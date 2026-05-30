@@ -6,7 +6,52 @@ Catalog-first terminal app for browsing OPDS 1.x catalogs, downloading books, an
 
 ```powershell
 python -m pip install -e ".[dev]"
-pytest
+python -m pytest -v
+```
+
+Run the app from an editable checkout with either the console script or module entrypoint:
+
+```powershell
+epub-tui
+python -m epub_tui
+```
+
+Use `--config` to point at a specific JSON config file:
+
+```powershell
+python -m epub_tui --config .\config.json
+epub-tui --config C:\Users\you\AppData\Roaming\epub-tui\config.json
+```
+
+Without `--config`, epub-tui looks for a config file at:
+
+- Windows: `%APPDATA%\epub-tui\config.json`
+- Linux/macOS with `XDG_CONFIG_HOME`: `$XDG_CONFIG_HOME/epub-tui/config.json`
+- Linux/macOS fallback: `~/.config/epub-tui/config.json`
+
+If the config file is missing, the app opens the setup screen.
+
+Example config:
+
+```json
+{
+  "library_path": "C:/Users/you/Books/epub-tui",
+  "catalogs": [
+    {
+      "name": "Public OPDS",
+      "url": "https://example.test/opds"
+    },
+    {
+      "name": "Private Library",
+      "url": "https://library.example.test/opds",
+      "auth": {
+        "username": "reader@example.test",
+        "password": "change-me"
+      }
+    }
+  ],
+  "preferences": {}
+}
 ```
 
 ## MVP
