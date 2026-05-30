@@ -12,11 +12,11 @@ class AcquisitionLink:
     size: int | None = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class CatalogEntry:
     title: str
-    identifier: str
-    updated: str
+    identifier: str | None
+    updated: str | None
     authors: list[str] = field(default_factory=list)
     summary: str | None = None
     cover_image_url: str | None = None
@@ -31,9 +31,9 @@ class CatalogEntry:
         return None
 
 
-@dataclass
+@dataclass(frozen=True)
 class CatalogFeed:
     title: str
     source_url: str
-    updated: str
+    updated: str | None
     entries: list[CatalogEntry]

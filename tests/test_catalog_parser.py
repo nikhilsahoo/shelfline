@@ -59,6 +59,23 @@ def test_parse_acquisition_feed_accepts_open_access_subrelation() -> None:
     assert entry.best_epub_link().href == "https://example.test/opds/books/open.epub"
 
 
+def test_parse_feed_preserves_missing_optional_values_as_none() -> None:
+    xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Minimal Catalog</title>
+  <entry>
+    <title>Untimed Book</title>
+  </entry>
+</feed>
+"""
+
+    feed = parse_opds_feed(xml, "https://example.test/minimal.xml")
+
+    assert feed.updated is None
+    assert feed.entries[0].identifier is None
+    assert feed.entries[0].updated is None
+
+
 def test_invalid_feed_raises_parse_error(fixture_dir: Path) -> None:
     xml = (fixture_dir / "opds" / "invalid.xml").read_text(encoding="utf-8")
 
