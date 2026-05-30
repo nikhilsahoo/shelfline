@@ -16,8 +16,15 @@ class EpubSection:
 
 
 @dataclass(frozen=True)
+class EpubOutlineItem:
+    title: str
+    section_index: int
+
+
+@dataclass(frozen=True)
 class EpubPreview:
     title: str
+    outline: tuple[EpubOutlineItem, ...]
     sections: tuple[EpubSection, ...]
 
 
@@ -113,9 +120,10 @@ class _HtmlTextExtractor(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._ignored_depth:
             return
-        self._parts.append(data)
         if self._active_heading is not None:
             self._heading_parts.append(data)
+            return
+        self._parts.append(data)
 
 
 def extract_epub_preview(path: Path) -> EpubPreview:
@@ -135,7 +143,11 @@ def extract_epub_preview(path: Path) -> EpubPreview:
 
     if not sections:
         raise ReaderError(f"No readable text sections found in {epub_path}")
-    return EpubPreview(title=title, sections=sections)
+    outline = tuple(
+        EpubOutlineItem(title=section.heading, section_index=index)
+        for index, section in enumerate(sections)
+    )
+    return EpubPreview(title=title, outline=outline, sections=sections)
 
 
 def _book_title(book: epub.EpubBook, path: Path) -> str:
@@ -169,9 +181,7 @@ def _spine_items(book: epub.EpubBook) -> list[Any]:
         item = _item_from_spine_entry(book, entry)
         if item is not None and _is_document_item(item):
             items.append(item)
-    if items:
-        return items
-    return [item for item in book.get_items() if _is_document_item(item)]
+    return items
 
 
 def _item_from_spine_entry(book: epub.EpubBook, entry: Any) -> Any | None:

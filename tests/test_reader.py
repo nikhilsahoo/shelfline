@@ -1,23 +1,50 @@
 from pathlib import Path
 
+import pytest
 from ebooklib import epub
 
-from epub_tui.reader import EpubPreview, extract_epub_preview
+from epub_tui.reader import (
+    EpubOutlineItem,
+    EpubPreview,
+    ReaderError,
+    extract_epub_preview,
+)
 
 
-def test_extract_epub_preview_reads_spine_text(tmp_path: Path) -> None:
-    epub_path = tmp_path / "sample.epub"
+def _chapter(title: str, file_name: str, content: bytes) -> epub.EpubHtml:
+    chapter = epub.EpubHtml(title=title, file_name=file_name, lang="en")
+    chapter.content = content
+    return chapter
+
+
+def _write_epub(
+    epub_path: Path,
+    chapters: list[epub.EpubHtml],
+    *,
+    title: str | None = "Sample EPUB",
+    spine: list[object] | None = None,
+) -> None:
     book = epub.EpubBook()
     book.set_identifier("sample")
-    book.set_title("Sample EPUB")
+    if title is not None:
+        book.set_title(title)
     book.set_language("en")
-    chapter = epub.EpubHtml(title="Chapter One", file_name="chapter.xhtml", lang="en")
-    chapter.content = b"<html><body><h1>Chapter One</h1><p>Hello terminal reader.</p></body></html>"
-    book.add_item(chapter)
-    book.spine = ["nav", chapter]
+    for chapter in chapters:
+        book.add_item(chapter)
+    book.spine = spine if spine is not None else ["nav", *chapters]
     book.add_item(epub.EpubNcx())
     book.add_item(epub.EpubNav())
     epub.write_epub(str(epub_path), book)
+
+
+def test_extract_epub_preview_reads_spine_text_with_outline(tmp_path: Path) -> None:
+    epub_path = tmp_path / "sample.epub"
+    chapter = _chapter(
+        "Chapter One",
+        "chapter.xhtml",
+        b"<html><body><h1>Chapter One</h1><p>Hello terminal reader.</p></body></html>",
+    )
+    _write_epub(epub_path, [chapter])
 
     preview = extract_epub_preview(epub_path)
 
@@ -25,3 +52,112 @@ def test_extract_epub_preview_reads_spine_text(tmp_path: Path) -> None:
     assert preview.title == "Sample EPUB"
     assert preview.sections[0].heading == "Chapter One"
     assert "Hello terminal reader." in preview.sections[0].text
+    assert preview.outline == (EpubOutlineItem(title="Chapter One", section_index=0),)
+
+
+def test_title_falls_back_to_path_stem_when_metadata_is_missing(tmp_path: Path) -> None:
+    epub_path = tmp_path / "untitled-book.epub"
+    chapter = _chapter(
+        "Chapter One",
+        "chapter.xhtml",
+        b"<html><body><h1>Chapter One</h1><p>Readable text.</p></body></html>",
+    )
+    _write_epub(epub_path, [chapter], title=None)
+
+    preview = extract_epub_preview(epub_path)
+
+    assert preview.title == "untitled-book"
+
+
+def test_title_falls_back_to_path_stem_when_metadata_is_blank(tmp_path: Path) -> None:
+    epub_path = tmp_path / "blank-title.epub"
+    chapter = _chapter(
+        "Chapter One",
+        "chapter.xhtml",
+        b"<html><body><h1>Chapter One</h1><p>Readable text.</p></body></html>",
+    )
+    _write_epub(epub_path, [chapter], title="   ")
+
+    preview = extract_epub_preview(epub_path)
+
+    assert preview.title == "blank-title"
+
+
+def test_headings_prefer_h1_then_h2_then_h3_then_item_name(tmp_path: Path) -> None:
+    epub_path = tmp_path / "headings.epub"
+    h1 = _chapter(
+        "Item H1",
+        "h1.xhtml",
+        b"<html><body><h2>Wrong H2</h2><h1>Right H1</h1><p>One.</p></body></html>",
+    )
+    h2 = _chapter(
+        "Item H2",
+        "h2.xhtml",
+        b"<html><body><h2>Right H2</h2><h3>Wrong H3</h3><p>Two.</p></body></html>",
+    )
+    h3 = _chapter(
+        "Item H3",
+        "h3.xhtml",
+        b"<html><body><h3>Right H3</h3><p>Three.</p></body></html>",
+    )
+    fallback = _chapter(
+        "Item Fallback",
+        "fallback.xhtml",
+        b"<html><body><p>Four.</p></body></html>",
+    )
+    _write_epub(epub_path, [h1, h2, h3, fallback])
+
+    preview = extract_epub_preview(epub_path)
+
+    assert [section.heading for section in preview.sections] == [
+        "Right H1",
+        "Right H2",
+        "Right H3",
+        "fallback.xhtml",
+    ]
+
+
+def test_empty_sections_are_skipped(tmp_path: Path) -> None:
+    epub_path = tmp_path / "empty-first.epub"
+    empty = _chapter("Empty", "empty.xhtml", b"<html><body><h1>Empty</h1></body></html>")
+    readable = _chapter(
+        "Readable",
+        "readable.xhtml",
+        b"<html><body><h1>Readable</h1><p>Keep this section.</p></body></html>",
+    )
+    _write_epub(epub_path, [empty, readable])
+
+    preview = extract_epub_preview(epub_path)
+
+    assert [section.heading for section in preview.sections] == ["Readable"]
+    assert preview.outline == (EpubOutlineItem(title="Readable", section_index=0),)
+
+
+def test_reader_error_when_no_readable_text_sections_are_found(tmp_path: Path) -> None:
+    epub_path = tmp_path / "empty.epub"
+    chapter = _chapter("Empty", "empty.xhtml", b"<html><body><h1>Empty</h1></body></html>")
+    _write_epub(epub_path, [chapter])
+
+    with pytest.raises(ReaderError, match="No readable text sections"):
+        extract_epub_preview(epub_path)
+
+
+def test_malformed_epub_is_wrapped_in_reader_error(tmp_path: Path) -> None:
+    epub_path = tmp_path / "not-an-epub.epub"
+    epub_path.write_bytes(b"not an epub archive")
+
+    with pytest.raises(ReaderError, match="Could not read EPUB preview"):
+        extract_epub_preview(epub_path)
+
+
+def test_reader_error_when_only_non_spine_documents_have_text(tmp_path: Path) -> None:
+    epub_path = tmp_path / "non-spine.epub"
+    chapter = _chapter(
+        "Non Spine",
+        "chapter.xhtml",
+        b"<html><body><h1>Non Spine</h1><p>Do not preview this.</p></body></html>",
+    )
+    _write_epub(epub_path, [chapter], spine=["nav"])
+
+    with pytest.raises(ReaderError, match="No readable text sections"):
+        extract_epub_preview(epub_path)
