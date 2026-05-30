@@ -257,6 +257,39 @@ async def test_workflow_stores_sanitized_acquisition_url_from_embedded_credentia
 
 
 @pytest.mark.asyncio
+async def test_workflow_stores_sanitized_cover_metadata_from_credentialed_opds_link(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Private</title>
+  <entry>
+    <title>Private Book</title>
+    <link rel="http://opds-spec.org/image" href="https://alice:secret@example.test/covers/private.jpg"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/private.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    httpx_mock.add_response(url="https://example.test/opds/books/private.epub", content=b"epub bytes")
+    catalog = CatalogConfig(name="Private", url="https://example.test/opds")
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    feed = await workflow.fetch_catalog(catalog)
+    await workflow.download_best_epub(catalog, feed.entries[0])
+
+    book = workflow.library.list_books()[0]
+    assert book.cover_image_url == "https://example.test/covers/private.jpg"
+    assert "alice" not in book.cover_image_url
+    assert "secret" not in book.cover_image_url
+
+
+@pytest.mark.asyncio
 async def test_workflow_downloads_and_tracks_non_epub_acquisition(
     tmp_path: Path,
     httpx_mock: HTTPXMock,

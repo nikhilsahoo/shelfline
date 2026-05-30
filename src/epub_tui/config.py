@@ -139,7 +139,7 @@ def _parse_catalog(raw: Any) -> CatalogConfig:
 
 def _catalog_to_json(catalog: CatalogConfig, redact: bool = False) -> dict[str, Any]:
     item: dict[str, Any] = {"name": catalog.name, "url": _strip_url_credentials(catalog.url)}
-    if catalog.auth is not None and not catalog.auth_from_url:
+    if catalog.auth is not None:
         item["auth"] = {
             "username": catalog.auth["username"],
             "password": "***" if redact else catalog.auth["password"],

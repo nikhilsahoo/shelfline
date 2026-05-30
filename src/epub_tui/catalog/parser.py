@@ -45,7 +45,7 @@ def _parse_entry(entry: Any, source_url: str) -> CatalogEntry:
         if not href:
             continue
 
-        resolved_href = urljoin(source_url, href)
+        resolved_href = sanitize_url_credentials(urljoin(source_url, href))
         media_type = link.get("type", "")
 
         if relation == SUBSECTION_REL:

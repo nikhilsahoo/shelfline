@@ -114,11 +114,21 @@ def test_save_and_redact_config_do_not_persist_embedded_url_credentials(tmp_path
     saved = saved_path.read_text(encoding="utf-8")
     redacted = redact_config(config)
 
-    assert "https://example.test/opds" in saved
-    assert "https://example.test/opds" in redacted
-    assert "alice" not in saved
-    assert "secret" not in saved
-    assert "alice" not in redacted
+    saved_payload = json.loads(saved)
+    redacted_payload = json.loads(redacted)
+
+    assert saved_payload["catalogs"][0] == {
+        "name": "Private",
+        "url": "https://example.test/opds",
+        "auth": {"username": "alice", "password": "secret"},
+    }
+    assert redacted_payload["catalogs"][0] == {
+        "name": "Private",
+        "url": "https://example.test/opds",
+        "auth": {"username": "alice", "password": "***"},
+    }
+    assert "alice:secret@" not in saved
+    assert "alice:secret@" not in redacted
     assert "secret" not in redacted
 
 

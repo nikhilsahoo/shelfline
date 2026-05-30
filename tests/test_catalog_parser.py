@@ -34,6 +34,55 @@ def test_parse_acquisition_feed_extracts_epub_and_pdf(fixture_dir: Path) -> None
     }
 
 
+def test_parse_feed_sanitizes_links_resolved_from_credentialed_source_url() -> None:
+    xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Private</title>
+  <entry>
+    <title>Private Book</title>
+    <link rel="subsection" href="sections/fiction.xml"/>
+    <link rel="http://opds-spec.org/image" href="covers/private.jpg"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/private.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+
+    feed = parse_opds_feed(xml, source_url="https://alice:secret@example.test/opds/root.xml")
+
+    entry = feed.entries[0]
+    assert feed.source_url == "https://example.test/opds/root.xml"
+    assert entry.navigation_url == "https://example.test/opds/sections/fiction.xml"
+    assert entry.cover_image_url == "https://example.test/opds/covers/private.jpg"
+    assert entry.best_epub_link().href == "https://example.test/opds/books/private.epub"
+    assert "alice" not in entry.navigation_url
+    assert "secret" not in entry.cover_image_url
+    assert "alice" not in entry.best_epub_link().href
+    assert "secret" not in entry.best_epub_link().href
+
+
+def test_parse_feed_sanitizes_absolute_credentialed_link_hrefs() -> None:
+    xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Private</title>
+  <entry>
+    <title>Private Book</title>
+    <link rel="http://opds-spec.org/image" href="https://alice:secret@example.test/covers/private.jpg"/>
+    <link rel="http://opds-spec.org/acquisition" href="https://alice:secret@example.test/books/private.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+
+    feed = parse_opds_feed(xml, source_url="https://example.test/opds/root.xml")
+
+    entry = feed.entries[0]
+    assert entry.cover_image_url == "https://example.test/covers/private.jpg"
+    assert entry.best_epub_link().href == "https://example.test/books/private.epub"
+    assert "alice" not in entry.cover_image_url
+    assert "secret" not in entry.cover_image_url
+    assert "alice" not in entry.best_epub_link().href
+    assert "secret" not in entry.best_epub_link().href
+
+
 def test_parse_acquisition_feed_accepts_open_access_subrelation() -> None:
     xml = """<?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
