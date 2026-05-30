@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ async def test_app_opens_setup_screen_without_config() -> None:
 
     async with app.run_test():
         assert isinstance(app.screen, SetupScreen)
+        assert "Library path" in str(app.screen.query_one("#setup-title").renderable)
 
 
 @pytest.mark.asyncio
@@ -49,6 +51,28 @@ async def test_catalog_screen_renders_saved_catalogs(tmp_path: Path) -> None:
     assert "Feedbooks" in str(text)
 
 
+@pytest.mark.asyncio
+async def test_catalog_screen_adds_catalog_to_config_file(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    config = AppConfig(library_path=tmp_path / "books", catalogs=[])
+    app = EpubTuiApp(config=config, config_path=config_path)
+
+    async with app.run_test():
+        screen = app.screen
+        assert isinstance(screen, CatalogsScreen)
+        screen.query_one("#catalog-name").value = "Example"
+        screen.query_one("#catalog-url").value = "https://example.test/opds"
+
+        screen.add_catalog_from_inputs()
+
+        assert app.config is not None
+        assert app.config.catalogs[0].name == "Example"
+        assert "Example" in str(screen.query_one("#catalog-list").renderable)
+
+    saved = json.loads(config_path.read_text(encoding="utf-8"))
+    assert saved["catalogs"] == [{"name": "Example", "url": "https://example.test/opds"}]
+
+
 def test_setup_screen_validates_library_path(tmp_path: Path) -> None:
     screen = SetupScreen()
 
@@ -61,6 +85,31 @@ def test_setup_screen_rejects_blank_library_path() -> None:
 
     assert screen.validate_library_path("") == "Library path is required"
     assert screen.validate_library_path("   ") == "Library path is required"
+
+
+@pytest.mark.asyncio
+async def test_setup_screen_saves_library_path_and_opens_catalogs(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    library_path = tmp_path / "books"
+    library_path.mkdir()
+    app = EpubTuiApp(config=None, config_path=config_path)
+
+    async with app.run_test() as pilot:
+        screen = app.screen
+        assert isinstance(screen, SetupScreen)
+        screen.query_one("#library-path").value = str(library_path)
+
+        await screen.complete_setup()
+        await pilot.pause()
+
+        assert isinstance(app.screen, CatalogsScreen)
+        assert app.config is not None
+        assert app.config.library_path == library_path
+        assert app.workflow is not None
+        assert app.library is app.workflow.library
+
+    saved = json.loads(config_path.read_text(encoding="utf-8"))
+    assert saved["library_path"] == str(library_path)
 
 
 @pytest.mark.asyncio

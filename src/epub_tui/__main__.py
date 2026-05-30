@@ -30,7 +30,7 @@ def build_app(
         if not config_path.exists():
             if explicit_config:
                 raise ConfigError(f"Config file does not exist: {config_path}")
-            return EpubTuiApp(config=None)
+            return EpubTuiApp(config=None, config_path=config_path)
         if not config_path.is_file():
             raise ConfigError(f"Config path is not a file: {config_path}")
         config = load_config(config_path)
@@ -38,7 +38,7 @@ def build_app(
         raise SystemExit(f"Config error: {exc}") from exc
 
     workflow = CatalogWorkflow(config=config, state_db=_default_state_db(config.library_path))
-    return EpubTuiApp(config=config, workflow=workflow)
+    return EpubTuiApp(config=config, workflow=workflow, config_path=config_path)
 
 
 def main(argv: Sequence[str] | None = None) -> None:

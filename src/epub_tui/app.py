@@ -1,6 +1,8 @@
 from textual.app import App
 
-from epub_tui.config import AppConfig
+from pathlib import Path
+
+from epub_tui.config import AppConfig, CatalogConfig, save_config
 from epub_tui.library import LibraryRepository
 from epub_tui.services import CatalogWorkflow
 from epub_tui.tui.screens import CatalogsScreen, LibraryScreen, SetupScreen
@@ -21,10 +23,12 @@ class EpubTuiApp(App[None]):
         *,
         workflow: CatalogWorkflow | None = None,
         library: LibraryRepository | None = None,
+        config_path: Path | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self.config = config
+        self.config_path = config_path
         self.workflow = workflow
         self.library = library or getattr(workflow, "library", None)
 
@@ -34,6 +38,33 @@ class EpubTuiApp(App[None]):
             return
 
         self.push_screen(CatalogsScreen(self.config, workflow=self.workflow))
+
+    def apply_config(self, config: AppConfig) -> None:
+        self.config = config
+        self.workflow = CatalogWorkflow(config=config, state_db=self._state_db_path(config.library_path))
+        self.library = self.workflow.library
+        if self.config_path is not None:
+            save_config(self.config_path, config)
+
+    async def complete_setup(self, library_path: Path) -> None:
+        self.apply_config(AppConfig(library_path=library_path, catalogs=[], preferences={}))
+        await self.push_screen(CatalogsScreen(self.config, workflow=self.workflow))
+
+    def add_catalog(self, catalog: CatalogConfig) -> None:
+        if self.config is None:
+            return
+        catalogs = [*self.config.catalogs, catalog]
+        self.apply_config(
+            AppConfig(
+                library_path=self.config.library_path,
+                catalogs=catalogs,
+                preferences=dict(self.config.preferences),
+            )
+        )
+
+    @staticmethod
+    def _state_db_path(library_path: Path) -> Path:
+        return library_path / ".epub-tui" / "state.db"
 
     def action_show_library(self) -> None:
         if self.library is not None:

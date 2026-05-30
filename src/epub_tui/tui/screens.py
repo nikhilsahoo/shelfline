@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlparse
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Static
+from textual.widgets import Button, Footer, Header, Input, Static
 
 from epub_tui.catalog.models import CatalogEntry, CatalogFeed
 from epub_tui.config import AppConfig, CatalogConfig
@@ -23,7 +25,9 @@ from epub_tui.tui.widgets import (
 class SetupScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Static("Setup", id="setup-title")
+        yield StatusLine("Library path", id="setup-title")
+        yield Input(placeholder="Library path", id="library-path")
+        yield Button("Save", id="save-library")
         yield StatusLine("Ready", id="status-line")
         yield Footer()
 
@@ -38,14 +42,27 @@ class SetupScreen(Screen[None]):
             return "Library path must be a directory"
         return None
 
+    async def complete_setup(self) -> None:
+        path_input = self.query_one("#library-path", Input)
+        library_path = Path(path_input.value).expanduser()
+        error = self.validate_library_path(path_input.value)
+        if error is not None:
+            self.query_one("#status-line", StatusLine).set_message(error)
+            return
+        await self.app.complete_setup(library_path)  # type: ignore[attr-defined]
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "save-library":
+            await self.complete_setup()
+
 
 class CatalogsScreen(Screen[None]):
     BINDINGS = [
-        ("enter", "open_selected", "Open"),
-        ("j", "cursor_down", "Down"),
-        ("down", "cursor_down", "Down"),
-        ("k", "cursor_up", "Up"),
-        ("up", "cursor_up", "Up"),
+        Binding("enter", "open_selected", "Open", priority=True),
+        Binding("j", "cursor_down", "Down", priority=True),
+        Binding("down", "cursor_down", "Down", priority=True),
+        Binding("k", "cursor_up", "Up", priority=True),
+        Binding("up", "cursor_up", "Up", priority=True),
     ]
 
     def __init__(
@@ -63,9 +80,18 @@ class CatalogsScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         yield Header()
         yield StatusLine(self._catalog_text(), id="catalog-list")
+        yield Input(placeholder="Catalog name", id="catalog-name")
+        yield Input(placeholder="OPDS URL", id="catalog-url")
+        yield Input(placeholder="Basic Auth username", id="catalog-username")
+        yield Input(placeholder="Basic Auth password", password=True, id="catalog-password")
+        yield Button("Add catalog", id="add-catalog")
         yield BusyIndicator(id="busy-indicator")
         yield StatusLine("Ready", id="status-line")
         yield Footer()
+
+    def on_mount(self) -> None:
+        self.app.set_focus(None)
+        self.call_after_refresh(lambda: self.app.set_focus(None))
 
     def begin_outgoing_call(self, message: str) -> None:
         self.query_one("#busy-indicator", BusyIndicator).start(message)
@@ -108,6 +134,50 @@ class CatalogsScreen(Screen[None]):
         self.query_one("#status-line", StatusLine).set_message(
             f"Selected {self.config.catalogs[self.selected_index].name}"
         )
+
+    def add_catalog_from_inputs(self) -> None:
+        name = self.query_one("#catalog-name", Input).value.strip()
+        url = self.query_one("#catalog-url", Input).value.strip()
+        username = self.query_one("#catalog-username", Input).value
+        password = self.query_one("#catalog-password", Input).value
+        error = self._validate_catalog_input(name, url)
+        if error is not None:
+            self.query_one("#status-line", StatusLine).set_message(error)
+            return
+
+        auth = None
+        if username or password:
+            if not username or not password:
+                self.query_one("#status-line", StatusLine).set_message(
+                    "Basic Auth requires both username and password"
+                )
+                return
+            auth = {"username": username, "password": password}
+
+        catalog = CatalogConfig(name=name, url=url, auth=auth)
+        self.app.add_catalog(catalog)  # type: ignore[attr-defined]
+        if getattr(self.app, "config", None) is not None:
+            self.config = self.app.config  # type: ignore[assignment]
+        self.query_one("#catalog-list", StatusLine).set_message(self._catalog_text())
+        self.query_one("#status-line", StatusLine).set_message("Catalog added")
+        self.query_one("#catalog-name", Input).value = ""
+        self.query_one("#catalog-url", Input).value = ""
+        self.query_one("#catalog-username", Input).value = ""
+        self.query_one("#catalog-password", Input).value = ""
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "add-catalog":
+            self.add_catalog_from_inputs()
+
+    def _validate_catalog_input(self, name: str, url: str) -> str | None:
+        if not name:
+            return "Catalog name is required"
+        if any(catalog.name == name for catalog in self.config.catalogs):
+            return f"Duplicate catalog name: {name}"
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return "Catalog URL must be http or https"
+        return None
 
     def _catalog_text(self) -> str:
         if not self.config.catalogs:
