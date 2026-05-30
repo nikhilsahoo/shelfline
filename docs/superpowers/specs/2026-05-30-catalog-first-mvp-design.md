@@ -49,7 +49,7 @@ The app uses a practical two-pane layout:
 
 - Left/sidebar: saved catalogs, current feed trail, and library shortcut.
 - Main pane: current feed entries or downloaded books.
-- Details/footer area: selected item metadata, cover image display when available, available actions, download state, and errors.
+- Details/footer area: selected item metadata, cover image display when available, available actions, busy/progress state, and errors.
 
 MVP screens:
 
@@ -108,6 +108,14 @@ Recoverable errors:
 - Local book deletion failure.
 
 Errors should show clear messages and preserve a retry/back path.
+
+Waiting states:
+
+- Every TUI screen that starts an outgoing call must show a visible progress indicator for the full time the user is waiting.
+- Feed fetch, feed refresh, catalog navigation, authenticated catalog retry, acquisition/download start, and cover image fetch all need a busy spinner or progress display.
+- Operations with measurable byte progress use determinate progress when possible.
+- Operations without measurable progress use an indeterminate busy indicator plus a short action label such as "Fetching catalog..." or "Refreshing feed...".
+- The indicator is cleared or replaced with a success/error state when the operation completes.
 
 Download progress:
 
@@ -194,6 +202,7 @@ TUI smoke tests:
 - Saved catalogs render in the catalog screen.
 - Authenticated catalog failures produce a recoverable error.
 - Feed entries render after a mocked successful fetch.
+- Feed fetch and refresh screens show a busy indicator while outgoing calls are running.
 - Library screen shows downloaded items.
 
 ## Implementation Notes

@@ -25,7 +25,7 @@
 - `src/epub_tui/downloads.py`: single download service with progress callbacks and temporary-file completion.
 - `src/epub_tui/reader.py`: EPUB text extraction.
 - `src/epub_tui/tui/screens.py`: Textual screens for setup, catalogs, feeds, entries, library, preview.
-- `src/epub_tui/tui/widgets.py`: reusable list/detail/status widgets, including graceful cover image display and download progress display.
+- `src/epub_tui/tui/widgets.py`: reusable list/detail/status widgets, including graceful cover image display, busy indicators, and download progress display.
 - `tests/conftest.py`: shared fixtures.
 - `tests/fixtures/opds/navigation.xml`: OPDS navigation feed fixture.
 - `tests/fixtures/opds/acquisition.xml`: OPDS acquisition feed fixture.
@@ -130,6 +130,7 @@ pytest
 - Optional HTTP Basic Auth per catalog
 - One active download at a time
 - Download progress bar for known totals and byte counter for unknown totals
+- Busy indicator on every TUI screen while catalog fetch, refresh, navigation, cover fetch, or download start calls are running
 - JSON config for library path and saved catalogs
 - SQLite metadata/cache
 - Local library management: mark read/unread and delete downloaded books
@@ -1642,6 +1643,21 @@ async def test_app_shows_catalogs_when_config_exists(tmp_path) -> None:
         assert "Public" in app.screen.renderable_text()
 
 
+@pytest.mark.asyncio
+async def test_catalog_screen_shows_busy_indicator_for_outgoing_call(tmp_path) -> None:
+    config = AppConfig(
+        library_path=tmp_path / "books",
+        catalogs=[CatalogConfig(name="Public", url="https://example.test/opds")],
+        preferences={},
+    )
+    app = EpubTuiApp(config=config)
+    async with app.run_test() as pilot:
+        app.screen.begin_outgoing_call("Fetching catalog...")
+        assert "Fetching catalog..." in app.screen.renderable_text()
+        app.screen.finish_outgoing_call("Ready")
+        assert "Ready" in app.screen.renderable_text()
+
+
 def test_cover_widget_falls_back_to_text_when_image_missing(tmp_path) -> None:
     from epub_tui.tui.widgets import CoverDisplay
 
@@ -1669,6 +1685,20 @@ def test_download_progress_widget_renders_unknown_total() -> None:
     widget.set_progress(DownloadProgress(bytes_received=4096, total_bytes=None))
 
     assert "4096 bytes" in widget.renderable_text()
+
+
+def test_busy_indicator_names_waiting_operation() -> None:
+    from epub_tui.tui.widgets import BusyIndicator
+
+    widget = BusyIndicator()
+    widget.start("Fetching catalog...")
+
+    assert widget.is_busy is True
+    assert "Fetching catalog..." in widget.renderable_text()
+
+    widget.stop("Catalog loaded")
+    assert widget.is_busy is False
+    assert widget.renderable_text() == "Catalog loaded"
 ```
 
 - [ ] **Step 2: Run TUI smoke tests to verify they fail**
@@ -1692,7 +1722,7 @@ Create `src/epub_tui/tui/widgets.py`:
 ```python
 from pathlib import Path
 
-from textual.widgets import ProgressBar, Static
+from textual.widgets import LoadingIndicator, ProgressBar, Static
 
 from epub_tui.downloads import DownloadProgress
 
@@ -1700,6 +1730,31 @@ from epub_tui.downloads import DownloadProgress
 class StatusLine(Static):
     def set_message(self, message: str) -> None:
         self.update(message)
+
+
+class BusyIndicator(Static):
+    def __init__(self) -> None:
+        self.is_busy = False
+        self._message = "Ready"
+        super().__init__(self.renderable_text())
+
+    def start(self, message: str) -> None:
+        self.is_busy = True
+        self._message = message
+        self.update(self.renderable_text())
+
+    def stop(self, message: str = "Ready") -> None:
+        self.is_busy = False
+        self._message = message
+        self.update(self.renderable_text())
+
+    def renderable_text(self) -> str:
+        prefix = "[busy] " if self.is_busy else ""
+        return f"{prefix}{self._message}"
+
+
+class BusySpinner(LoadingIndicator):
+    pass
 
 
 class CoverDisplay(Static):
@@ -1758,7 +1813,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
 from epub_tui.config import AppConfig
-from epub_tui.tui.widgets import StatusLine
+from epub_tui.tui.widgets import BusyIndicator, StatusLine
 
 
 class SetupScreen(Screen[None]):
@@ -1787,12 +1842,20 @@ class CatalogsScreen(Screen[None]):
         yield ListView(
             *[ListItem(Label(catalog.name), id=f"catalog-{index}") for index, catalog in enumerate(self.config.catalogs)]
         )
+        yield BusyIndicator()
         yield StatusLine("Ready")
         yield Footer()
 
     def renderable_text(self) -> str:
         names = " ".join(catalog.name for catalog in self.config.catalogs)
-        return f"Catalogs {names} Ready"
+        busy = self.query_one(BusyIndicator).renderable_text() if self.is_mounted else "Ready"
+        return f"Catalogs {names} {busy}"
+
+    def begin_outgoing_call(self, message: str) -> None:
+        self.query_one(BusyIndicator).start(message)
+
+    def finish_outgoing_call(self, message: str = "Ready") -> None:
+        self.query_one(BusyIndicator).stop(message)
 ```
 
 Modify `src/epub_tui/app.py`:
@@ -1893,6 +1956,27 @@ async def test_workflow_fetches_parses_caches_and_downloads(
     assert downloaded.read_bytes() == b"epub bytes"
     assert workflow.library.list_books()[0].title == "Sample Book"
     assert workflow.library.list_books()[0].cover_image_url == "https://example.test/opds/covers/sample.jpg"
+
+
+@pytest.mark.asyncio
+async def test_workflow_reports_waiting_status_for_outgoing_calls(
+    tmp_path: Path,
+    fixture_dir: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = (fixture_dir / "opds" / "acquisition.xml").read_text(encoding="utf-8")
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    config = AppConfig(
+        library_path=tmp_path / "books",
+        catalogs=[CatalogConfig(name="Public", url="https://example.test/opds")],
+        preferences={},
+    )
+    workflow = CatalogWorkflow(config=config, state_db=tmp_path / "state.db", http_client=httpx.AsyncClient())
+    statuses: list[str] = []
+
+    await workflow.fetch_catalog(config.catalogs[0], on_status=statuses.append)
+
+    assert statuses == ["Fetching catalog...", "Catalog loaded"]
 ```
 
 - [ ] **Step 2: Run integration test to verify it fails**
@@ -1910,6 +1994,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Callable
 
 import httpx
 
@@ -1917,8 +2002,12 @@ from epub_tui.catalog.client import CatalogClient
 from epub_tui.catalog.models import CatalogEntry, CatalogFeed
 from epub_tui.catalog.parser import parse_opds_feed
 from epub_tui.config import AppConfig, CatalogConfig
-from epub_tui.downloads import DownloadError, DownloadService
+from epub_tui.downloads import DownloadError, DownloadProgress, DownloadService
 from epub_tui.library import BookRecord, LibraryRepository
+
+
+StatusCallback = Callable[[str], None]
+ProgressCallback = Callable[[DownloadProgress], None]
 
 
 class CatalogWorkflow:
@@ -1929,24 +2018,42 @@ class CatalogWorkflow:
         self.catalog_client = CatalogClient(http_client)
         self.downloads = DownloadService(http_client)
 
-    async def fetch_catalog(self, catalog: CatalogConfig, url: str | None = None) -> CatalogFeed:
+    async def fetch_catalog(
+        self,
+        catalog: CatalogConfig,
+        url: str | None = None,
+        on_status: StatusCallback | None = None,
+    ) -> CatalogFeed:
         target_url = url or catalog.url
+        if on_status is not None:
+            on_status("Fetching catalog...")
         body = await self.catalog_client.fetch_feed(catalog, target_url)
         feed = parse_opds_feed(body, source_url=target_url)
         self.library.save_feed_cache(catalog.name, target_url, feed.title, body)
+        if on_status is not None:
+            on_status("Catalog loaded")
         return feed
 
-    async def download_best_epub(self, catalog: CatalogConfig, entry: CatalogEntry) -> Path:
+    async def download_best_epub(
+        self,
+        catalog: CatalogConfig,
+        entry: CatalogEntry,
+        on_status: StatusCallback | None = None,
+        on_progress: ProgressCallback | None = None,
+    ) -> Path:
         link = entry.best_epub_link()
         if link is None:
             raise DownloadError(f"No EPUB acquisition link for {entry.title}")
         filename = _safe_filename(entry.title, ".epub")
         auth = None if catalog.auth is None else (catalog.auth["username"], catalog.auth["password"])
+        if on_status is not None:
+            on_status("Starting download...")
         path = await self.downloads.download(
             url=link.href,
             destination_dir=self.config.library_path,
             filename=filename,
             auth=auth,
+            on_progress=on_progress,
         )
         self.library.add_book(
             BookRecord(
@@ -1963,6 +2070,8 @@ class CatalogWorkflow:
                 is_read=False,
             )
         )
+        if on_status is not None:
+            on_status("Download complete")
         return path
 
 
@@ -2128,6 +2237,7 @@ Example config:
 - Optional HTTP Basic Auth per catalog
 - One active download at a time
 - Download progress bar for known totals and byte counter for unknown totals
+- Busy indicator on every TUI screen while catalog fetch, refresh, navigation, cover fetch, or download start calls are running
 - JSON config for library path and saved catalogs
 - SQLite metadata/cache
 - Local library management: mark read/unread and delete downloaded books
@@ -2156,7 +2266,7 @@ git commit -m "feat: add CLI config entrypoint"
 
 ## Self-Review
 
-- Spec coverage: OPDS 1.x parsing and cover image metadata are covered by Task 3. Basic Auth fetch and credential redaction are covered by Tasks 2 and 4. JSON config is covered by Task 2. SQLite cache/book metadata, including cover URLs, optional local cover paths, read/unread state, and soft deletion, is covered by Task 5. Single download workflow and progress callbacks are covered by Task 6. EPUB preview is covered by Task 7. Textual startup, catalog screen smoke coverage, library action bindings, cover display fallback, and download progress display are covered by Task 8. End-to-end service integration is covered by Task 9. CLI launch and usage docs are covered by Task 10.
+- Spec coverage: OPDS 1.x parsing and cover image metadata are covered by Task 3. Basic Auth fetch and credential redaction are covered by Tasks 2 and 4. JSON config is covered by Task 2. SQLite cache/book metadata, including cover URLs, optional local cover paths, read/unread state, and soft deletion, is covered by Task 5. Single download workflow and progress callbacks are covered by Task 6. EPUB preview is covered by Task 7. Textual startup, catalog screen smoke coverage, library action bindings, busy indicators for outgoing calls, cover display fallback, and download progress display are covered by Task 8. End-to-end service integration and status callbacks for outgoing calls are covered by Task 9. CLI launch and usage docs are covered by Task 10.
 - Scope boundaries: OPDS 2.x, multi-download queue, PDF/DjVu/CBR rendering, OAuth, annotations, sync, and full-text search are not implemented in this plan.
-- Type consistency: `AppConfig`, `CatalogConfig`, `CatalogFeed`, `CatalogEntry`, `AcquisitionLink`, `BookRecord`, `LibraryRepository`, `CatalogClient`, `DownloadProgress`, `DownloadService`, `CatalogWorkflow`, and `EpubTuiApp` signatures are used consistently across tasks.
+- Type consistency: `AppConfig`, `CatalogConfig`, `CatalogFeed`, `CatalogEntry`, `AcquisitionLink`, `BookRecord`, `LibraryRepository`, `CatalogClient`, `DownloadProgress`, `DownloadService`, `CatalogWorkflow`, `StatusCallback`, `ProgressCallback`, and `EpubTuiApp` signatures are used consistently across tasks.
 - Red-flag scan: The plan contains no unresolved work markers.
