@@ -12,6 +12,8 @@ class EpubTuiApp(App[None]):
     TITLE = "epub-tui"
     BINDINGS = [
         ("q", "quit", "Quit"),
+        ("c", "show_catalogs", "Catalogs"),
+        ("a", "add_catalog", "Add Catalog"),
         ("l", "show_library", "Library"),
         ("m", "toggle_read", "Read/Unread"),
         ("x", "delete_book", "Delete Book"),
@@ -72,6 +74,25 @@ class EpubTuiApp(App[None]):
             return
 
         self.notify("Library screen is not wired yet")
+
+    def action_show_catalogs(self) -> None:
+        self._push_catalogs()
+
+    def action_add_catalog(self) -> None:
+        self._push_catalogs(show_add_form=True)
+
+    def _push_catalogs(self, *, show_add_form: bool = False) -> None:
+        if self.config is None:
+            self.notify("Catalogs are available after setup")
+            return
+
+        self.push_screen(
+            CatalogsScreen(
+                self.config,
+                workflow=self.workflow,
+                show_add_form=show_add_form,
+            )
+        )
 
     def action_toggle_read(self) -> None:
         if isinstance(self.screen, LibraryScreen):

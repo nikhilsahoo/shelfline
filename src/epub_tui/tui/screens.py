@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.containers import Container
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Input, Static
 
@@ -70,26 +71,31 @@ class CatalogsScreen(Screen[None]):
         config: AppConfig,
         *,
         workflow: CatalogWorkflow | None = None,
+        show_add_form: bool = False,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self.config = config
         self.workflow = workflow
+        self.show_add_form = show_add_form
         self.selected_index = 0
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield StatusLine(self._catalog_text(), id="catalog-list")
-        yield Input(placeholder="Catalog name", id="catalog-name")
-        yield Input(placeholder="OPDS URL", id="catalog-url")
-        yield Input(placeholder="Basic Auth username", id="catalog-username")
-        yield Input(placeholder="Basic Auth password", password=True, id="catalog-password")
-        yield Button("Add catalog", id="add-catalog")
+        yield Button("New catalog", id="show-add-catalog")
+        with Container(id="catalog-form"):
+            yield Input(placeholder="Catalog name", id="catalog-name")
+            yield Input(placeholder="OPDS URL", id="catalog-url")
+            yield Input(placeholder="Basic Auth username", id="catalog-username")
+            yield Input(placeholder="Basic Auth password", password=True, id="catalog-password")
+            yield Button("Add catalog", id="add-catalog")
         yield BusyIndicator(id="busy-indicator")
         yield StatusLine("Ready", id="status-line")
         yield Footer()
 
     def on_mount(self) -> None:
+        self.query_one("#catalog-form", Container).display = self.show_add_form
         self.app.set_focus(None)
         self.call_after_refresh(lambda: self.app.set_focus(None))
 
@@ -164,10 +170,21 @@ class CatalogsScreen(Screen[None]):
         self.query_one("#catalog-url", Input).value = ""
         self.query_one("#catalog-username", Input).value = ""
         self.query_one("#catalog-password", Input).value = ""
+        self.query_one("#catalog-form", Container).display = False
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "show-add-catalog":
+            self.action_toggle_add_catalog()
+            return
         if event.button.id == "add-catalog":
             self.add_catalog_from_inputs()
+
+    def action_toggle_add_catalog(self) -> None:
+        form = self.query_one("#catalog-form", Container)
+        form.display = not form.display
+        self.query_one("#status-line", StatusLine).set_message(
+            "Add catalog form shown" if form.display else "Add catalog form hidden"
+        )
 
     def _validate_catalog_input(self, name: str, url: str) -> str | None:
         if not name:

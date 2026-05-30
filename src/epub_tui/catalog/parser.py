@@ -12,6 +12,7 @@ OPDS_ACQUISITION_REL = "http://opds-spec.org/acquisition"
 OPDS_IMAGE_REL = "http://opds-spec.org/image"
 OPDS_THUMBNAIL_REL = "http://opds-spec.org/image/thumbnail"
 SUBSECTION_REL = "subsection"
+OPDS_SUBSECTION_REL = "http://opds-spec.org/subsection"
 
 
 class OpdsParseError(ValueError):
@@ -49,7 +50,7 @@ def _parse_entry(entry: Any, source_url: str) -> CatalogEntry:
         resolved_href = sanitize_url_credentials(urljoin(source_url, href))
         media_type = link.get("type", "")
 
-        if relation == SUBSECTION_REL:
+        if _is_navigation_link(relation, media_type):
             navigation_url = resolved_href
         elif relation == OPDS_IMAGE_REL:
             cover_image_url = resolved_href
@@ -81,6 +82,15 @@ def _parse_entry(entry: Any, source_url: str) -> CatalogEntry:
 
 def _is_acquisition_relation(relation: str) -> bool:
     return relation == OPDS_ACQUISITION_REL or relation.startswith(f"{OPDS_ACQUISITION_REL}/")
+
+
+def _is_navigation_link(relation: str, media_type: str) -> bool:
+    return relation in {SUBSECTION_REL, OPDS_SUBSECTION_REL} or _is_opds_catalog_media_type(media_type)
+
+
+def _is_opds_catalog_media_type(media_type: str) -> bool:
+    media_type = media_type.lower()
+    return "application/atom+xml" in media_type and "opds-catalog" in media_type
 
 
 def _get_text(mapping: Any, key: str) -> str:

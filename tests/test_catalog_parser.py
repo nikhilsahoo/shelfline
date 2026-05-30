@@ -16,6 +16,38 @@ def test_parse_navigation_feed_resolves_relative_links(fixture_dir: Path) -> Non
     assert feed.entries[0].acquisition_links == []
 
 
+def test_parse_navigation_feed_accepts_opds_subsection_uri_relation() -> None:
+    xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Catalog</title>
+  <entry>
+    <title>Classics</title>
+    <link rel="http://opds-spec.org/subsection" href="classics.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+</feed>
+"""
+
+    feed = parse_opds_feed(xml, source_url="https://example.test/opds/fiction.xml")
+
+    assert feed.entries[0].navigation_url == "https://example.test/opds/classics.xml"
+
+
+def test_parse_navigation_feed_accepts_atom_catalog_links_without_rel() -> None:
+    xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Catalog</title>
+  <entry>
+    <title>Series</title>
+    <link href="series.xml" type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  </entry>
+</feed>
+"""
+
+    feed = parse_opds_feed(xml, source_url="https://example.test/opds/root.xml")
+
+    assert feed.entries[0].navigation_url == "https://example.test/opds/series.xml"
+
+
 def test_parse_acquisition_feed_extracts_epub_and_pdf(fixture_dir: Path) -> None:
     xml = (fixture_dir / "opds" / "acquisition.xml").read_text(encoding="utf-8")
 

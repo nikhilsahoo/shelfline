@@ -13,6 +13,7 @@ from epub_tui.library import BookRecord, LibraryRepository
 from epub_tui.reader import EpubOutlineItem, EpubPreview, EpubSection
 from epub_tui.tui.screens import (
     CatalogAuthScreen,
+    CatalogsScreen,
     DownloadStatusScreen,
     EntryScreen,
     EpubPreviewScreen,
@@ -65,6 +66,24 @@ class FakeWorkflow:
             on_status("Download complete")
             self.download_statuses.append("Download complete")
         return self.download_path
+
+
+class MappingWorkflow(FakeWorkflow):
+    def __init__(self, feeds: dict[str | None, CatalogFeed]) -> None:
+        super().__init__()
+        self.feeds = feeds
+
+    async def fetch_catalog(
+        self,
+        catalog: CatalogConfig,
+        url: str | None = None,
+        on_status: Any | None = None,
+    ) -> CatalogFeed:
+        self.fetch_urls.append(url)
+        if on_status is not None:
+            on_status("Fetching catalog...")
+            self.fetch_statuses.append("Fetching catalog...")
+        return self.feeds[url]
 
 
 def _entry() -> CatalogEntry:
@@ -398,6 +417,118 @@ async def test_app_library_bindings_delegate_to_active_library_screen(tmp_path: 
 
         app.action_delete_book()
         assert repo.list_books() == []
+
+
+@pytest.mark.asyncio
+async def test_app_catalog_binding_returns_from_library_to_catalogs(tmp_path: Path) -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    config = AppConfig(library_path=tmp_path, catalogs=[catalog])
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    app = EpubTuiApp(config=config, library=repo)
+
+    async with app.run_test() as pilot:
+        app.action_show_library()
+        await pilot.pause()
+        assert isinstance(app.screen, LibraryScreen)
+
+        app.action_show_catalogs()
+        await pilot.pause()
+
+        assert isinstance(app.screen, CatalogsScreen)
+        assert "Example" in str(app.screen.query_one("#catalog-list").renderable)
+
+
+@pytest.mark.asyncio
+async def test_app_add_catalog_binding_opens_catalogs_with_form_visible(tmp_path: Path) -> None:
+    config = AppConfig(library_path=tmp_path, catalogs=[])
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    app = EpubTuiApp(config=config, library=repo)
+
+    async with app.run_test() as pilot:
+        app.action_show_library()
+        await pilot.pause()
+
+        app.action_add_catalog()
+        await pilot.pause()
+
+        assert isinstance(app.screen, CatalogsScreen)
+        assert app.screen.query_one("#catalog-form").display is True
+
+
+@pytest.mark.asyncio
+async def test_catalog_screen_hides_add_form_until_requested(tmp_path: Path) -> None:
+    config = AppConfig(library_path=tmp_path, catalogs=[])
+    app = EpubTuiApp(config=config)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, CatalogsScreen)
+        assert screen.query_one("#catalog-form").display is False
+
+        screen.action_toggle_add_catalog()
+
+        assert screen.query_one("#catalog-form").display is True
+
+
+@pytest.mark.asyncio
+async def test_feed_screen_can_drill_down_multiple_navigation_levels() -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    root_feed = CatalogFeed(
+        title="Root",
+        source_url="https://example.test/opds",
+        updated=None,
+        entries=[_navigation_entry()],
+    )
+    group_feed = CatalogFeed(
+        title="Fiction",
+        source_url="https://example.test/opds/fiction",
+        updated=None,
+        entries=[
+            CatalogEntry(
+                title="Classics",
+                identifier="urn:nav:classics",
+                updated=None,
+                navigation_url="https://example.test/opds/fiction/classics",
+            )
+        ],
+    )
+    books_feed = CatalogFeed(
+        title="Classics",
+        source_url="https://example.test/opds/fiction/classics",
+        updated=None,
+        entries=[_entry()],
+    )
+    workflow = MappingWorkflow(
+        {
+            None: root_feed,
+            "https://example.test/opds/fiction": group_feed,
+            "https://example.test/opds/fiction/classics": books_feed,
+        }
+    )
+    app = EpubTuiApp(
+        config=AppConfig(library_path=Path("books"), catalogs=[catalog]),
+        workflow=workflow,
+    )
+
+    async with app.run_test() as pilot:
+        await app.screen.open_catalog(0)
+        await pilot.pause()
+        await app.screen.open_entry(0)
+        await pilot.pause()
+        await app.screen.open_entry(0)
+        await pilot.pause()
+
+        assert isinstance(app.screen, FeedScreen)
+        assert app.screen.feed.title == "Classics"
+        assert "Interesting Book" in str(app.screen.query_one("#feed-body").renderable)
+        assert workflow.fetch_urls == [
+            None,
+            "https://example.test/opds/fiction",
+            "https://example.test/opds/fiction/classics",
+        ]
 
 
 @pytest.mark.asyncio
