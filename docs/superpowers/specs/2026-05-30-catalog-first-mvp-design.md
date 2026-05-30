@@ -16,6 +16,7 @@ Included in the MVP:
 - User-configured library path required before downloads.
 - Human-editable JSON configuration for library path and saved catalogs.
 - SQLite-backed app-managed cache and downloaded-book metadata.
+- Cover image metadata and optional terminal display when supported.
 - EPUB text preview for downloaded EPUB files.
 - Metadata tracking for downloaded non-EPUB files.
 
@@ -47,7 +48,7 @@ The app uses a practical two-pane layout:
 
 - Left/sidebar: saved catalogs, current feed trail, and library shortcut.
 - Main pane: current feed entries or downloaded books.
-- Details/footer area: selected item metadata, available actions, download state, and errors.
+- Details/footer area: selected item metadata, cover image display when available, available actions, download state, and errors.
 
 MVP screens:
 
@@ -59,6 +60,8 @@ MVP screens:
 - `DownloadStatus`: modal or bottom panel for the single active download.
 - `LibraryScreen`: show downloaded items and stored metadata.
 - `EpubPreviewScreen`: scrollable plain-text preview for downloaded EPUBs.
+
+Cover display is progressive enhancement. If the terminal and dependencies support Sixel or another compatible terminal graphics protocol, the details pane can show the book cover image. If not, the TUI shows a compact text placeholder with the title/author and never fails the screen because image rendering is unavailable.
 
 Keyboard-first bindings:
 
@@ -168,6 +171,7 @@ Core tests:
 - Config tests for loading, saving, validating, and preserving human-editable JSON.
 - Library tests using temporary SQLite databases and temporary library directories.
 - EPUB preview tests with a tiny fixture EPUB.
+- Cover display widget tests that verify graceful fallback when terminal graphics support is unavailable.
 
 TUI smoke tests:
 
@@ -184,6 +188,7 @@ Recommended dependencies:
 
 - `textual` for the TUI.
 - `rich` for terminal text rendering.
+- Optional `textual-image` for cover display using Sixel or other terminal graphics protocols with fallback rendering.
 - `httpx` for HTTP fetching and streaming downloads.
 - `feedparser` for OPDS 1.x Atom parsing.
 - `sqlite3` from the standard library for MVP persistence.

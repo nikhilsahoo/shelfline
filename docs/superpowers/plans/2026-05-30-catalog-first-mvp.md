@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a Python Textual TUI that browses OPDS 1.x catalogs, supports optional Basic Auth, downloads one book at a time into a user-configured library path, tracks downloaded books, and previews EPUB text.
+**Goal:** Build a Python Textual TUI that browses OPDS 1.x catalogs, supports optional Basic Auth, downloads one book at a time into a user-configured library path, tracks downloaded books, displays cover images when terminal graphics are available, and previews EPUB text.
 
 **Architecture:** Use a layered package where Textual screens call small core services. JSON config owns user-editable library/catalog settings, SQLite owns app-managed cache and book metadata, and catalog/download/reader modules are testable without launching the TUI.
 
-**Tech Stack:** Python 3.11+, Textual, Rich, httpx, feedparser, pytest, pytest-asyncio, pytest-httpx, ebooklib, SQLite via the standard library, JSON via the standard library.
+**Tech Stack:** Python 3.11+, Textual, Rich, optional textual-image for Sixel/terminal graphics cover rendering, httpx, feedparser, pytest, pytest-asyncio, pytest-httpx, ebooklib, SQLite via the standard library, JSON via the standard library.
 
 ---
 
@@ -25,7 +25,7 @@
 - `src/epub_tui/downloads.py`: single download service with temporary-file completion.
 - `src/epub_tui/reader.py`: EPUB text extraction.
 - `src/epub_tui/tui/screens.py`: Textual screens for setup, catalogs, feeds, entries, library, preview.
-- `src/epub_tui/tui/widgets.py`: reusable list/detail/status widgets.
+- `src/epub_tui/tui/widgets.py`: reusable list/detail/status widgets, including graceful cover image display.
 - `tests/conftest.py`: shared fixtures.
 - `tests/fixtures/opds/navigation.xml`: OPDS navigation feed fixture.
 - `tests/fixtures/opds/acquisition.xml`: OPDS acquisition feed fixture.
@@ -89,6 +89,7 @@ dependencies = [
   "httpx>=0.27",
   "rich>=13.7",
   "textual>=0.80",
+  "textual-image>=0.8",
 ]
 
 [project.optional-dependencies]
@@ -130,6 +131,7 @@ pytest
 - One active download at a time
 - JSON config for library path and saved catalogs
 - SQLite metadata/cache
+- Sixel/terminal graphics cover display when supported, with text fallback
 - EPUB text preview
 ```
 
@@ -1468,6 +1470,15 @@ async def test_app_shows_catalogs_when_config_exists(tmp_path) -> None:
     async with app.run_test() as pilot:
         assert app.screen.id == "catalogs"
         assert "Public" in app.screen.renderable_text()
+
+
+def test_cover_widget_falls_back_to_text_when_image_missing(tmp_path) -> None:
+    from epub_tui.tui.widgets import CoverDisplay
+
+    widget = CoverDisplay(title="Sample Book", author_line="Ada Writer", image_path=tmp_path / "missing.jpg")
+
+    assert "Sample Book" in widget.renderable_text()
+    assert "Ada Writer" in widget.renderable_text()
 ```
 
 - [ ] **Step 2: Run TUI smoke tests to verify they fail**
@@ -1489,12 +1500,37 @@ __all__ = ["CatalogsScreen", "SetupScreen"]
 Create `src/epub_tui/tui/widgets.py`:
 
 ```python
+from pathlib import Path
+
 from textual.widgets import Static
 
 
 class StatusLine(Static):
     def set_message(self, message: str) -> None:
         self.update(message)
+
+
+class CoverDisplay(Static):
+    def __init__(self, title: str, author_line: str, image_path: Path | None) -> None:
+        self.title = title
+        self.author_line = author_line
+        self.image_path = image_path
+        super().__init__(self._build_renderable())
+
+    def renderable_text(self) -> str:
+        if self.image_path is None or not self.image_path.exists():
+            return f"[cover unavailable]\n{self.title}\n{self.author_line}"
+        return f"[cover]\n{self.title}\n{self.author_line}"
+
+    def _build_renderable(self):
+        if self.image_path is not None and self.image_path.exists():
+            try:
+                from textual_image.widget import Image
+
+                return Image(str(self.image_path))
+            except Exception:
+                return self.renderable_text()
+        return self.renderable_text()
 ```
 
 Create `src/epub_tui/tui/screens.py`:
@@ -1863,6 +1899,7 @@ Example config:
 - One active download at a time
 - JSON config for library path and saved catalogs
 - SQLite metadata/cache
+- Sixel/terminal graphics cover display when supported, with text fallback
 - EPUB text preview
 ```
 
@@ -1887,7 +1924,7 @@ git commit -m "feat: add CLI config entrypoint"
 
 ## Self-Review
 
-- Spec coverage: OPDS 1.x parsing and cover image metadata are covered by Task 3. Basic Auth fetch and credential redaction are covered by Tasks 2 and 4. JSON config is covered by Task 2. SQLite cache/book metadata, including cover URLs and optional local cover paths, is covered by Task 5. Single download workflow is covered by Task 6. EPUB preview is covered by Task 7. Textual startup and catalog screen smoke coverage are covered by Task 8. End-to-end service integration is covered by Task 9. CLI launch and usage docs are covered by Task 10.
+- Spec coverage: OPDS 1.x parsing and cover image metadata are covered by Task 3. Basic Auth fetch and credential redaction are covered by Tasks 2 and 4. JSON config is covered by Task 2. SQLite cache/book metadata, including cover URLs and optional local cover paths, is covered by Task 5. Single download workflow is covered by Task 6. EPUB preview is covered by Task 7. Textual startup, catalog screen smoke coverage, and cover display fallback are covered by Task 8. End-to-end service integration is covered by Task 9. CLI launch and usage docs are covered by Task 10.
 - Scope boundaries: OPDS 2.x, multi-download queue, PDF/DjVu/CBR rendering, OAuth, annotations, sync, and full-text search are not implemented in this plan.
 - Type consistency: `AppConfig`, `CatalogConfig`, `CatalogFeed`, `CatalogEntry`, `AcquisitionLink`, `BookRecord`, `LibraryRepository`, `CatalogClient`, `DownloadService`, `CatalogWorkflow`, and `EpubTuiApp` signatures are used consistently across tasks.
 - Red-flag scan: The plan contains no unresolved work markers.
