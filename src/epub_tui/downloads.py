@@ -35,24 +35,11 @@ def safe_replace(partial_path: Path, final_path: Path) -> Path:
 
 
 def _content_length(response: httpx.Response) -> int | None:
-    if not any(name == b"Content-Length" for name, _ in response.headers.raw):
-        return None
-
     value = response.headers.get("Content-Length")
-    if value is None:
+    if value is None or not value.isdigit():
         return None
 
-    try:
-        length = int(value)
-    except ValueError:
-        return None
-
-    stream = getattr(response.stream, "_stream", None)
-    body = getattr(stream, "_stream", None)
-    if isinstance(body, bytes) and len(body) == length and length < 8:
-        return None
-
-    return length
+    return int(value)
 
 
 class DownloadService:

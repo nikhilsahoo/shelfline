@@ -63,8 +63,8 @@ async def test_download_reports_progress_with_known_total(
 ) -> None:
     httpx_mock.add_response(
         url="https://example.test/book.epub",
-        content=b"book bytes",
-        headers={"Content-Length": "10"},
+        content=b"book",
+        headers={"content-length": "4"},
     )
     service = DownloadService(httpx.AsyncClient())
     updates: list[DownloadProgress] = []
@@ -76,7 +76,7 @@ async def test_download_reports_progress_with_known_total(
         on_progress=updates.append,
     )
 
-    assert updates[-1] == DownloadProgress(bytes_received=10, total_bytes=10)
+    assert updates[-1] == DownloadProgress(bytes_received=4, total_bytes=4)
     assert updates[-1].percent == 100.0
 
 
@@ -84,7 +84,10 @@ async def test_download_reports_progress_with_known_total(
 async def test_download_reports_progress_without_known_total(
     tmp_path: Path, httpx_mock: HTTPXMock
 ) -> None:
-    httpx_mock.add_response(url="https://example.test/book.epub", content=b"book")
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, stream=httpx.ByteStream(b"book"))
+
+    httpx_mock.add_callback(handler, url="https://example.test/book.epub")
     service = DownloadService(httpx.AsyncClient())
     updates: list[DownloadProgress] = []
 
