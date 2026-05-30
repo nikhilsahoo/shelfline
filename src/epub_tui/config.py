@@ -142,11 +142,31 @@ def _catalog_to_json(catalog: CatalogConfig, redact: bool = False) -> dict[str, 
 
 
 def _write_config_text(path: Path, text: str) -> None:
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    flags = os.O_WRONLY | os.O_CREAT
     fd = os.open(path, flags, _CONFIG_FILE_MODE)
-    with os.fdopen(fd, "w", encoding="utf-8") as file:
-        file.write(text)
+    try:
+        _restrict_config_descriptor_permissions(fd)
+        os.ftruncate(fd, 0)
+        os.lseek(fd, 0, os.SEEK_SET)
+        with os.fdopen(fd, "w", encoding="utf-8") as file:
+            fd = -1
+            file.write(text)
+    finally:
+        if fd != -1:
+            os.close(fd)
     _restrict_config_permissions(path)
+
+
+def _restrict_config_descriptor_permissions(fd: int) -> None:
+    if os.name != "posix":
+        return
+    fchmod = getattr(os, "fchmod", None)
+    if fchmod is None:
+        return
+    try:
+        fchmod(fd, _CONFIG_FILE_MODE)
+    except (OSError, NotImplementedError):
+        pass
 
 
 def _restrict_config_permissions(path: Path) -> None:

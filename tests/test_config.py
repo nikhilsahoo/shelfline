@@ -78,6 +78,58 @@ def test_save_config_restricts_file_permissions_when_supported(
     assert chmod_calls == [(config_path, 0o600)]
 
 
+def test_save_config_restricts_open_file_descriptor_before_writing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    events: list[str] = []
+    real_fdopen = os.fdopen
+
+    class RecordingFile:
+        def __init__(self, file: object) -> None:
+            self._file = file
+
+        def __enter__(self) -> "RecordingFile":
+            self._file.__enter__()
+            return self
+
+        def __exit__(self, *args: object) -> object:
+            return self._file.__exit__(*args)
+
+        def write(self, text: str) -> object:
+            events.append("write")
+            return self._file.write(text)
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._file, name)
+
+    def fake_fchmod(fd: int, mode: int) -> None:
+        events.append(f"fchmod:{mode:o}")
+
+    def recording_fdopen(fd: int, *args: object, **kwargs: object) -> RecordingFile:
+        return RecordingFile(real_fdopen(fd, *args, **kwargs))
+
+    monkeypatch.setattr("epub_tui.config.os.name", "posix")
+    monkeypatch.setattr("epub_tui.config.os.fchmod", fake_fchmod, raising=False)
+    monkeypatch.setattr("epub_tui.config.os.fdopen", recording_fdopen)
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}", encoding="utf-8")
+    config = AppConfig(
+        library_path=tmp_path / "books",
+        catalogs=[
+            CatalogConfig(
+                name="Private",
+                url="https://example.test/opds",
+                auth={"username": "alice", "password": "secret"},
+            )
+        ],
+    )
+
+    save_config(config_path, config)
+
+    assert events[:2] == ["fchmod:600", "write"]
+
+
 def test_save_config_writes_user_only_permissions_on_posix(tmp_path: Path) -> None:
     if os.name != "posix" or not hasattr(os, "umask"):
         pytest.skip("POSIX permission bits are not meaningful on this platform")
@@ -92,6 +144,30 @@ def test_save_config_writes_user_only_permissions_on_posix(tmp_path: Path) -> No
         os.umask(old_umask)
 
     assert config_path.stat().st_mode & 0o777 == 0o600
+
+
+def test_save_config_tightens_existing_permissive_file_on_posix(tmp_path: Path) -> None:
+    if os.name != "posix":
+        pytest.skip("POSIX permission bits are not meaningful on this platform")
+
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}", encoding="utf-8")
+    config_path.chmod(0o644)
+    config = AppConfig(
+        library_path=tmp_path / "books",
+        catalogs=[
+            CatalogConfig(
+                name="Private",
+                url="https://example.test/opds",
+                auth={"username": "alice", "password": "secret"},
+            )
+        ],
+    )
+
+    save_config(config_path, config)
+
+    assert config_path.stat().st_mode & 0o777 == 0o600
+    assert "secret" in config_path.read_text(encoding="utf-8")
 
 
 def test_rejects_duplicate_catalog_names(tmp_path: Path) -> None:
