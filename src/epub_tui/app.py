@@ -1,5 +1,7 @@
-from textual.app import App, ComposeResult
-from textual.widgets import Footer, Header, Static
+from textual.app import App
+
+from epub_tui.config import AppConfig
+from epub_tui.tui.screens import CatalogsScreen, SetupScreen
 
 
 class EpubTuiApp(App[None]):
@@ -11,10 +13,16 @@ class EpubTuiApp(App[None]):
         ("x", "delete_book", "Delete Book"),
     ]
 
-    def compose(self) -> ComposeResult:
-        yield Header()
-        yield Static("epub-tui catalog-first MVP")
-        yield Footer()
+    def __init__(self, config: AppConfig | None = None, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+        self.config = config
+
+    def on_mount(self) -> None:
+        if self.config is None:
+            self.push_screen(SetupScreen())
+            return
+
+        self.push_screen(CatalogsScreen(self.config))
 
     def action_show_library(self) -> None:
         self.notify("Library screen is not wired yet")
