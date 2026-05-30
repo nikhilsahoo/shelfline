@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a Python Textual TUI that browses OPDS 1.x catalogs, supports optional Basic Auth, downloads one book at a time into a user-configured library path, tracks downloaded books, displays cover images when terminal graphics are available, and previews EPUB text.
+**Goal:** Build a Python Textual TUI that browses OPDS 1.x catalogs, supports optional Basic Auth, downloads one book at a time into a user-configured library path, manages downloaded books locally, displays cover images when terminal graphics are available, and previews EPUB text.
 
 **Architecture:** Use a layered package where Textual screens call small core services. JSON config owns user-editable library/catalog settings, SQLite owns app-managed cache and book metadata, and catalog/download/reader modules are testable without launching the TUI.
 
@@ -21,7 +21,7 @@
 - `src/epub_tui/catalog/models.py`: OPDS feed, entry, and acquisition dataclasses.
 - `src/epub_tui/catalog/parser.py`: OPDS 1.x Atom normalization from feedparser output.
 - `src/epub_tui/catalog/client.py`: HTTP fetching with optional Basic Auth.
-- `src/epub_tui/library.py`: SQLite schema and book/cache repositories.
+- `src/epub_tui/library.py`: SQLite schema plus book/cache repositories with read/unread and deletion operations.
 - `src/epub_tui/downloads.py`: single download service with temporary-file completion.
 - `src/epub_tui/reader.py`: EPUB text extraction.
 - `src/epub_tui/tui/screens.py`: Textual screens for setup, catalogs, feeds, entries, library, preview.
@@ -131,6 +131,7 @@ pytest
 - One active download at a time
 - JSON config for library path and saved catalogs
 - SQLite metadata/cache
+- Local library management: mark read/unread and delete downloaded books
 - Sixel/terminal graphics cover display when supported, with text fallback
 - EPUB text preview
 ```
@@ -164,12 +165,26 @@ from textual.widgets import Footer, Header, Static
 
 class EpubTuiApp(App[None]):
     TITLE = "epub-tui"
-    BINDINGS = [("q", "quit", "Quit")]
+    BINDINGS = [
+        ("q", "quit", "Quit"),
+        ("l", "show_library", "Library"),
+        ("m", "toggle_read", "Read/Unread"),
+        ("x", "delete_book", "Delete Book"),
+    ]
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield Static("epub-tui catalog-first MVP")
         yield Footer()
+
+    def action_show_library(self) -> None:
+        self.notify("Library screen is not wired yet")
+
+    def action_toggle_read(self) -> None:
+        self.notify("Read/unread is available from the library screen")
+
+    def action_delete_book(self) -> None:
+        self.notify("Delete is available from the library screen")
 ```
 
 Create `tests/conftest.py`:
@@ -958,6 +973,7 @@ def test_repository_initializes_schema_and_saves_book(tmp_path: Path) -> None:
         cover_image_url="https://example.test/covers/sample.jpg",
         cover_image_path=tmp_path / "covers" / "sample.jpg",
         local_file_path=tmp_path / "books" / "sample.epub",
+        is_read=False,
     )
 
     repo.add_book(book)
@@ -968,6 +984,65 @@ def test_repository_initializes_schema_and_saves_book(tmp_path: Path) -> None:
     assert books[0].authors == ["Ada Writer"]
     assert books[0].cover_image_url == "https://example.test/covers/sample.jpg"
     assert books[0].cover_image_path == tmp_path / "covers" / "sample.jpg"
+    assert books[0].is_read is False
+
+
+def test_repository_marks_book_read_and_unread(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    book_path = tmp_path / "books" / "sample.epub"
+    book_path.parent.mkdir()
+    book_path.write_bytes(b"book")
+    repo.add_book(
+        BookRecord(
+            title="Sample Book",
+            authors=[],
+            identifiers=[],
+            source_catalog="Private",
+            source_entry_url=None,
+            acquisition_url="https://example.test/books/sample.epub",
+            media_type="application/epub+zip",
+            cover_image_url=None,
+            cover_image_path=None,
+            local_file_path=book_path,
+            is_read=False,
+        )
+    )
+
+    repo.mark_read(book_path, is_read=True)
+    assert repo.list_books()[0].is_read is True
+
+    repo.mark_read(book_path, is_read=False)
+    assert repo.list_books()[0].is_read is False
+
+
+def test_repository_deletes_local_book_and_hides_it_by_default(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    book_path = tmp_path / "books" / "sample.epub"
+    book_path.parent.mkdir()
+    book_path.write_bytes(b"book")
+    repo.add_book(
+        BookRecord(
+            title="Sample Book",
+            authors=[],
+            identifiers=[],
+            source_catalog="Private",
+            source_entry_url=None,
+            acquisition_url="https://example.test/books/sample.epub",
+            media_type="application/epub+zip",
+            cover_image_url=None,
+            cover_image_path=None,
+            local_file_path=book_path,
+            is_read=False,
+        )
+    )
+
+    repo.delete_book(book_path, remove_file=True)
+
+    assert not book_path.exists()
+    assert repo.list_books() == []
+    assert repo.list_books(include_deleted=True)[0].deleted_at is not None
 
 
 def test_feed_cache_round_trip(tmp_path: Path) -> None:
@@ -1014,6 +1089,8 @@ class BookRecord:
     cover_image_url: str | None
     cover_image_path: Path | None
     local_file_path: Path
+    is_read: bool = False
+    deleted_at: str | None = None
 
 
 class LibraryRepository:
@@ -1037,6 +1114,8 @@ class LibraryRepository:
                     cover_image_url TEXT,
                     cover_image_path TEXT,
                     local_file_path TEXT NOT NULL UNIQUE,
+                    is_read INTEGER NOT NULL DEFAULT 0,
+                    deleted_at TEXT,
                     downloaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -1057,9 +1136,9 @@ class LibraryRepository:
                 INSERT INTO books (
                     title, authors_json, identifiers_json, source_catalog,
                     source_entry_url, acquisition_url, media_type,
-                    cover_image_url, cover_image_path, local_file_path
+                    cover_image_url, cover_image_path, local_file_path, is_read
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     book.title,
@@ -1072,21 +1151,41 @@ class LibraryRepository:
                     book.cover_image_url,
                     str(book.cover_image_path) if book.cover_image_path is not None else None,
                     str(book.local_file_path),
+                    1 if book.is_read else 0,
                 ),
             )
 
-    def list_books(self) -> list[BookRecord]:
+    def list_books(self, include_deleted: bool = False) -> list[BookRecord]:
+        deleted_clause = "" if include_deleted else "WHERE deleted_at IS NULL"
         with self._connect() as conn:
             rows = conn.execute(
-                """
+                f"""
                 SELECT title, authors_json, identifiers_json, source_catalog,
                        source_entry_url, acquisition_url, media_type,
-                       cover_image_url, cover_image_path, local_file_path
+                       cover_image_url, cover_image_path, local_file_path,
+                       is_read, deleted_at
                 FROM books
+                {deleted_clause}
                 ORDER BY downloaded_at DESC, title ASC
                 """
             ).fetchall()
         return [_book_from_row(row) for row in rows]
+
+    def mark_read(self, local_file_path: Path, is_read: bool) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE books SET is_read = ? WHERE local_file_path = ? AND deleted_at IS NULL",
+                (1 if is_read else 0, str(local_file_path)),
+            )
+
+    def delete_book(self, local_file_path: Path, remove_file: bool = True) -> None:
+        if remove_file:
+            local_file_path.unlink(missing_ok=True)
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE books SET deleted_at = CURRENT_TIMESTAMP WHERE local_file_path = ?",
+                (str(local_file_path),),
+            )
 
     def save_feed_cache(self, source_catalog: str, url: str, title: str, body: str) -> None:
         with self._connect() as conn:
@@ -1136,6 +1235,8 @@ def _book_from_row(row: sqlite3.Row) -> BookRecord:
         cover_image_url=row["cover_image_url"],
         cover_image_path=Path(row["cover_image_path"]) if row["cover_image_path"] else None,
         local_file_path=Path(row["local_file_path"]),
+        is_read=bool(row["is_read"]),
+        deleted_at=row["deleted_at"],
     )
 ```
 
@@ -1591,7 +1692,12 @@ from epub_tui.tui.screens import CatalogsScreen, SetupScreen
 
 class EpubTuiApp(App[None]):
     TITLE = "epub-tui"
-    BINDINGS = [("q", "quit", "Quit")]
+    BINDINGS = [
+        ("q", "quit", "Quit"),
+        ("l", "show_library", "Library"),
+        ("m", "toggle_read", "Read/Unread"),
+        ("x", "delete_book", "Delete Book"),
+    ]
 
     def __init__(self, config: AppConfig | None = None) -> None:
         super().__init__()
@@ -1602,6 +1708,15 @@ class EpubTuiApp(App[None]):
             self.push_screen(SetupScreen())
         else:
             self.push_screen(CatalogsScreen(self.config))
+
+    def action_show_library(self) -> None:
+        self.notify("Library screen is not wired yet")
+
+    def action_toggle_read(self) -> None:
+        self.notify("Read/unread is available from the library screen")
+
+    def action_delete_book(self) -> None:
+        self.notify("Delete is available from the library screen")
 ```
 
 - [ ] **Step 4: Run TUI smoke tests**
@@ -1731,6 +1846,7 @@ class CatalogWorkflow:
                 cover_image_url=entry.cover_image_url or entry.thumbnail_url,
                 cover_image_path=None,
                 local_file_path=path,
+                is_read=False,
             )
         )
         return path
@@ -1899,6 +2015,7 @@ Example config:
 - One active download at a time
 - JSON config for library path and saved catalogs
 - SQLite metadata/cache
+- Local library management: mark read/unread and delete downloaded books
 - Sixel/terminal graphics cover display when supported, with text fallback
 - EPUB text preview
 ```
@@ -1924,7 +2041,7 @@ git commit -m "feat: add CLI config entrypoint"
 
 ## Self-Review
 
-- Spec coverage: OPDS 1.x parsing and cover image metadata are covered by Task 3. Basic Auth fetch and credential redaction are covered by Tasks 2 and 4. JSON config is covered by Task 2. SQLite cache/book metadata, including cover URLs and optional local cover paths, is covered by Task 5. Single download workflow is covered by Task 6. EPUB preview is covered by Task 7. Textual startup, catalog screen smoke coverage, and cover display fallback are covered by Task 8. End-to-end service integration is covered by Task 9. CLI launch and usage docs are covered by Task 10.
+- Spec coverage: OPDS 1.x parsing and cover image metadata are covered by Task 3. Basic Auth fetch and credential redaction are covered by Tasks 2 and 4. JSON config is covered by Task 2. SQLite cache/book metadata, including cover URLs, optional local cover paths, read/unread state, and soft deletion, is covered by Task 5. Single download workflow is covered by Task 6. EPUB preview is covered by Task 7. Textual startup, catalog screen smoke coverage, library action bindings, and cover display fallback are covered by Task 8. End-to-end service integration is covered by Task 9. CLI launch and usage docs are covered by Task 10.
 - Scope boundaries: OPDS 2.x, multi-download queue, PDF/DjVu/CBR rendering, OAuth, annotations, sync, and full-text search are not implemented in this plan.
 - Type consistency: `AppConfig`, `CatalogConfig`, `CatalogFeed`, `CatalogEntry`, `AcquisitionLink`, `BookRecord`, `LibraryRepository`, `CatalogClient`, `DownloadService`, `CatalogWorkflow`, and `EpubTuiApp` signatures are used consistently across tasks.
 - Red-flag scan: The plan contains no unresolved work markers.

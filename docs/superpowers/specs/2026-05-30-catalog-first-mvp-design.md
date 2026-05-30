@@ -17,6 +17,7 @@ Included in the MVP:
 - Human-editable JSON configuration for library path and saved catalogs.
 - SQLite-backed app-managed cache and downloaded-book metadata.
 - Cover image metadata and optional terminal display when supported.
+- Basic local library management: list downloaded books, mark read/unread, and delete local books.
 - EPUB text preview for downloaded EPUB files.
 - Metadata tracking for downloaded non-EPUB files.
 
@@ -26,7 +27,7 @@ Explicitly out of scope for the MVP:
 - Multiple simultaneous downloads.
 - PDF, DjVu, CBR, CBZ, or other in-terminal rendering.
 - Full-text book search.
-- Sync, annotations, reading progress persistence, and advanced library management.
+- Sync, annotations, reading progress persistence beyond read/unread state, collections/tags, bulk edits, and advanced library management.
 - OAuth, bearer token, cookie, or custom authentication flows.
 
 ## Architecture
@@ -36,7 +37,7 @@ The app is organized into layered modules. Textual screens call services in the 
 - `tui`: Textual screens, widgets, commands, key bindings, and status display.
 - `catalog`: OPDS fetching, Basic Auth handling, feed parsing, URL resolution, and normalized catalog models.
 - `downloads`: single-download orchestration, progress reporting, temporary file handling, retries, and final file placement.
-- `library`: SQLite schema, downloaded book metadata, and feed cache.
+- `library`: SQLite schema, downloaded book metadata, read/unread state, deletion operations, and feed cache.
 - `reader`: EPUB text extraction and preview document model.
 - `config`: JSON configuration loading/saving, saved catalogs, optional per-catalog credentials, and library path validation.
 
@@ -58,7 +59,7 @@ MVP screens:
 - `FeedScreen`: browse OPDS navigation/acquisition feeds with breadcrumb and back stack.
 - `EntryScreen`: show item details and acquisition/download options.
 - `DownloadStatus`: modal or bottom panel for the single active download.
-- `LibraryScreen`: show downloaded items and stored metadata.
+- `LibraryScreen`: show downloaded items and stored metadata, mark books read/unread, delete local books, and open EPUB preview.
 - `EpubPreviewScreen`: scrollable plain-text preview for downloaded EPUBs.
 
 Cover display is progressive enhancement. If the terminal and dependencies support Sixel or another compatible terminal graphics protocol, the details pane can show the book cover image. If not, the TUI shows a compact text placeholder with the title/author and never fails the screen because image rendering is unavailable.
@@ -72,6 +73,8 @@ Keyboard-first bindings:
 - `/`: filter the visible list.
 - `r`: refresh current feed.
 - `l`: open library.
+- `m`: toggle read/unread in the library.
+- `x`: delete selected local library book after confirmation.
 - `q`: quit or close current screen.
 
 ## Core Flow
@@ -90,6 +93,7 @@ Primary flow:
 8. Save downloaded-book metadata in SQLite.
 9. Offer a basic EPUB text preview for EPUB downloads.
 10. Track non-EPUB downloads as stored files with metadata, without in-terminal preview.
+11. Let the user manage downloaded books locally by marking read/unread and deleting a book from the local library.
 
 Recoverable errors:
 
@@ -101,6 +105,7 @@ Recoverable errors:
 - Download failure or interruption.
 - Duplicate local file.
 - Invalid library path.
+- Local book deletion failure.
 
 Errors should show clear messages and preserve a retry/back path.
 
@@ -141,11 +146,11 @@ The TUI can create and update this file, but the file should remain simple enoug
 SQLite stores cache and app-managed metadata:
 
 - `feed_cache`: feed URL, catalog ID, title, fetched timestamp, and raw or normalized feed cache.
-- `books`: title, authors, identifiers, source catalog ID, source entry URL, acquisition URL, media type, cover image URL, local cover image path when downloaded, local file path, and download timestamp.
+- `books`: title, authors, identifiers, source catalog ID, source entry URL, acquisition URL, media type, cover image URL, local cover image path when downloaded, local file path, read/unread state, download timestamp, and deletion timestamp when metadata is retained.
 
 Credential fields should be isolated behind a config or credential store interface. This keeps the MVP simple while leaving room to replace JSON credential storage with OS keyring integration later.
 
-Downloads write to a temporary file first, then move to the final library location only after completion and basic validation. Interrupted downloads must not appear as complete library books.
+Downloads write to a temporary file first, then move to the final library location only after completion and basic validation. Interrupted downloads must not appear as complete library books. Deleting a book removes the local file and marks the SQLite record deleted, so the app can avoid immediately re-importing stale metadata while keeping a lightweight audit trail.
 
 ## Reader
 
@@ -170,6 +175,7 @@ Core tests:
 - Download tests with mocked HTTP responses, including success, interruption, failure, and duplicate filenames.
 - Config tests for loading, saving, validating, and preserving human-editable JSON.
 - Library tests using temporary SQLite databases and temporary library directories.
+- Library management tests for mark read/unread, list hiding deleted books by default, and local file deletion.
 - EPUB preview tests with a tiny fixture EPUB.
 - Cover display widget tests that verify graceful fallback when terminal graphics support is unavailable.
 
