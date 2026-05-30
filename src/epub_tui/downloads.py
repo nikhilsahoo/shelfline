@@ -70,6 +70,8 @@ class DownloadService:
 
             try:
                 async with self._client.stream("GET", url, auth=auth) as response:
+                    if 300 <= response.status_code < 400:
+                        raise DownloadError(f"HTTP {response.status_code}")
                     if response.status_code >= 400:
                         raise DownloadError(f"HTTP {response.status_code}")
 
@@ -93,7 +95,7 @@ class DownloadService:
                     return final_path
             except httpx.HTTPError as exc:
                 raise DownloadError(str(exc)) from exc
-        except Exception:
+        except BaseException:
             if partial_path.exists():
                 partial_path.unlink()
             raise
