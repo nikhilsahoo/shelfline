@@ -5,7 +5,7 @@ import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
-from epub_tui.config import AppConfig, CatalogConfig
+from epub_tui.config import AppConfig, CatalogConfig, load_config
 from epub_tui.downloads import DownloadError, DownloadProgress
 from epub_tui.services import CatalogWorkflow
 
@@ -209,6 +209,90 @@ async def test_workflow_download_omits_auth_for_cross_origin_acquisition(
     downloaded = await workflow.download_best_epub(catalog, feed.entries[0])
 
     assert downloaded.read_bytes() == b"epub bytes"
+
+
+@pytest.mark.asyncio
+async def test_workflow_stores_sanitized_acquisition_url_from_embedded_credentials(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        """
+{
+  "library_path": "%s",
+  "catalogs": [
+    {
+      "name": "Private",
+      "url": "https://alice:secret@example.test/opds"
+    }
+  ]
+}
+"""
+        % str(tmp_path / "books").replace("\\", "\\\\"),
+        encoding="utf-8",
+    )
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Private</title>
+  <entry>
+    <title>Private Book</title>
+    <link rel="http://opds-spec.org/acquisition" href="books/private.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    httpx_mock.add_response(url="https://example.test/opds/books/private.epub", content=b"epub bytes")
+    config = load_config(config_path)
+    catalog = config.catalogs[0]
+    workflow = CatalogWorkflow(config=config, state_db=tmp_path / "state.db", http_client=httpx.AsyncClient())
+
+    feed = await workflow.fetch_catalog(catalog)
+    await workflow.download_best_epub(catalog, feed.entries[0])
+
+    book = workflow.library.list_books()[0]
+    assert book.acquisition_url == "https://example.test/opds/books/private.epub"
+    assert "alice" not in book.acquisition_url
+    assert "secret" not in book.acquisition_url
+
+
+@pytest.mark.asyncio
+async def test_workflow_downloads_and_tracks_non_epub_acquisition(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Private</title>
+  <entry>
+    <title>Scanned Book</title>
+    <id>urn:example:scanned</id>
+    <author><name>Casey Archivist</name></author>
+    <link rel="http://opds-spec.org/acquisition" href="downloads/scanned" type="application/pdf" title="PDF"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    httpx_mock.add_response(url="https://example.test/opds/downloads/scanned", content=b"pdf bytes")
+    catalog = CatalogConfig(name="Public", url="https://example.test/opds")
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    feed = await workflow.fetch_catalog(catalog)
+    downloaded = await workflow.download_acquisition(catalog, feed.entries[0])
+
+    assert downloaded == tmp_path / "books" / "Scanned Book.pdf"
+    assert downloaded.read_bytes() == b"pdf bytes"
+    book = workflow.library.list_books()[0]
+    assert book.title == "Scanned Book"
+    assert book.authors == ["Casey Archivist"]
+    assert book.identifiers == ["urn:example:scanned"]
+    assert book.acquisition_url == "https://example.test/opds/downloads/scanned"
+    assert book.media_type == "application/pdf"
+    assert book.local_file_path == downloaded
 
 
 @pytest.mark.asyncio

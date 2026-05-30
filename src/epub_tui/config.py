@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse, urlsplit, urlunsplit
 
 
 class ConfigError(ValueError):
@@ -20,6 +20,7 @@ class CatalogConfig:
     name: str
     url: str
     auth: dict[str, str] | None = None
+    auth_from_url: bool = field(default=False, repr=False, compare=False)
 
 
 @dataclass(frozen=True)
@@ -117,8 +118,10 @@ def _parse_catalog(raw: Any) -> CatalogConfig:
     if not isinstance(url, str) or not _is_http_url(url):
         raise ConfigError(f"Invalid catalog URL for {name}")
 
+    sanitized_url, embedded_auth = _normalize_catalog_url(url)
     auth_raw = raw.get("auth")
     auth: dict[str, str] | None = None
+    auth_from_url = False
     if auth_raw is not None:
         if not isinstance(auth_raw, dict):
             raise ConfigError(f"Catalog {name} auth must be an object")
@@ -127,13 +130,16 @@ def _parse_catalog(raw: Any) -> CatalogConfig:
         if not isinstance(username, str) or not isinstance(password, str):
             raise ConfigError(f"Catalog {name} auth requires both username and password")
         auth = {"username": username, "password": password}
+    elif embedded_auth is not None:
+        auth = embedded_auth
+        auth_from_url = True
 
-    return CatalogConfig(name=name, url=url, auth=auth)
+    return CatalogConfig(name=name, url=sanitized_url, auth=auth, auth_from_url=auth_from_url)
 
 
 def _catalog_to_json(catalog: CatalogConfig, redact: bool = False) -> dict[str, Any]:
-    item: dict[str, Any] = {"name": catalog.name, "url": catalog.url}
-    if catalog.auth is not None:
+    item: dict[str, Any] = {"name": catalog.name, "url": _strip_url_credentials(catalog.url)}
+    if catalog.auth is not None and not catalog.auth_from_url:
         item["auth"] = {
             "username": catalog.auth["username"],
             "password": "***" if redact else catalog.auth["password"],
@@ -181,3 +187,28 @@ def _restrict_config_permissions(path: Path) -> None:
 def _is_http_url(value: str) -> bool:
     parsed = urlparse(value)
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _normalize_catalog_url(url: str) -> tuple[str, dict[str, str] | None]:
+    parts = urlsplit(url)
+    auth = None
+    if parts.username is not None:
+        auth = {
+            "username": unquote(parts.username),
+            "password": unquote(parts.password or ""),
+        }
+    return _strip_url_credentials(url), auth
+
+
+def _strip_url_credentials(url: str) -> str:
+    parts = urlsplit(url)
+    if "@" not in parts.netloc:
+        return url
+
+    hostname = parts.hostname or ""
+    if ":" in hostname and not hostname.startswith("["):
+        hostname = f"[{hostname}]"
+    netloc = hostname
+    if parts.port is not None:
+        netloc = f"{netloc}:{parts.port}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))

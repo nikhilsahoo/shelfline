@@ -43,6 +43,85 @@ def test_load_config_with_catalog_and_basic_auth(tmp_path: Path) -> None:
     assert config.preferences == {"theme": "textual-dark"}
 
 
+def test_load_config_extracts_embedded_url_credentials(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    library_path = tmp_path / "library"
+    config_path.write_text(
+        json.dumps(
+            {
+                "library_path": str(library_path),
+                "catalogs": [
+                    {
+                        "name": "Private",
+                        "url": "https://alice:secret@example.test/opds",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.catalogs[0].url == "https://example.test/opds"
+    assert config.catalogs[0].auth == {"username": "alice", "password": "secret"}
+
+
+def test_load_config_prefers_explicit_auth_over_embedded_url_credentials(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "library_path": str(tmp_path / "library"),
+                "catalogs": [
+                    {
+                        "name": "Private",
+                        "url": "https://ignored:ignored@example.test/opds",
+                        "auth": {"username": "alice", "password": "secret"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.catalogs[0].url == "https://example.test/opds"
+    assert config.catalogs[0].auth == {"username": "alice", "password": "secret"}
+
+
+def test_save_and_redact_config_do_not_persist_embedded_url_credentials(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "library_path": str(tmp_path / "library"),
+                "catalogs": [
+                    {
+                        "name": "Private",
+                        "url": "https://alice:secret@example.test/opds",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = load_config(config_path)
+    saved_path = tmp_path / "saved.json"
+
+    save_config(saved_path, config)
+    saved = saved_path.read_text(encoding="utf-8")
+    redacted = redact_config(config)
+
+    assert "https://example.test/opds" in saved
+    assert "https://example.test/opds" in redacted
+    assert "alice" not in saved
+    assert "secret" not in saved
+    assert "alice" not in redacted
+    assert "secret" not in redacted
+
+
 def test_save_config_is_human_editable_json(tmp_path: Path) -> None:
     config_path = tmp_path / "config.json"
     config = AppConfig(

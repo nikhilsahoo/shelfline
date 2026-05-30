@@ -9,8 +9,8 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 
 from epub_tui.catalog.client import CatalogClient
-from epub_tui.catalog.models import CatalogEntry, CatalogFeed
-from epub_tui.catalog.parser import parse_opds_feed
+from epub_tui.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
+from epub_tui.catalog.parser import parse_opds_feed, sanitize_url_credentials
 from epub_tui.config import AppConfig, CatalogConfig
 from epub_tui.downloads import DownloadError, DownloadProgress, DownloadService
 from epub_tui.library import BookRecord, LibraryRepository
@@ -26,6 +26,18 @@ _WINDOWS_RESERVED_NAMES = {
     *(f"COM{number}" for number in range(1, 10)),
     *(f"LPT{number}" for number in range(1, 10)),
 }
+_MEDIA_TYPE_EXTENSIONS = {
+    "application/epub+zip": ".epub",
+    "application/pdf": ".pdf",
+    "image/vnd.djvu": ".djvu",
+    "image/x-djvu": ".djvu",
+    "application/x-djvu": ".djvu",
+    "application/vnd.comicbook+zip": ".cbz",
+    "application/x-cbz": ".cbz",
+    "application/vnd.comicbook-rar": ".cbr",
+    "application/x-cbr": ".cbr",
+}
+_KNOWN_ACQUISITION_EXTENSIONS = {".epub", ".pdf", ".djvu", ".djv", ".cbz", ".cbr"}
 
 
 class CatalogWorkflow:
@@ -51,7 +63,7 @@ class CatalogWorkflow:
         url: str | None = None,
         on_status: StatusCallback | None = None,
     ) -> CatalogFeed:
-        target_url = url or catalog.url
+        target_url = sanitize_url_credentials(url or catalog.url)
         _emit(on_status, "Fetching catalog...")
         body = await self._catalog_client.fetch_feed(
             _catalog_for_url(catalog, target_url),
@@ -74,12 +86,33 @@ class CatalogWorkflow:
         if link is None:
             raise DownloadError("No EPUB acquisition link exists")
 
+        return await self.download_acquisition(
+            catalog,
+            entry,
+            link=link,
+            on_status=on_status,
+            on_progress=on_progress,
+        )
+
+    async def download_acquisition(
+        self,
+        catalog: CatalogConfig,
+        entry: CatalogEntry,
+        link: AcquisitionLink | None = None,
+        on_status: StatusCallback | None = None,
+        on_progress: ProgressCallback | None = None,
+    ) -> Path:
+        selected_link = link or _best_acquisition_link(entry)
+        if selected_link is None:
+            raise DownloadError("No acquisition link exists")
+
+        href = sanitize_url_credentials(selected_link.href)
         _emit(on_status, "Starting download...")
         downloaded_path = await self._download_service.download(
-            url=link.href,
+            url=href,
             destination_dir=self.config.library_path,
-            filename=_safe_epub_filename(entry.title),
-            auth=_auth_tuple(catalog) if _same_origin(catalog.url, link.href) else None,
+            filename=_safe_acquisition_filename(entry.title, selected_link),
+            auth=_auth_tuple(catalog) if _same_origin(catalog.url, href) else None,
             on_progress=on_progress,
         )
         self.library.add_book(
@@ -89,8 +122,8 @@ class CatalogWorkflow:
                 identifiers=[entry.identifier] if entry.identifier else [],
                 source_catalog=catalog.name,
                 source_entry_url=None,
-                acquisition_url=link.href,
-                media_type=link.media_type,
+                acquisition_url=href,
+                media_type=selected_link.media_type,
                 cover_image_url=entry.cover_image_url or entry.thumbnail_url,
                 cover_image_path=None,
                 local_file_path=downloaded_path,
@@ -117,7 +150,7 @@ def _auth_tuple(catalog: CatalogConfig) -> tuple[str, str] | None:
 
 def _catalog_for_url(catalog: CatalogConfig, url: str) -> CatalogConfig:
     if catalog.auth is None or _same_origin(catalog.url, url):
-        return catalog
+        return replace(catalog, url=sanitize_url_credentials(catalog.url))
     return replace(catalog, auth=None)
 
 
@@ -142,14 +175,46 @@ def _origin_port(parts) -> int | None:
 
 
 def _safe_epub_filename(title: str) -> str:
+    return _safe_filename(title, ".epub")
+
+
+def _best_acquisition_link(entry: CatalogEntry) -> AcquisitionLink | None:
+    epub_link = entry.best_epub_link()
+    if epub_link is not None:
+        return epub_link
+    return entry.acquisition_links[0] if entry.acquisition_links else None
+
+
+def _safe_acquisition_filename(title: str, link: AcquisitionLink) -> str:
+    return _safe_filename(title, _extension_for_link(link))
+
+
+def _safe_filename(title: str, extension: str) -> str:
     stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', " ", title)
     stem = re.sub(r"\s+", " ", stem).strip(" .")
     if not stem or stem.split(".", 1)[0].upper() in _WINDOWS_RESERVED_NAMES:
         stem = "book"
-    return f"{stem}.epub"
+    if Path(stem).suffix.lower() == extension:
+        return stem
+    return f"{stem}{extension}"
+
+
+def _extension_for_link(link: AcquisitionLink) -> str:
+    media_extension = _MEDIA_TYPE_EXTENSIONS.get(link.media_type.lower())
+    if media_extension is not None:
+        return media_extension
+
+    for value in (link.title, urlsplit(link.href).path):
+        if not value:
+            continue
+        extension = Path(value).suffix.lower()
+        if extension in _KNOWN_ACQUISITION_EXTENSIONS:
+            return extension
+    return ".bin"
 
 
 def _opds_parse_base_url(url: str) -> str:
+    url = sanitize_url_credentials(url)
     parts = urlsplit(url)
     if parts.path.endswith("/") or Path(parts.path).suffix:
         return url

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import feedparser
 
@@ -18,6 +18,7 @@ class OpdsParseError(ValueError):
 
 
 def parse_opds_feed(xml: str, source_url: str) -> CatalogFeed:
+    source_url = sanitize_url_credentials(source_url)
     parsed = feedparser.parse(xml)
     feed_title = _get_text(parsed.feed, "title")
 
@@ -102,3 +103,17 @@ def _parse_size(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def sanitize_url_credentials(url: str) -> str:
+    parts = urlsplit(url)
+    if "@" not in parts.netloc:
+        return url
+
+    hostname = parts.hostname or ""
+    if ":" in hostname and not hostname.startswith("["):
+        hostname = f"[{hostname}]"
+    netloc = hostname
+    if parts.port is not None:
+        netloc = f"{netloc}:{parts.port}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
