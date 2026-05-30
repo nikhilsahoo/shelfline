@@ -18,6 +18,14 @@ from epub_tui.library import BookRecord, LibraryRepository
 
 StatusCallback = Callable[[str], None]
 ProgressCallback = Callable[[DownloadProgress], None]
+_WINDOWS_RESERVED_NAMES = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *(f"COM{number}" for number in range(1, 10)),
+    *(f"LPT{number}" for number in range(1, 10)),
+}
 
 
 class CatalogWorkflow:
@@ -28,7 +36,10 @@ class CatalogWorkflow:
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self.config = config
-        self._http_client = http_client or httpx.AsyncClient()
+        self._http_client = http_client or httpx.AsyncClient(
+            timeout=60.0,
+            follow_redirects=True,
+        )
         self._catalog_client = CatalogClient(self._http_client)
         self._download_service = DownloadService(self._http_client)
         self.library = LibraryRepository(state_db)
@@ -42,7 +53,10 @@ class CatalogWorkflow:
     ) -> CatalogFeed:
         target_url = url or catalog.url
         _emit(on_status, "Fetching catalog...")
-        body = await self._catalog_client.fetch_feed(catalog, target_url)
+        body = await self._catalog_client.fetch_feed(
+            _catalog_for_url(catalog, target_url),
+            target_url,
+        )
         feed = parse_opds_feed(body, source_url=_opds_parse_base_url(target_url))
         feed = replace(feed, source_url=target_url)
         self.library.save_feed_cache(catalog.name, target_url, feed.title, body)
@@ -65,7 +79,7 @@ class CatalogWorkflow:
             url=link.href,
             destination_dir=self.config.library_path,
             filename=_safe_epub_filename(entry.title),
-            auth=_auth_tuple(catalog),
+            auth=_auth_tuple(catalog) if _same_origin(catalog.url, link.href) else None,
             on_progress=on_progress,
         )
         self.library.add_book(
@@ -101,10 +115,36 @@ def _auth_tuple(catalog: CatalogConfig) -> tuple[str, str] | None:
     return catalog.auth["username"], catalog.auth["password"]
 
 
+def _catalog_for_url(catalog: CatalogConfig, url: str) -> CatalogConfig:
+    if catalog.auth is None or _same_origin(catalog.url, url):
+        return catalog
+    return replace(catalog, auth=None)
+
+
+def _same_origin(left_url: str, right_url: str) -> bool:
+    left = urlsplit(left_url)
+    right = urlsplit(right_url)
+    return (
+        left.scheme == right.scheme
+        and left.hostname == right.hostname
+        and _origin_port(left) == _origin_port(right)
+    )
+
+
+def _origin_port(parts) -> int | None:
+    if parts.port is not None:
+        return parts.port
+    if parts.scheme == "http":
+        return 80
+    if parts.scheme == "https":
+        return 443
+    return None
+
+
 def _safe_epub_filename(title: str) -> str:
     stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', " ", title)
     stem = re.sub(r"\s+", " ", stem).strip(" .")
-    if not stem:
+    if not stem or stem.split(".", 1)[0].upper() in _WINDOWS_RESERVED_NAMES:
         stem = "book"
     return f"{stem}.epub"
 

@@ -115,6 +115,142 @@ async def test_workflow_uses_auth_without_exposing_credentials_in_callbacks(
 
 
 @pytest.mark.asyncio
+async def test_workflow_fetch_omits_auth_for_cross_origin_override(
+    tmp_path: Path,
+    fixture_dir: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = (fixture_dir / "opds" / "acquisition.xml").read_text(encoding="utf-8")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "authorization" not in request.headers
+        return httpx.Response(200, text=feed_xml)
+
+    httpx_mock.add_callback(handler, url="https://other.test/opds")
+    catalog = CatalogConfig(
+        name="Private",
+        url="https://example.test/opds",
+        auth={"username": "alice", "password": "secret"},
+    )
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    feed = await workflow.fetch_catalog(catalog, url="https://other.test/opds")
+
+    assert feed.source_url == "https://other.test/opds"
+
+
+@pytest.mark.asyncio
+async def test_workflow_fetch_sends_auth_for_same_origin_override(
+    tmp_path: Path,
+    fixture_dir: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = (fixture_dir / "opds" / "acquisition.xml").read_text(encoding="utf-8")
+    expected_auth = "Basic " + base64.b64encode(b"alice:secret").decode("ascii")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == expected_auth
+        return httpx.Response(200, text=feed_xml)
+
+    httpx_mock.add_callback(handler, url="https://example.test/alternate")
+    catalog = CatalogConfig(
+        name="Private",
+        url="https://example.test/opds",
+        auth={"username": "alice", "password": "secret"},
+    )
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    feed = await workflow.fetch_catalog(catalog, url="https://example.test/alternate")
+
+    assert feed.source_url == "https://example.test/alternate"
+
+
+@pytest.mark.asyncio
+async def test_workflow_download_omits_auth_for_cross_origin_acquisition(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Private</title>
+  <entry>
+    <title>Remote Book</title>
+    <link rel="http://opds-spec.org/acquisition" href="https://cdn.test/remote.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "authorization" not in request.headers
+        return httpx.Response(200, content=b"epub bytes")
+
+    httpx_mock.add_callback(handler, url="https://cdn.test/remote.epub")
+    catalog = CatalogConfig(
+        name="Private",
+        url="https://example.test/opds",
+        auth={"username": "alice", "password": "secret"},
+    )
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    feed = await workflow.fetch_catalog(catalog)
+    downloaded = await workflow.download_best_epub(catalog, feed.entries[0])
+
+    assert downloaded.read_bytes() == b"epub bytes"
+
+
+@pytest.mark.asyncio
+async def test_workflow_uses_safe_filename_for_windows_reserved_title(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Private</title>
+  <entry>
+    <title>CON</title>
+    <link rel="http://opds-spec.org/acquisition" href="book.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    httpx_mock.add_response(url="https://example.test/opds/book.epub", content=b"epub bytes")
+    catalog = CatalogConfig(name="Private", url="https://example.test/opds")
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    feed = await workflow.fetch_catalog(catalog)
+    downloaded = await workflow.download_best_epub(catalog, feed.entries[0])
+
+    assert downloaded.name == "book.epub"
+
+
+def test_workflow_default_client_matches_service_http_defaults(tmp_path: Path) -> None:
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[], preferences={}),
+        tmp_path / "state.db",
+    )
+
+    assert workflow._http_client.follow_redirects is True
+    assert workflow._http_client.timeout == httpx.Timeout(60.0)
+
+
+@pytest.mark.asyncio
 async def test_workflow_raises_download_error_when_entry_has_no_epub(
     tmp_path: Path,
     fixture_dir: Path,
