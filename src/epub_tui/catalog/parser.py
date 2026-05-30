@@ -121,4 +121,5 @@ def sanitize_url_credentials(url: str) -> str:
 
 
 def sanitize_text_url_credentials(text: str) -> str:
-    return re.sub(r"(https?://)[^\s\"'<>/@]+(?::[^\s\"'<>/@]*)?@", r"\1", text)
+    text = re.sub(r"(https?://)[^\s\"'<>/@]+(?::[^\s\"'<>/@]*)?@", r"\1", text)
+    return re.sub(r"(?<!:)(//)[^\s\"'<>/@]+(?::[^\s\"'<>/@]*)?@", r"\1", text)

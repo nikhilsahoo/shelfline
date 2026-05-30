@@ -157,6 +157,22 @@ async def test_catalog_screen_opens_feed_through_workflow() -> None:
 
 
 @pytest.mark.asyncio
+async def test_catalog_screen_enter_binding_opens_feed_through_workflow() -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FakeWorkflow(feed=_feed())
+    app = EpubTuiApp(
+        config=AppConfig(library_path=Path("books"), catalogs=[catalog]),
+        workflow=workflow,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("enter")
+
+        assert isinstance(app.screen, FeedScreen)
+        assert workflow.fetch_statuses == ["Fetching catalog...", "Catalog loaded"]
+
+
+@pytest.mark.asyncio
 async def test_feed_screen_opens_entry_details() -> None:
     app = EpubTuiApp(config=None)
 
@@ -167,6 +183,17 @@ async def test_feed_screen_opens_entry_details() -> None:
 
         assert isinstance(app.screen, EntryScreen)
         assert "Interesting Book" in str(app.screen.query_one("#entry-body").renderable)
+
+
+@pytest.mark.asyncio
+async def test_feed_screen_enter_binding_opens_entry_details() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(_feed()))
+        await pilot.press("enter")
+
+        assert isinstance(app.screen, EntryScreen)
 
 
 @pytest.mark.asyncio
@@ -204,6 +231,20 @@ async def test_entry_screen_downloads_acquisition_through_workflow(tmp_path: Pat
         assert isinstance(app.screen, DownloadStatusScreen)
         assert workflow.downloads[0][2] == _entry().acquisition_links[1]
         assert "Download complete" in str(app.screen.query_one("#download-status").renderable)
+
+
+@pytest.mark.asyncio
+async def test_entry_screen_download_binding_uses_workflow(tmp_path: Path) -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FakeWorkflow(download_path=tmp_path / "Interesting Book.epub")
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
+        await pilot.press("d")
+
+        assert isinstance(app.screen, DownloadStatusScreen)
+        assert workflow.downloads[0][2] == _entry().acquisition_links[0]
 
 
 @pytest.mark.asyncio

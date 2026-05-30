@@ -40,6 +40,8 @@ class SetupScreen(Screen[None]):
 
 
 class CatalogsScreen(Screen[None]):
+    BINDINGS = [("enter", "open_selected", "Open")]
+
     def __init__(
         self,
         config: AppConfig,
@@ -82,6 +84,9 @@ class CatalogsScreen(Screen[None]):
         self.finish_outgoing_call("Catalog loaded")
         await self.app.push_screen(FeedScreen(feed, catalog=catalog, workflow=self.workflow))
 
+    async def action_open_selected(self) -> None:
+        await self.open_catalog(0)
+
     def _catalog_text(self) -> str:
         if not self.config.catalogs:
             return "No catalogs configured"
@@ -89,6 +94,8 @@ class CatalogsScreen(Screen[None]):
 
 
 class FeedScreen(Screen[None]):
+    BINDINGS = [("enter", "open_selected", "Open")]
+
     def __init__(
         self,
         feed: CatalogFeed,
@@ -134,6 +141,9 @@ class FeedScreen(Screen[None]):
             )
         )
 
+    def action_open_selected(self) -> None:
+        self.open_entry(0)
+
     def _begin_outgoing_call(self, message: str) -> None:
         self.query_one("#busy-indicator", BusyIndicator).start(message)
         self.query_one("#status-line", StatusLine).set_message(message)
@@ -153,6 +163,8 @@ class FeedScreen(Screen[None]):
 
 
 class EntryScreen(Screen[None]):
+    BINDINGS = [("d", "download_selected", "Download")]
+
     def __init__(
         self,
         entry: CatalogEntry,
@@ -205,6 +217,9 @@ class EntryScreen(Screen[None]):
             on_progress=lambda progress: status_screen.update_progress(progress),
         )
         status_screen.set_status("Download complete")
+
+    async def action_download_selected(self) -> None:
+        await self.download_acquisition(0)
 
     def _entry_text(self) -> str:
         lines = [self.entry.title]
