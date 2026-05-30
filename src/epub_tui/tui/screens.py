@@ -40,7 +40,13 @@ class SetupScreen(Screen[None]):
 
 
 class CatalogsScreen(Screen[None]):
-    BINDINGS = [("enter", "open_selected", "Open")]
+    BINDINGS = [
+        ("enter", "open_selected", "Open"),
+        ("j", "cursor_down", "Down"),
+        ("down", "cursor_down", "Down"),
+        ("k", "cursor_up", "Up"),
+        ("up", "cursor_up", "Up"),
+    ]
 
     def __init__(
         self,
@@ -52,6 +58,7 @@ class CatalogsScreen(Screen[None]):
         super().__init__(**kwargs)
         self.config = config
         self.workflow = workflow
+        self.selected_index = 0
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -76,6 +83,7 @@ class CatalogsScreen(Screen[None]):
             self.finish_outgoing_call("Catalog is not available")
             return
 
+        self.selected_index = index
         catalog = self.config.catalogs[index]
         feed = await self.workflow.fetch_catalog(
             catalog,
@@ -85,7 +93,21 @@ class CatalogsScreen(Screen[None]):
         await self.app.push_screen(FeedScreen(feed, catalog=catalog, workflow=self.workflow))
 
     async def action_open_selected(self) -> None:
-        await self.open_catalog(0)
+        await self.open_catalog(self.selected_index)
+
+    def action_cursor_down(self) -> None:
+        self._move_selection(1)
+
+    def action_cursor_up(self) -> None:
+        self._move_selection(-1)
+
+    def _move_selection(self, delta: int) -> None:
+        if not self.config.catalogs:
+            return
+        self.selected_index = max(0, min(len(self.config.catalogs) - 1, self.selected_index + delta))
+        self.query_one("#status-line", StatusLine).set_message(
+            f"Selected {self.config.catalogs[self.selected_index].name}"
+        )
 
     def _catalog_text(self) -> str:
         if not self.config.catalogs:
@@ -94,7 +116,13 @@ class CatalogsScreen(Screen[None]):
 
 
 class FeedScreen(Screen[None]):
-    BINDINGS = [("enter", "open_selected", "Open")]
+    BINDINGS = [
+        ("enter", "open_selected", "Open"),
+        ("j", "cursor_down", "Down"),
+        ("down", "cursor_down", "Down"),
+        ("k", "cursor_up", "Up"),
+        ("up", "cursor_up", "Up"),
+    ]
 
     def __init__(
         self,
@@ -108,6 +136,7 @@ class FeedScreen(Screen[None]):
         self.feed = feed
         self.catalog = catalog
         self.workflow = workflow
+        self.selected_index = 0
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -129,20 +158,43 @@ class FeedScreen(Screen[None]):
         self.query_one("#busy-indicator", BusyIndicator).stop()
         self.query_one("#status-line", StatusLine).set_message(message)
 
-    def open_entry(self, index: int = 0) -> None:
+    async def open_entry(self, index: int = 0) -> None:
         if index < 0 or index >= len(self.feed.entries):
             self.finish_outgoing_call("Entry is not available")
             return
-        self.app.push_screen(
-            EntryScreen(
-                self.feed.entries[index],
-                catalog=self.catalog,
-                workflow=self.workflow,
+        self.selected_index = index
+        entry = self.feed.entries[index]
+        if entry.navigation_url is not None:
+            if self.workflow is None or self.catalog is None:
+                self.finish_outgoing_call("Catalog workflow is not available")
+                return
+            feed = await self.workflow.fetch_catalog(
+                self.catalog,
+                url=entry.navigation_url,
+                on_status=lambda message: self._begin_outgoing_call(message),
             )
-        )
+            self.finish_outgoing_call("Catalog loaded")
+            await self.app.push_screen(FeedScreen(feed, catalog=self.catalog, workflow=self.workflow))
+            return
 
-    def action_open_selected(self) -> None:
-        self.open_entry(0)
+        await self.app.push_screen(EntryScreen(entry, catalog=self.catalog, workflow=self.workflow))
+
+    async def action_open_selected(self) -> None:
+        await self.open_entry(self.selected_index)
+
+    def action_cursor_down(self) -> None:
+        self._move_selection(1)
+
+    def action_cursor_up(self) -> None:
+        self._move_selection(-1)
+
+    def _move_selection(self, delta: int) -> None:
+        if not self.feed.entries:
+            return
+        self.selected_index = max(0, min(len(self.feed.entries) - 1, self.selected_index + delta))
+        self.query_one("#status-line", StatusLine).set_message(
+            f"Selected {self.feed.entries[self.selected_index].title}"
+        )
 
     def _begin_outgoing_call(self, message: str) -> None:
         self.query_one("#busy-indicator", BusyIndicator).start(message)
@@ -163,7 +215,13 @@ class FeedScreen(Screen[None]):
 
 
 class EntryScreen(Screen[None]):
-    BINDINGS = [("d", "download_selected", "Download")]
+    BINDINGS = [
+        ("d", "download_selected", "Download"),
+        ("j", "cursor_down", "Down"),
+        ("down", "cursor_down", "Down"),
+        ("k", "cursor_up", "Up"),
+        ("up", "cursor_up", "Up"),
+    ]
 
     def __init__(
         self,
@@ -177,6 +235,7 @@ class EntryScreen(Screen[None]):
         self.entry = entry
         self.catalog = catalog
         self.workflow = workflow
+        self.selected_index = 0
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -209,6 +268,7 @@ class EntryScreen(Screen[None]):
 
         status_screen = DownloadStatusScreen(status="Starting download...")
         await self.app.push_screen(status_screen)
+        self.selected_index = index
         await self.workflow.download_acquisition(
             self.catalog,
             self.entry,
@@ -219,7 +279,21 @@ class EntryScreen(Screen[None]):
         status_screen.set_status("Download complete")
 
     async def action_download_selected(self) -> None:
-        await self.download_acquisition(0)
+        await self.download_acquisition(self.selected_index)
+
+    def action_cursor_down(self) -> None:
+        self._move_selection(1)
+
+    def action_cursor_up(self) -> None:
+        self._move_selection(-1)
+
+    def _move_selection(self, delta: int) -> None:
+        if not self.entry.acquisition_links:
+            return
+        self.selected_index = max(0, min(len(self.entry.acquisition_links) - 1, self.selected_index + delta))
+        link = self.entry.acquisition_links[self.selected_index]
+        label = link.title or link.media_type
+        self.query_one("#status-line", StatusLine).set_message(f"Selected {label}")
 
     def _entry_text(self) -> str:
         lines = [self.entry.title]

@@ -28,6 +28,7 @@ class FakeWorkflow:
         self.fetch_statuses: list[str] = []
         self.download_statuses: list[str] = []
         self.downloads: list[tuple[CatalogConfig, CatalogEntry, AcquisitionLink | None]] = []
+        self.fetch_urls: list[str | None] = []
 
     async def fetch_catalog(
         self,
@@ -35,6 +36,7 @@ class FakeWorkflow:
         url: str | None = None,
         on_status: Any | None = None,
     ) -> CatalogFeed:
+        self.fetch_urls.append(url)
         if on_status is not None:
             on_status("Fetching catalog...")
             self.fetch_statuses.append("Fetching catalog...")
@@ -95,6 +97,15 @@ def _feed() -> CatalogFeed:
         source_url="https://example.test/opds",
         updated="2026-05-30",
         entries=[_entry()],
+    )
+
+
+def _navigation_entry() -> CatalogEntry:
+    return CatalogEntry(
+        title="Fiction",
+        identifier="urn:nav:fiction",
+        updated="2026-05-30",
+        navigation_url="https://example.test/opds/fiction",
     )
 
 
@@ -173,12 +184,33 @@ async def test_catalog_screen_enter_binding_opens_feed_through_workflow() -> Non
 
 
 @pytest.mark.asyncio
+async def test_catalog_screen_selection_moves_before_opening() -> None:
+    catalogs = [
+        CatalogConfig(name="First", url="https://first.test/opds"),
+        CatalogConfig(name="Second", url="https://second.test/opds"),
+    ]
+    workflow = FakeWorkflow(feed=_feed())
+    app = EpubTuiApp(
+        config=AppConfig(library_path=Path("books"), catalogs=catalogs),
+        workflow=workflow,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("j")
+        await pilot.press("enter")
+
+        assert isinstance(app.screen, FeedScreen)
+        assert workflow.fetch_urls == [None]
+        assert app.screen.catalog == catalogs[1]
+
+
+@pytest.mark.asyncio
 async def test_feed_screen_opens_entry_details() -> None:
     app = EpubTuiApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(_feed()))
-        app.screen.open_entry(0)
+        await app.screen.open_entry(0)
         await pilot.pause()
 
         assert isinstance(app.screen, EntryScreen)
@@ -194,6 +226,52 @@ async def test_feed_screen_enter_binding_opens_entry_details() -> None:
         await pilot.press("enter")
 
         assert isinstance(app.screen, EntryScreen)
+
+
+@pytest.mark.asyncio
+async def test_feed_screen_selection_moves_before_opening_entry() -> None:
+    feed = CatalogFeed(
+        title="Example Feed",
+        source_url="https://example.test/opds",
+        updated=None,
+        entries=[_navigation_entry(), _entry()],
+    )
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(feed))
+        await pilot.press("j")
+        await pilot.press("enter")
+
+        assert isinstance(app.screen, EntryScreen)
+        assert "Interesting Book" in str(app.screen.query_one("#entry-body").renderable)
+
+
+@pytest.mark.asyncio
+async def test_feed_screen_navigation_entry_fetches_next_feed() -> None:
+    next_feed = CatalogFeed(
+        title="Fiction Feed",
+        source_url="https://example.test/opds/fiction",
+        updated=None,
+        entries=[_entry()],
+    )
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FakeWorkflow(feed=next_feed)
+    feed = CatalogFeed(
+        title="Root Feed",
+        source_url="https://example.test/opds",
+        updated=None,
+        entries=[_navigation_entry()],
+    )
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(feed, catalog=catalog, workflow=workflow))
+        await pilot.press("enter")
+
+        assert isinstance(app.screen, FeedScreen)
+        assert app.screen.feed.title == "Fiction Feed"
+        assert workflow.fetch_urls == ["https://example.test/opds/fiction"]
 
 
 @pytest.mark.asyncio
@@ -245,6 +323,21 @@ async def test_entry_screen_download_binding_uses_workflow(tmp_path: Path) -> No
 
         assert isinstance(app.screen, DownloadStatusScreen)
         assert workflow.downloads[0][2] == _entry().acquisition_links[0]
+
+
+@pytest.mark.asyncio
+async def test_entry_screen_selection_moves_before_downloading(tmp_path: Path) -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FakeWorkflow(download_path=tmp_path / "Interesting Book.pdf")
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
+        await pilot.press("j")
+        await pilot.press("d")
+
+        assert isinstance(app.screen, DownloadStatusScreen)
+        assert workflow.downloads[0][2] == _entry().acquisition_links[1]
 
 
 @pytest.mark.asyncio
