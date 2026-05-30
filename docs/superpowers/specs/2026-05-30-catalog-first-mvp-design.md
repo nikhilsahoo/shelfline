@@ -106,10 +106,10 @@ Errors should show clear messages and preserve a retry/back path.
 The MVP targets OPDS 1.x Atom feeds. The catalog layer normalizes feedparser output into internal models:
 
 - `CatalogFeed`: feed title, source URL, updated time, entries, and navigation context.
-- `CatalogEntry`: title, authors, summary, categories, identifiers, updated time, and links.
+- `CatalogEntry`: title, authors, summary, categories, identifiers, updated time, cover image URL, thumbnail URL, and links.
 - `AcquisitionLink`: URL, relation, media type, title, size if available, and indirect/acquisition metadata where practical.
 
-The parser resolves relative URLs against the feed URL and distinguishes navigation links from acquisition links.
+The parser resolves relative URLs against the feed URL and distinguishes navigation links, acquisition links, and OPDS image links. When a catalog exposes both full-size image and thumbnail links, the full-size image is preferred for stored cover metadata and the thumbnail can be used for compact TUI list/detail displays.
 
 Basic Authentication is supported per saved catalog:
 
@@ -138,7 +138,7 @@ The TUI can create and update this file, but the file should remain simple enoug
 SQLite stores cache and app-managed metadata:
 
 - `feed_cache`: feed URL, catalog ID, title, fetched timestamp, and raw or normalized feed cache.
-- `books`: title, authors, identifiers, source catalog ID, source entry URL, acquisition URL, media type, local file path, and download timestamp.
+- `books`: title, authors, identifiers, source catalog ID, source entry URL, acquisition URL, media type, cover image URL, local cover image path when downloaded, local file path, and download timestamp.
 
 Credential fields should be isolated behind a config or credential store interface. This keeps the MVP simple while leaving room to replace JSON credential storage with OS keyring integration later.
 
@@ -161,7 +161,7 @@ Non-EPUB formats are tracked in the library but display a message that in-termin
 
 Core tests:
 
-- OPDS parser fixtures for navigation feeds, acquisition feeds, missing fields, relative URLs, and invalid XML.
+- OPDS parser fixtures for navigation feeds, acquisition feeds, cover image links, missing fields, relative URLs, and invalid XML.
 - Basic Auth fetch tests that verify credentials are sent when configured and omitted when not configured.
 - Credential redaction tests for logs/errors/status messages.
 - Download tests with mocked HTTP responses, including success, interruption, failure, and duplicate filenames.

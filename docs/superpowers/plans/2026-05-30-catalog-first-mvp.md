@@ -559,6 +559,8 @@ Create `tests/fixtures/opds/acquisition.xml`:
     <updated>2026-05-30T00:00:00Z</updated>
     <author><name>Ada Writer</name></author>
     <summary>A short fixture book.</summary>
+    <link rel="http://opds-spec.org/image" href="covers/sample.jpg" type="image/jpeg" title="Cover"/>
+    <link rel="http://opds-spec.org/image/thumbnail" href="covers/sample-thumb.jpg" type="image/jpeg" title="Thumbnail"/>
     <link rel="http://opds-spec.org/acquisition" href="books/sample.epub" type="application/epub+zip" title="EPUB"/>
     <link rel="http://opds-spec.org/acquisition" href="books/sample.pdf" type="application/pdf" title="PDF"/>
   </entry>
@@ -603,6 +605,8 @@ def test_parse_acquisition_feed_extracts_epub_and_pdf(fixture_dir: Path) -> None
     assert entry.title == "Sample Book"
     assert entry.authors == ["Ada Writer"]
     assert entry.summary == "A short fixture book."
+    assert entry.cover_image_url == "https://example.test/opds/covers/sample.jpg"
+    assert entry.thumbnail_url == "https://example.test/opds/covers/sample-thumb.jpg"
     assert entry.best_epub_link().href == "https://example.test/opds/books/sample.epub"
     assert {link.media_type for link in entry.acquisition_links} == {"application/epub+zip", "application/pdf"}
 
@@ -661,6 +665,8 @@ class CatalogEntry:
     updated: str | None
     authors: list[str] = field(default_factory=list)
     summary: str | None = None
+    cover_image_url: str | None = None
+    thumbnail_url: str | None = None
     navigation_url: str | None = None
     acquisition_links: list[AcquisitionLink] = field(default_factory=list)
 
@@ -697,6 +703,8 @@ class OpdsParseError(ValueError):
 
 
 ACQUISITION_REL_PREFIX = "http://opds-spec.org/acquisition"
+IMAGE_REL = "http://opds-spec.org/image"
+THUMBNAIL_REL = "http://opds-spec.org/image/thumbnail"
 NAVIGATION_RELS = {"subsection", "start", "up", "self"}
 
 
@@ -725,6 +733,8 @@ def _parse_entry(entry: Any, source_url: str) -> CatalogEntry:
         updated=_optional_str(entry.get("updated")),
         authors=[author.get("name", "") for author in entry.get("authors", []) if author.get("name")],
         summary=_optional_str(entry.get("summary")),
+        cover_image_url=_image_url(links, source_url, IMAGE_REL),
+        thumbnail_url=_image_url(links, source_url, THUMBNAIL_REL),
         navigation_url=_navigation_url(links, source_url),
         acquisition_links=acquisition_links,
     )
@@ -752,6 +762,13 @@ def _navigation_url(links: list[Any], source_url: str) -> str | None:
 
 def _is_acquisition(link: Any) -> bool:
     return str(link.get("rel", "")).startswith(ACQUISITION_REL_PREFIX)
+
+
+def _image_url(links: list[Any], source_url: str, relation: str) -> str | None:
+    for link in links:
+        if str(link.get("rel", "")) == relation and str(link.get("type", "")).startswith("image/"):
+            return urljoin(source_url, str(link.get("href", "")))
+    return None
 
 
 def _optional_str(value: Any) -> str | None:
@@ -936,6 +953,8 @@ def test_repository_initializes_schema_and_saves_book(tmp_path: Path) -> None:
         source_entry_url="https://example.test/opds/book",
         acquisition_url="https://example.test/books/sample.epub",
         media_type="application/epub+zip",
+        cover_image_url="https://example.test/covers/sample.jpg",
+        cover_image_path=tmp_path / "covers" / "sample.jpg",
         local_file_path=tmp_path / "books" / "sample.epub",
     )
 
@@ -945,6 +964,8 @@ def test_repository_initializes_schema_and_saves_book(tmp_path: Path) -> None:
     assert len(books) == 1
     assert books[0].title == "Sample Book"
     assert books[0].authors == ["Ada Writer"]
+    assert books[0].cover_image_url == "https://example.test/covers/sample.jpg"
+    assert books[0].cover_image_path == tmp_path / "covers" / "sample.jpg"
 
 
 def test_feed_cache_round_trip(tmp_path: Path) -> None:
@@ -988,6 +1009,8 @@ class BookRecord:
     source_entry_url: str | None
     acquisition_url: str
     media_type: str
+    cover_image_url: str | None
+    cover_image_path: Path | None
     local_file_path: Path
 
 
@@ -1009,6 +1032,8 @@ class LibraryRepository:
                     source_entry_url TEXT,
                     acquisition_url TEXT NOT NULL,
                     media_type TEXT NOT NULL,
+                    cover_image_url TEXT,
+                    cover_image_path TEXT,
                     local_file_path TEXT NOT NULL UNIQUE,
                     downloaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
@@ -1029,9 +1054,10 @@ class LibraryRepository:
                 """
                 INSERT INTO books (
                     title, authors_json, identifiers_json, source_catalog,
-                    source_entry_url, acquisition_url, media_type, local_file_path
+                    source_entry_url, acquisition_url, media_type,
+                    cover_image_url, cover_image_path, local_file_path
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     book.title,
@@ -1041,6 +1067,8 @@ class LibraryRepository:
                     book.source_entry_url,
                     book.acquisition_url,
                     book.media_type,
+                    book.cover_image_url,
+                    str(book.cover_image_path) if book.cover_image_path is not None else None,
                     str(book.local_file_path),
                 ),
             )
@@ -1050,7 +1078,8 @@ class LibraryRepository:
             rows = conn.execute(
                 """
                 SELECT title, authors_json, identifiers_json, source_catalog,
-                       source_entry_url, acquisition_url, media_type, local_file_path
+                       source_entry_url, acquisition_url, media_type,
+                       cover_image_url, cover_image_path, local_file_path
                 FROM books
                 ORDER BY downloaded_at DESC, title ASC
                 """
@@ -1102,6 +1131,8 @@ def _book_from_row(row: sqlite3.Row) -> BookRecord:
         source_entry_url=row["source_entry_url"],
         acquisition_url=row["acquisition_url"],
         media_type=row["media_type"],
+        cover_image_url=row["cover_image_url"],
+        cover_image_path=Path(row["cover_image_path"]) if row["cover_image_path"] else None,
         local_file_path=Path(row["local_file_path"]),
     )
 ```
@@ -1596,6 +1627,7 @@ async def test_workflow_fetches_parses_caches_and_downloads(
     assert feed.title == "Fiction"
     assert downloaded.read_bytes() == b"epub bytes"
     assert workflow.library.list_books()[0].title == "Sample Book"
+    assert workflow.library.list_books()[0].cover_image_url == "https://example.test/opds/covers/sample.jpg"
 ```
 
 - [ ] **Step 2: Run integration test to verify it fails**
@@ -1660,6 +1692,8 @@ class CatalogWorkflow:
                 source_entry_url=None,
                 acquisition_url=link.href,
                 media_type=link.media_type,
+                cover_image_url=entry.cover_image_url or entry.thumbnail_url,
+                cover_image_path=None,
                 local_file_path=path,
             )
         )
@@ -1853,7 +1887,7 @@ git commit -m "feat: add CLI config entrypoint"
 
 ## Self-Review
 
-- Spec coverage: OPDS 1.x parsing is covered by Task 3. Basic Auth fetch and credential redaction are covered by Tasks 2 and 4. JSON config is covered by Task 2. SQLite cache/book metadata is covered by Task 5. Single download workflow is covered by Task 6. EPUB preview is covered by Task 7. Textual startup and catalog screen smoke coverage are covered by Task 8. End-to-end service integration is covered by Task 9. CLI launch and usage docs are covered by Task 10.
+- Spec coverage: OPDS 1.x parsing and cover image metadata are covered by Task 3. Basic Auth fetch and credential redaction are covered by Tasks 2 and 4. JSON config is covered by Task 2. SQLite cache/book metadata, including cover URLs and optional local cover paths, is covered by Task 5. Single download workflow is covered by Task 6. EPUB preview is covered by Task 7. Textual startup and catalog screen smoke coverage are covered by Task 8. End-to-end service integration is covered by Task 9. CLI launch and usage docs are covered by Task 10.
 - Scope boundaries: OPDS 2.x, multi-download queue, PDF/DjVu/CBR rendering, OAuth, annotations, sync, and full-text search are not implemented in this plan.
 - Type consistency: `AppConfig`, `CatalogConfig`, `CatalogFeed`, `CatalogEntry`, `AcquisitionLink`, `BookRecord`, `LibraryRepository`, `CatalogClient`, `DownloadService`, `CatalogWorkflow`, and `EpubTuiApp` signatures are used consistently across tasks.
 - Red-flag scan: The plan contains no unresolved work markers.
