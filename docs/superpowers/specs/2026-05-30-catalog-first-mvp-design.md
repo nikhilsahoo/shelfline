@@ -131,6 +131,8 @@ The JSON configuration file is the source of truth for user-managed settings:
 - `catalogs`: saved OPDS catalog entries with name, URL, and optional Basic Auth username/password.
 - `preferences`: small user-editable app preferences as needed.
 
+By default, the config file lives in the platform app configuration directory. On Windows this is `%APPDATA%\epub-tui\config.json`; on Unix-like systems this is `${XDG_CONFIG_HOME}/epub-tui/config.json` when `XDG_CONFIG_HOME` is set, otherwise `~/.config/epub-tui/config.json`. The CLI accepts `--config` to override this path for portable setups and tests.
+
 The TUI can create and update this file, but the file should remain simple enough for a user to edit directly outside the app. Config validation should produce specific, recoverable errors for malformed JSON, missing library path, duplicate catalog names, invalid catalog URLs, and incomplete credentials.
 
 SQLite stores cache and app-managed metadata:

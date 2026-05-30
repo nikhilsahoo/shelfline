@@ -17,7 +17,7 @@
 - `src/epub_tui/__init__.py`: package version.
 - `src/epub_tui/__main__.py`: `python -m epub_tui` entrypoint.
 - `src/epub_tui/app.py`: Textual app class and dependency wiring.
-- `src/epub_tui/config.py`: JSON config models, loading, saving, validation, credential redaction.
+- `src/epub_tui/config.py`: JSON config models, default config path, loading, saving, validation, credential redaction.
 - `src/epub_tui/catalog/models.py`: OPDS feed, entry, and acquisition dataclasses.
 - `src/epub_tui/catalog/parser.py`: OPDS 1.x Atom normalization from feedparser output.
 - `src/epub_tui/catalog/client.py`: HTTP fetching with optional Basic Auth.
@@ -214,7 +214,15 @@ from pathlib import Path
 
 import pytest
 
-from epub_tui.config import AppConfig, CatalogConfig, ConfigError, load_config, redact_config, save_config
+from epub_tui.config import (
+    AppConfig,
+    CatalogConfig,
+    ConfigError,
+    default_config_path,
+    load_config,
+    redact_config,
+    save_config,
+)
 
 
 def test_load_config_with_catalog_and_basic_auth(tmp_path: Path) -> None:
@@ -319,6 +327,22 @@ def test_redact_config_hides_password(tmp_path: Path) -> None:
 
     assert "secret" not in redacted
     assert "***" in redacted
+
+
+def test_default_config_path_uses_appdata_on_windows(tmp_path: Path) -> None:
+    path = default_config_path(env={"APPDATA": str(tmp_path)}, platform_name="nt")
+
+    assert path == tmp_path / "epub-tui" / "config.json"
+
+
+def test_default_config_path_uses_xdg_config_home(tmp_path: Path) -> None:
+    path = default_config_path(
+        env={"XDG_CONFIG_HOME": str(tmp_path)},
+        platform_name="posix",
+        home=tmp_path / "home",
+    )
+
+    assert path == tmp_path / "epub-tui" / "config.json"
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -335,9 +359,10 @@ Create `src/epub_tui/config.py`:
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 from urllib.parse import urlparse
 
 
@@ -357,6 +382,20 @@ class AppConfig:
     library_path: Path
     catalogs: list[CatalogConfig] = field(default_factory=list)
     preferences: dict[str, Any] = field(default_factory=dict)
+
+
+def default_config_path(
+    env: Mapping[str, str] | None = None,
+    platform_name: str | None = None,
+    home: Path | None = None,
+) -> Path:
+    values = os.environ if env is None else env
+    system = os.name if platform_name is None else platform_name
+    if system == "nt" and values.get("APPDATA"):
+        return Path(values["APPDATA"]) / "epub-tui" / "config.json"
+    if values.get("XDG_CONFIG_HOME"):
+        return Path(values["XDG_CONFIG_HOME"]) / "epub-tui" / "config.json"
+    return (home or Path.home()) / ".config" / "epub-tui" / "config.json"
 
 
 def load_config(path: Path) -> AppConfig:
@@ -1665,6 +1704,8 @@ git commit -m "feat: integrate catalog download workflow"
 Create `tests/test_cli.py`:
 
 ```python
+from pathlib import Path
+
 from epub_tui.__main__ import build_app
 from epub_tui.app import EpubTuiApp
 
@@ -1672,6 +1713,26 @@ from epub_tui.app import EpubTuiApp
 def test_build_app_returns_textual_app() -> None:
     app = build_app([])
     assert isinstance(app, EpubTuiApp)
+
+
+def test_build_app_uses_default_config_when_present(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    library_path = tmp_path / "books"
+    config_path.write_text(
+        (
+            "{\n"
+            f'  "library_path": "{library_path.as_posix()}",\n'
+            '  "catalogs": [{"name": "Example", "url": "https://example.test/opds"}],\n'
+            '  "preferences": {}\n'
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+
+    app = build_app([], default_config=config_path)
+
+    assert app.config is not None
+    assert app.config.catalogs[0].name == "Example"
 ```
 
 - [ ] **Step 2: Run CLI test to verify it fails**
@@ -1692,17 +1753,18 @@ from pathlib import Path
 from typing import Sequence
 
 from epub_tui.app import EpubTuiApp
-from epub_tui.config import ConfigError, load_config
+from epub_tui.config import ConfigError, default_config_path, load_config
 
 
-def build_app(argv: Sequence[str] | None = None) -> EpubTuiApp:
+def build_app(argv: Sequence[str] | None = None, default_config: Path | None = None) -> EpubTuiApp:
     parser = argparse.ArgumentParser(prog="epub-tui")
-    parser.add_argument("--config", type=Path, default=None)
+    parser.add_argument("--config", type=Path, default=None, help="Path to config JSON")
     args = parser.parse_args(argv)
+    config_path = args.config or default_config or default_config_path()
     config = None
-    if args.config is not None:
+    if config_path.exists():
         try:
-            config = load_config(args.config)
+            config = load_config(config_path)
         except ConfigError as exc:
             raise SystemExit(str(exc)) from exc
     return EpubTuiApp(config=config)
@@ -1735,8 +1797,11 @@ pytest
 ## Run
 
 ```powershell
+epub-tui
 epub-tui --config path\to\config.json
 ```
+
+By default, `epub-tui` reads config from `%APPDATA%\epub-tui\config.json` on Windows, `${XDG_CONFIG_HOME}/epub-tui/config.json` when `XDG_CONFIG_HOME` is set, or `~/.config/epub-tui/config.json` otherwise. Use `--config` to override that location.
 
 Example config:
 
