@@ -34,6 +34,31 @@ def test_parse_acquisition_feed_extracts_epub_and_pdf(fixture_dir: Path) -> None
     }
 
 
+def test_parse_acquisition_feed_accepts_open_access_subrelation() -> None:
+    xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Open Access</title>
+  <id>urn:example:open-access</id>
+  <updated>2026-05-30T00:00:00Z</updated>
+  <entry>
+    <title>Open Book</title>
+    <id>urn:isbn:9780000000002</id>
+    <updated>2026-05-30T00:00:00Z</updated>
+    <link rel="http://opds-spec.org/acquisition/open-access" href="books/open.epub" type="application/epub+zip" title="Open EPUB"/>
+    <link rel="http://opds-spec.org/acquisition-not-real" href="books/not-real.epub" type="application/epub+zip" title="Not Real"/>
+  </entry>
+</feed>
+"""
+
+    feed = parse_opds_feed(xml, source_url="https://example.test/opds/open.xml")
+
+    entry = feed.entries[0]
+    assert [link.relation for link in entry.acquisition_links] == [
+        "http://opds-spec.org/acquisition/open-access"
+    ]
+    assert entry.best_epub_link().href == "https://example.test/opds/books/open.epub"
+
+
 def test_invalid_feed_raises_parse_error(fixture_dir: Path) -> None:
     xml = (fixture_dir / "opds" / "invalid.xml").read_text(encoding="utf-8")
 

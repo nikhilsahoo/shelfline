@@ -53,7 +53,7 @@ def _parse_entry(entry: Any, source_url: str) -> CatalogEntry:
             cover_image_url = resolved_href
         elif relation == OPDS_THUMBNAIL_REL:
             thumbnail_url = resolved_href
-        elif relation == OPDS_ACQUISITION_REL:
+        elif _is_acquisition_relation(relation):
             acquisition_links.append(
                 AcquisitionLink(
                     href=resolved_href,
@@ -75,6 +75,10 @@ def _parse_entry(entry: Any, source_url: str) -> CatalogEntry:
         navigation_url=navigation_url,
         acquisition_links=acquisition_links,
     )
+
+
+def _is_acquisition_relation(relation: str) -> bool:
+    return relation == OPDS_ACQUISITION_REL or relation.startswith(f"{OPDS_ACQUISITION_REL}/")
 
 
 def _get_text(mapping: Any, key: str) -> str:
