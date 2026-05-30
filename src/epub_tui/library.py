@@ -143,18 +143,37 @@ class LibraryRepository:
             )
 
     def delete_book(self, local_file_path: Path, remove_file: bool = True) -> None:
-        path = Path(local_file_path)
-        if remove_file and path.exists():
-            path.unlink()
+        deleted_path = self._mark_book_deleted(local_file_path)
+        if deleted_path is None:
+            return
+        if remove_file and deleted_path.exists():
+            deleted_path.unlink()
+
+    def _mark_book_deleted(self, local_file_path: Path) -> Path | None:
+        path_text = self._path_to_text(Path(local_file_path))
         with self._connect() as connection:
-            connection.execute(
+            row = connection.execute(
+                """
+                SELECT local_file_path
+                FROM books
+                WHERE local_file_path = ? AND deleted_at IS NULL
+                """,
+                (path_text,),
+            ).fetchone()
+            if row is None:
+                return None
+
+            cursor = connection.execute(
                 """
                 UPDATE books
                 SET deleted_at = CURRENT_TIMESTAMP
-                WHERE local_file_path = ?
+                WHERE local_file_path = ? AND deleted_at IS NULL
                 """,
-                (self._path_to_text(path),),
+                (path_text,),
             )
+            if cursor.rowcount == 0:
+                return None
+            return Path(row["local_file_path"])
 
     def save_feed_cache(
         self, source_catalog: str, url: str, title: str, body: str
