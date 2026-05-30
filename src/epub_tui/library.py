@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import json
 from pathlib import Path
 import sqlite3
-from typing import Any
+from typing import Any, Iterator
 
 
 @dataclass(frozen=True)
@@ -143,13 +144,6 @@ class LibraryRepository:
             )
 
     def delete_book(self, local_file_path: Path, remove_file: bool = True) -> None:
-        deleted_path = self._mark_book_deleted(local_file_path)
-        if deleted_path is None:
-            return
-        if remove_file and deleted_path.exists():
-            deleted_path.unlink()
-
-    def _mark_book_deleted(self, local_file_path: Path) -> Path | None:
         path_text = self._path_to_text(Path(local_file_path))
         with self._connect() as connection:
             row = connection.execute(
@@ -161,7 +155,7 @@ class LibraryRepository:
                 (path_text,),
             ).fetchone()
             if row is None:
-                return None
+                return
 
             cursor = connection.execute(
                 """
@@ -172,8 +166,11 @@ class LibraryRepository:
                 (path_text,),
             )
             if cursor.rowcount == 0:
-                return None
-            return Path(row["local_file_path"])
+                return
+
+            deleted_path = Path(row["local_file_path"])
+            if remove_file and deleted_path.exists():
+                deleted_path.unlink()
 
     def save_feed_cache(
         self, source_catalog: str, url: str, title: str, body: str
@@ -204,10 +201,15 @@ class LibraryRepository:
             ).fetchone()
         return dict(row) if row is not None else None
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self.db_path)
         connection.row_factory = sqlite3.Row
-        return connection
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     @staticmethod
     def _path_to_text(path: Path | None) -> str | None:
