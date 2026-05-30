@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from ebooklib import epub
 
 from epub_tui.app import EpubTuiApp
 from epub_tui.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
@@ -128,12 +129,26 @@ def _navigation_entry() -> CatalogEntry:
     )
 
 
-def _book(tmp_path: Path, *, is_read: bool = False) -> BookRecord:
-    book_path = tmp_path / "books" / "interesting.epub"
+def _write_preview_epub(epub_path: Path, title: str) -> None:
+    book = epub.EpubBook()
+    book.set_identifier(title)
+    book.set_title(title)
+    book.set_language("en")
+    chapter = epub.EpubHtml(title="Chapter One", file_name="chapter.xhtml", lang="en")
+    chapter.content = b"<html><body><h1>Chapter One</h1><p>Readable text.</p></body></html>"
+    book.add_item(chapter)
+    book.spine = ["nav", chapter]
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    epub.write_epub(str(epub_path), book)
+
+
+def _book(tmp_path: Path, *, title: str = "Interesting Book", is_read: bool = False) -> BookRecord:
+    book_path = tmp_path / "books" / f"{title}.epub"
     book_path.parent.mkdir(exist_ok=True)
-    book_path.write_bytes(b"book")
+    _write_preview_epub(book_path, title)
     return BookRecord(
-        title="Interesting Book",
+        title=title,
         authors=["Ada Lovelace"],
         identifiers=["urn:book:interesting"],
         source_catalog="Example",
@@ -397,6 +412,26 @@ async def test_library_screen_renders_books_and_updates_repository(tmp_path: Pat
         screen.action_delete_book()
         assert repo.list_books() == []
         assert "No downloaded books" in str(screen.query_one("#library-body").renderable)
+
+
+@pytest.mark.asyncio
+async def test_library_screen_selects_and_opens_epub_preview(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, is_read=False))
+    repo.add_book(_book(tmp_path, title="Second Book", is_read=False))
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(LibraryScreen(library=repo))
+        await pilot.press("j")
+
+        assert app.screen.selected_book is not None
+        assert app.screen.selected_book.title == "Second Book"
+
+        await pilot.press("enter")
+
+        assert isinstance(app.screen, EpubPreviewScreen)
 
 
 @pytest.mark.asyncio

@@ -432,6 +432,14 @@ class DownloadStatusScreen(Screen[None]):
 
 
 class LibraryScreen(Screen[None]):
+    BINDINGS = [
+        ("enter", "open_selected", "Open"),
+        ("j", "cursor_down", "Down"),
+        ("down", "cursor_down", "Down"),
+        ("k", "cursor_up", "Up"),
+        ("up", "cursor_up", "Up"),
+    ]
+
     def __init__(
         self,
         *,
@@ -482,6 +490,15 @@ class LibraryScreen(Screen[None]):
             return
         self.app.push_screen(EpubPreviewScreen(extract_epub_preview(book.local_file_path)))
 
+    def action_open_selected(self) -> None:
+        self.open_preview()
+
+    def action_cursor_down(self) -> None:
+        self._move_selection(1)
+
+    def action_cursor_up(self) -> None:
+        self._move_selection(-1)
+
     @property
     def selected_book(self) -> BookRecord | None:
         if not self.books:
@@ -498,6 +515,12 @@ class LibraryScreen(Screen[None]):
 
     def _set_status(self, message: str) -> None:
         self.query_one("#status-line", StatusLine).set_message(message)
+
+    def _move_selection(self, delta: int) -> None:
+        if not self.books:
+            return
+        self.selected_index = max(0, min(len(self.books) - 1, self.selected_index + delta))
+        self._set_status(f"Selected {self.books[self.selected_index].title}")
 
     def _library_text(self) -> str:
         if not self.books:
