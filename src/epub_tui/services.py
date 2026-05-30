@@ -10,7 +10,7 @@ import httpx
 
 from epub_tui.catalog.client import CatalogClient
 from epub_tui.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
-from epub_tui.catalog.parser import parse_opds_feed, sanitize_url_credentials
+from epub_tui.catalog.parser import parse_opds_feed, sanitize_text_url_credentials, sanitize_url_credentials
 from epub_tui.config import AppConfig, CatalogConfig
 from epub_tui.downloads import DownloadError, DownloadProgress, DownloadService
 from epub_tui.library import BookRecord, LibraryRepository
@@ -71,7 +71,12 @@ class CatalogWorkflow:
         )
         feed = parse_opds_feed(body, source_url=_opds_parse_base_url(target_url))
         feed = replace(feed, source_url=target_url)
-        self.library.save_feed_cache(catalog.name, target_url, feed.title, body)
+        self.library.save_feed_cache(
+            catalog.name,
+            target_url,
+            feed.title,
+            sanitize_text_url_credentials(body),
+        )
         _emit(on_status, "Catalog loaded")
         return feed
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
@@ -117,3 +118,7 @@ def sanitize_url_credentials(url: str) -> str:
     if parts.port is not None:
         netloc = f"{netloc}:{parts.port}"
     return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
+
+def sanitize_text_url_credentials(text: str) -> str:
+    return re.sub(r"(https?://)[^\s\"'<>/@]+(?::[^\s\"'<>/@]*)?@", r"\1", text)

@@ -7,10 +7,11 @@ from textual.screen import Screen
 from textual.widgets import Footer, Header, Static
 
 from epub_tui.catalog.models import CatalogEntry, CatalogFeed
-from epub_tui.config import AppConfig
+from epub_tui.config import AppConfig, CatalogConfig
 from epub_tui.downloads import DownloadProgress
 from epub_tui.library import BookRecord, LibraryRepository
-from epub_tui.reader import EpubPreview
+from epub_tui.reader import EpubPreview, extract_epub_preview
+from epub_tui.services import CatalogWorkflow
 from epub_tui.tui.widgets import (
     BusyIndicator,
     CoverDisplay,
@@ -39,9 +40,16 @@ class SetupScreen(Screen[None]):
 
 
 class CatalogsScreen(Screen[None]):
-    def __init__(self, config: AppConfig, **kwargs: object) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        *,
+        workflow: CatalogWorkflow | None = None,
+        **kwargs: object,
+    ) -> None:
         super().__init__(**kwargs)
         self.config = config
+        self.workflow = workflow
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -58,6 +66,22 @@ class CatalogsScreen(Screen[None]):
         self.query_one("#busy-indicator", BusyIndicator).stop()
         self.query_one("#status-line", StatusLine).set_message(message)
 
+    async def open_catalog(self, index: int = 0) -> None:
+        if self.workflow is None:
+            self.finish_outgoing_call("Catalog workflow is not available")
+            return
+        if index < 0 or index >= len(self.config.catalogs):
+            self.finish_outgoing_call("Catalog is not available")
+            return
+
+        catalog = self.config.catalogs[index]
+        feed = await self.workflow.fetch_catalog(
+            catalog,
+            on_status=lambda message: self.begin_outgoing_call(message),
+        )
+        self.finish_outgoing_call("Catalog loaded")
+        await self.app.push_screen(FeedScreen(feed, catalog=catalog, workflow=self.workflow))
+
     def _catalog_text(self) -> str:
         if not self.config.catalogs:
             return "No catalogs configured"
@@ -65,9 +89,18 @@ class CatalogsScreen(Screen[None]):
 
 
 class FeedScreen(Screen[None]):
-    def __init__(self, feed: CatalogFeed, **kwargs: object) -> None:
+    def __init__(
+        self,
+        feed: CatalogFeed,
+        *,
+        catalog: CatalogConfig | None = None,
+        workflow: CatalogWorkflow | None = None,
+        **kwargs: object,
+    ) -> None:
         super().__init__(**kwargs)
         self.feed = feed
+        self.catalog = catalog
+        self.workflow = workflow
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -89,6 +122,18 @@ class FeedScreen(Screen[None]):
         self.query_one("#busy-indicator", BusyIndicator).stop()
         self.query_one("#status-line", StatusLine).set_message(message)
 
+    def open_entry(self, index: int = 0) -> None:
+        if index < 0 or index >= len(self.feed.entries):
+            self.finish_outgoing_call("Entry is not available")
+            return
+        self.app.push_screen(
+            EntryScreen(
+                self.feed.entries[index],
+                catalog=self.catalog,
+                workflow=self.workflow,
+            )
+        )
+
     def _begin_outgoing_call(self, message: str) -> None:
         self.query_one("#busy-indicator", BusyIndicator).start(message)
         self.query_one("#status-line", StatusLine).set_message(message)
@@ -108,9 +153,18 @@ class FeedScreen(Screen[None]):
 
 
 class EntryScreen(Screen[None]):
-    def __init__(self, entry: CatalogEntry, **kwargs: object) -> None:
+    def __init__(
+        self,
+        entry: CatalogEntry,
+        *,
+        catalog: CatalogConfig | None = None,
+        workflow: CatalogWorkflow | None = None,
+        **kwargs: object,
+    ) -> None:
         super().__init__(**kwargs)
         self.entry = entry
+        self.catalog = catalog
+        self.workflow = workflow
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -132,6 +186,25 @@ class EntryScreen(Screen[None]):
     def finish_download(self, message: str = "Ready") -> None:
         self.query_one("#busy-indicator", BusyIndicator).stop()
         self.query_one("#status-line", StatusLine).set_message(message)
+
+    async def download_acquisition(self, index: int = 0) -> None:
+        if self.workflow is None or self.catalog is None:
+            self.finish_download("Download workflow is not available")
+            return
+        if index < 0 or index >= len(self.entry.acquisition_links):
+            self.finish_download("Acquisition is not available")
+            return
+
+        status_screen = DownloadStatusScreen(status="Starting download...")
+        await self.app.push_screen(status_screen)
+        await self.workflow.download_acquisition(
+            self.catalog,
+            self.entry,
+            link=self.entry.acquisition_links[index],
+            on_status=status_screen.set_status,
+            on_progress=lambda progress: status_screen.update_progress(progress),
+        )
+        status_screen.set_status("Download complete")
 
     def _entry_text(self) -> str:
         lines = [self.entry.title]
@@ -171,9 +244,14 @@ class DownloadStatusScreen(Screen[None]):
 
     def update_progress(self, progress: DownloadProgress, status: str | None = None) -> None:
         self.progress = progress
-        self.query_one("#download-progress", DownloadProgressDisplay).update_progress(progress)
+        if self.is_mounted:
+            self.query_one("#download-progress", DownloadProgressDisplay).update_progress(progress)
         if status is not None:
-            self.status = status
+            self.set_status(status)
+
+    def set_status(self, status: str) -> None:
+        self.status = status
+        if self.is_mounted:
             self.query_one("#download-status", StatusLine).set_message(status)
 
 
@@ -217,6 +295,16 @@ class LibraryScreen(Screen[None]):
         self.library.delete_book(book.local_file_path, remove_file=True)
         self.refresh_books()
         self._set_status("Book deleted")
+
+    def open_preview(self) -> None:
+        book = self.selected_book
+        if book is None:
+            self._set_status("No book selected")
+            return
+        if book.media_type != "application/epub+zip":
+            self._set_status("Preview is not implemented for this format")
+            return
+        self.app.push_screen(EpubPreviewScreen(extract_epub_preview(book.local_file_path)))
 
     @property
     def selected_book(self) -> BookRecord | None:

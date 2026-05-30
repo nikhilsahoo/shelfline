@@ -2,6 +2,7 @@ from textual.app import App
 
 from epub_tui.config import AppConfig
 from epub_tui.library import LibraryRepository
+from epub_tui.services import CatalogWorkflow
 from epub_tui.tui.screens import CatalogsScreen, LibraryScreen, SetupScreen
 
 
@@ -18,19 +19,21 @@ class EpubTuiApp(App[None]):
         self,
         config: AppConfig | None = None,
         *,
+        workflow: CatalogWorkflow | None = None,
         library: LibraryRepository | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self.config = config
-        self.library = library
+        self.workflow = workflow
+        self.library = library or getattr(workflow, "library", None)
 
     def on_mount(self) -> None:
         if self.config is None:
             self.push_screen(SetupScreen())
             return
 
-        self.push_screen(CatalogsScreen(self.config))
+        self.push_screen(CatalogsScreen(self.config, workflow=self.workflow))
 
     def action_show_library(self) -> None:
         if self.library is not None:

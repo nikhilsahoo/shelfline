@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -18,6 +19,50 @@ from epub_tui.tui.screens import (
     FeedScreen,
     LibraryScreen,
 )
+
+
+class FakeWorkflow:
+    def __init__(self, feed: CatalogFeed | None = None, download_path: Path | None = None) -> None:
+        self.feed = feed
+        self.download_path = download_path or Path("downloaded.epub")
+        self.fetch_statuses: list[str] = []
+        self.download_statuses: list[str] = []
+        self.downloads: list[tuple[CatalogConfig, CatalogEntry, AcquisitionLink | None]] = []
+
+    async def fetch_catalog(
+        self,
+        catalog: CatalogConfig,
+        url: str | None = None,
+        on_status: Any | None = None,
+    ) -> CatalogFeed:
+        if on_status is not None:
+            on_status("Fetching catalog...")
+            self.fetch_statuses.append("Fetching catalog...")
+        if self.feed is None:
+            raise AssertionError("FakeWorkflow.feed is required")
+        if on_status is not None:
+            on_status("Catalog loaded")
+            self.fetch_statuses.append("Catalog loaded")
+        return self.feed
+
+    async def download_acquisition(
+        self,
+        catalog: CatalogConfig,
+        entry: CatalogEntry,
+        link: AcquisitionLink | None = None,
+        on_status: Any | None = None,
+        on_progress: Any | None = None,
+    ) -> Path:
+        self.downloads.append((catalog, entry, link))
+        if on_status is not None:
+            on_status("Starting download...")
+            self.download_statuses.append("Starting download...")
+        if on_progress is not None:
+            on_progress(DownloadProgress(bytes_received=10, total_bytes=10))
+        if on_status is not None:
+            on_status("Download complete")
+            self.download_statuses.append("Download complete")
+        return self.download_path
 
 
 def _entry() -> CatalogEntry:
@@ -44,6 +89,15 @@ def _entry() -> CatalogEntry:
     )
 
 
+def _feed() -> CatalogFeed:
+    return CatalogFeed(
+        title="Example Feed",
+        source_url="https://example.test/opds",
+        updated="2026-05-30",
+        entries=[_entry()],
+    )
+
+
 def _book(tmp_path: Path, *, is_read: bool = False) -> BookRecord:
     book_path = tmp_path / "books" / "interesting.epub"
     book_path.parent.mkdir(exist_ok=True)
@@ -65,12 +119,7 @@ def _book(tmp_path: Path, *, is_read: bool = False) -> BookRecord:
 
 @pytest.mark.asyncio
 async def test_feed_screen_renders_feed_entries_and_busy_states() -> None:
-    feed = CatalogFeed(
-        title="Example Feed",
-        source_url="https://example.test/opds",
-        updated="2026-05-30",
-        entries=[_entry()],
-    )
+    feed = _feed()
     app = EpubTuiApp(config=None)
 
     async with app.run_test():
@@ -87,6 +136,37 @@ async def test_feed_screen_renders_feed_entries_and_busy_states() -> None:
         assert "Refreshing feed" in str(screen.query_one("#busy-indicator").renderable)
         screen.begin_navigation("Opening next page")
         assert "Opening next page" in str(screen.query_one("#busy-indicator").renderable)
+
+
+@pytest.mark.asyncio
+async def test_catalog_screen_opens_feed_through_workflow() -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FakeWorkflow(feed=_feed())
+    app = EpubTuiApp(
+        config=AppConfig(library_path=Path("books"), catalogs=[catalog]),
+        workflow=workflow,
+    )
+
+    async with app.run_test() as pilot:
+        await app.screen.open_catalog(0)
+        await pilot.pause()
+
+        assert isinstance(app.screen, FeedScreen)
+        assert workflow.fetch_statuses == ["Fetching catalog...", "Catalog loaded"]
+        assert "Example Feed" in str(app.screen.query_one("#feed-body").renderable)
+
+
+@pytest.mark.asyncio
+async def test_feed_screen_opens_entry_details() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(_feed()))
+        app.screen.open_entry(0)
+        await pilot.pause()
+
+        assert isinstance(app.screen, EntryScreen)
+        assert "Interesting Book" in str(app.screen.query_one("#entry-body").renderable)
 
 
 @pytest.mark.asyncio
@@ -108,6 +188,22 @@ async def test_entry_screen_renders_cover_fallback_and_all_acquisitions() -> Non
     assert "application/pdf" in rendered
     assert "Ada Lovelace" in cover
     assert "Preparing download" in busy
+
+
+@pytest.mark.asyncio
+async def test_entry_screen_downloads_acquisition_through_workflow(tmp_path: Path) -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FakeWorkflow(download_path=tmp_path / "Interesting Book.pdf")
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
+        await app.screen.download_acquisition(1)
+        await pilot.pause()
+
+        assert isinstance(app.screen, DownloadStatusScreen)
+        assert workflow.downloads[0][2] == _entry().acquisition_links[1]
+        assert "Download complete" in str(app.screen.query_one("#download-status").renderable)
 
 
 @pytest.mark.asyncio

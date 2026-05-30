@@ -290,6 +290,38 @@ async def test_workflow_stores_sanitized_cover_metadata_from_credentialed_opds_l
 
 
 @pytest.mark.asyncio
+async def test_workflow_feed_cache_body_strips_credentialed_links(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Private</title>
+  <entry>
+    <title>Private Book</title>
+    <link rel="http://opds-spec.org/image" href="https://alice:secret@example.test/covers/private.jpg"/>
+    <link rel="http://opds-spec.org/acquisition" href="https://alice:secret@example.test/books/private.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    catalog = CatalogConfig(name="Private", url="https://example.test/opds")
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    await workflow.fetch_catalog(catalog)
+
+    cached = workflow.library.get_feed_cache("https://example.test/opds")
+    assert cached is not None
+    assert "alice" not in cached["body"]
+    assert "secret" not in cached["body"]
+    assert "https://example.test/books/private.epub" in cached["body"]
+
+
+@pytest.mark.asyncio
 async def test_workflow_downloads_and_tracks_non_epub_acquisition(
     tmp_path: Path,
     httpx_mock: HTTPXMock,

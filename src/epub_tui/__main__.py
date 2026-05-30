@@ -6,6 +6,7 @@ from typing import Sequence
 
 from epub_tui.app import EpubTuiApp
 from epub_tui.config import ConfigError, default_config_path, load_config
+from epub_tui.services import CatalogWorkflow
 
 
 def build_app(
@@ -36,11 +37,16 @@ def build_app(
     except (ConfigError, OSError) as exc:
         raise SystemExit(f"Config error: {exc}") from exc
 
-    return EpubTuiApp(config=config)
+    workflow = CatalogWorkflow(config=config, state_db=_default_state_db(config.library_path))
+    return EpubTuiApp(config=config, workflow=workflow)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     build_app(argv).run()
+
+
+def _default_state_db(library_path: Path) -> Path:
+    return library_path / ".epub-tui" / "state.db"
 
 
 if __name__ == "__main__":
