@@ -90,8 +90,5 @@ class CoverDisplay(Static):
         return self._renderable
 
     def _render_cover(self) -> str:
-        if self.terminal_graphics and self.image_path is not None and self.image_path.exists():
-            return str(self.image_path)
-
         author_text = ", ".join(self.authors) if self.authors else "Unknown author"
         return f"{self.title}\n{author_text}"

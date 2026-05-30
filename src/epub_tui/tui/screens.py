@@ -18,6 +18,9 @@ class SetupScreen(Screen[None]):
         yield Footer()
 
     def validate_library_path(self, path: str | Path) -> str | None:
+        if isinstance(path, str) and not path.strip():
+            return "Library path is required"
+
         library_path = Path(path).expanduser()
         if not library_path.exists():
             return "Library path must exist"

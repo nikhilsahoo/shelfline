@@ -56,6 +56,13 @@ def test_setup_screen_validates_library_path(tmp_path: Path) -> None:
     assert screen.validate_library_path(tmp_path / "missing") == "Library path must exist"
 
 
+def test_setup_screen_rejects_blank_library_path() -> None:
+    screen = SetupScreen()
+
+    assert screen.validate_library_path("") == "Library path is required"
+    assert screen.validate_library_path("   ") == "Library path is required"
+
+
 @pytest.mark.asyncio
 async def test_catalog_screen_busy_indicator_for_outgoing_call(tmp_path: Path) -> None:
     config = AppConfig(library_path=tmp_path)
@@ -99,3 +106,21 @@ def test_cover_display_falls_back_without_terminal_graphics() -> None:
 
     assert "Example Book" in rendered
     assert "Ada Lovelace" in rendered
+
+
+def test_cover_display_falls_back_when_terminal_graphics_requested(tmp_path: Path) -> None:
+    image_path = tmp_path / "cover.jpg"
+    image_path.write_bytes(b"not a real image")
+
+    display = CoverDisplay(
+        title="Example Book",
+        authors=["Ada Lovelace"],
+        image_path=image_path,
+        terminal_graphics=True,
+    )
+
+    rendered = str(display.renderable)
+
+    assert "Example Book" in rendered
+    assert "Ada Lovelace" in rendered
+    assert str(image_path) not in rendered
