@@ -7,6 +7,23 @@ from pytest_httpx import HTTPXMock
 from epub_tui.downloads import DownloadError, DownloadProgress, DownloadService
 
 
+def test_download_error_is_runtime_error() -> None:
+    assert isinstance(DownloadError(), RuntimeError)
+
+
+def test_download_progress_percent_rounds_to_two_decimal_places() -> None:
+    progress = DownloadProgress(bytes_received=1, total_bytes=6)
+
+    assert progress.percent == 16.67
+
+
+@pytest.mark.asyncio
+async def test_download_service_can_use_default_client() -> None:
+    service = DownloadService()
+
+    await service.aclose()
+
+
 @pytest.mark.asyncio
 async def test_download_writes_temp_then_final_file(
     tmp_path: Path, httpx_mock: HTTPXMock

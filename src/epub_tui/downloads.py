@@ -7,7 +7,7 @@ from pathlib import Path, PurePath
 import httpx
 
 
-class DownloadError(Exception):
+class DownloadError(RuntimeError):
     """Raised when a download cannot be completed."""
 
 
@@ -20,7 +20,7 @@ class DownloadProgress:
     def percent(self) -> float | None:
         if not self.total_bytes:
             return None
-        return round((self.bytes_received / self.total_bytes) * 100, 1)
+        return round((self.bytes_received / self.total_bytes) * 100, 2)
 
 
 ProgressCallback = Callable[[DownloadProgress], None]
@@ -43,8 +43,8 @@ def _content_length(response: httpx.Response) -> int | None:
 
 
 class DownloadService:
-    def __init__(self, client: httpx.AsyncClient) -> None:
-        self._client = client
+    def __init__(self, client: httpx.AsyncClient | None = None) -> None:
+        self._client = client or httpx.AsyncClient(timeout=60.0, follow_redirects=True)
         self._active = False
 
     async def download(
