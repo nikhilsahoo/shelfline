@@ -12,6 +12,9 @@ class ConfigError(ValueError):
     pass
 
 
+_CONFIG_FILE_MODE = 0o600
+
+
 @dataclass(frozen=True)
 class CatalogConfig:
     name: str
@@ -58,7 +61,8 @@ def save_config(path: Path, config: AppConfig) -> None:
         "catalogs": [_catalog_to_json(catalog) for catalog in config.catalogs],
         "preferences": config.preferences,
     }
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    _write_config_text(path, text)
 
 
 def redact_config(config: AppConfig) -> str:
@@ -135,6 +139,23 @@ def _catalog_to_json(catalog: CatalogConfig, redact: bool = False) -> dict[str, 
             "password": "***" if redact else catalog.auth["password"],
         }
     return item
+
+
+def _write_config_text(path: Path, text: str) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    fd = os.open(path, flags, _CONFIG_FILE_MODE)
+    with os.fdopen(fd, "w", encoding="utf-8") as file:
+        file.write(text)
+    _restrict_config_permissions(path)
+
+
+def _restrict_config_permissions(path: Path) -> None:
+    if os.name != "posix":
+        return
+    try:
+        os.chmod(path, _CONFIG_FILE_MODE)
+    except (OSError, NotImplementedError):
+        pass
 
 
 def _is_http_url(value: str) -> bool:

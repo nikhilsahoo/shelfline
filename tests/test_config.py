@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -56,6 +57,41 @@ def test_save_config_is_human_editable_json(tmp_path: Path) -> None:
     assert "\n  " in text
     loaded = json.loads(text)
     assert loaded["catalogs"][0]["name"] == "Public"
+
+
+def test_save_config_restricts_file_permissions_when_supported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    chmod_calls: list[tuple[Path, int]] = []
+
+    def fake_chmod(path: Path, mode: int) -> None:
+        chmod_calls.append((path, mode))
+
+    monkeypatch.setattr("epub_tui.config.os.name", "posix")
+    monkeypatch.setattr("epub_tui.config.os.chmod", fake_chmod)
+
+    config_path = tmp_path / "config.json"
+    config = AppConfig(library_path=tmp_path / "books")
+
+    save_config(config_path, config)
+
+    assert chmod_calls == [(config_path, 0o600)]
+
+
+def test_save_config_writes_user_only_permissions_on_posix(tmp_path: Path) -> None:
+    if os.name != "posix" or not hasattr(os, "umask"):
+        pytest.skip("POSIX permission bits are not meaningful on this platform")
+
+    config_path = tmp_path / "config.json"
+    config = AppConfig(library_path=tmp_path / "books")
+
+    old_umask = os.umask(0)
+    try:
+        save_config(config_path, config)
+    finally:
+        os.umask(old_umask)
+
+    assert config_path.stat().st_mode & 0o777 == 0o600
 
 
 def test_rejects_duplicate_catalog_names(tmp_path: Path) -> None:
