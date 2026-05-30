@@ -14,7 +14,8 @@ Included in the MVP:
 - Saved catalog list.
 - Single active download workflow.
 - User-configured library path required before downloads.
-- SQLite-backed local state.
+- Human-editable JSON configuration for library path and saved catalogs.
+- SQLite-backed app-managed cache and downloaded-book metadata.
 - EPUB text preview for downloaded EPUB files.
 - Metadata tracking for downloaded non-EPUB files.
 
@@ -34,9 +35,9 @@ The app is organized into layered modules. Textual screens call services in the 
 - `tui`: Textual screens, widgets, commands, key bindings, and status display.
 - `catalog`: OPDS fetching, Basic Auth handling, feed parsing, URL resolution, and normalized catalog models.
 - `downloads`: single-download orchestration, progress reporting, temporary file handling, retries, and final file placement.
-- `library`: SQLite schema, settings, saved catalogs, downloaded book metadata, and feed cache.
+- `library`: SQLite schema, downloaded book metadata, and feed cache.
 - `reader`: EPUB text extraction and preview document model.
-- `config`: first-run and startup configuration, especially library path validation.
+- `config`: JSON configuration loading/saving, saved catalogs, optional per-catalog credentials, and library path validation.
 
 Network fetches and downloads run in Textual workers so the interface remains responsive. OPDS parsing, download logic, library persistence, and EPUB extraction should be testable without launching the TUI.
 
@@ -83,7 +84,7 @@ Primary flow:
 5. Open an acquisition entry details view.
 6. Choose the best EPUB acquisition link when one is available.
 7. Download one book at a time into the configured library path.
-8. Save metadata in SQLite.
+8. Save downloaded-book metadata in SQLite.
 9. Offer a basic EPUB text preview for EPUB downloads.
 10. Track non-EPUB downloads as stored files with metadata, without in-terminal preview.
 
@@ -116,22 +117,28 @@ Basic Authentication is supported per saved catalog:
 - Credentials are used for catalog feed requests and acquisition/download requests that belong to that catalog.
 - Credentials are never displayed in logs, status messages, exception strings, or exported metadata.
 - Catalog URLs containing embedded credentials should be accepted for compatibility, but the app should normalize them into separate credential fields before saving when possible.
-- Credential storage starts with local SQLite fields suitable for MVP development, with a clear boundary so it can move to a platform keyring later.
+- Credential storage starts in the user-editable JSON configuration file for MVP development, with a clear boundary so it can move to a platform keyring later.
 
 Only HTTP Basic Auth is in scope. Digest auth, OAuth, browser login, cookies, and custom token flows are out of scope.
 
 ## Data Model
 
-SQLite stores app state. Downloaded files live under the user-configured library path.
+The app splits human-editable configuration from app-managed state. Downloaded files live under the user-configured library path.
 
-Suggested tables:
+The JSON configuration file is the source of truth for user-managed settings:
 
-- `settings`: library path and small app preferences.
-- `catalogs`: name, URL, optional Basic Auth username/password, last fetched time, and last error.
+- `library_path`: absolute or user-expanded path to the local book library.
+- `catalogs`: saved OPDS catalog entries with name, URL, and optional Basic Auth username/password.
+- `preferences`: small user-editable app preferences as needed.
+
+The TUI can create and update this file, but the file should remain simple enough for a user to edit directly outside the app. Config validation should produce specific, recoverable errors for malformed JSON, missing library path, duplicate catalog names, invalid catalog URLs, and incomplete credentials.
+
+SQLite stores cache and app-managed metadata:
+
 - `feed_cache`: feed URL, catalog ID, title, fetched timestamp, and raw or normalized feed cache.
 - `books`: title, authors, identifiers, source catalog ID, source entry URL, acquisition URL, media type, local file path, and download timestamp.
 
-Credential fields should be isolated behind a repository or credential store interface. This keeps the MVP simple while leaving room to replace SQLite credential storage with OS keyring integration later.
+Credential fields should be isolated behind a config or credential store interface. This keeps the MVP simple while leaving room to replace JSON credential storage with OS keyring integration later.
 
 Downloads write to a temporary file first, then move to the final library location only after completion and basic validation. Interrupted downloads must not appear as complete library books.
 
@@ -156,6 +163,7 @@ Core tests:
 - Basic Auth fetch tests that verify credentials are sent when configured and omitted when not configured.
 - Credential redaction tests for logs/errors/status messages.
 - Download tests with mocked HTTP responses, including success, interruption, failure, and duplicate filenames.
+- Config tests for loading, saving, validating, and preserving human-editable JSON.
 - Library tests using temporary SQLite databases and temporary library directories.
 - EPUB preview tests with a tiny fixture EPUB.
 
@@ -177,6 +185,7 @@ Recommended dependencies:
 - `httpx` for HTTP fetching and streaming downloads.
 - `feedparser` for OPDS 1.x Atom parsing.
 - `sqlite3` from the standard library for MVP persistence.
+- `json` from the standard library for user-editable configuration.
 - An EPUB parsing library such as `ebooklib`, or a small EPUB ZIP/XML extractor if dependency weight becomes an issue.
 
 Dependency choices should be confirmed during implementation planning against current package health and local project constraints.
