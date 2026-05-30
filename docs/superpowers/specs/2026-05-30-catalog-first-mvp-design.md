@@ -9,6 +9,7 @@ Build a Python terminal UI for browsing OPDS 1.x catalogs, downloading one book 
 Included in the MVP:
 
 - Python + Textual/Rich TUI.
+- Windows and Linux support.
 - OPDS 1.x Atom catalog browsing.
 - Optional Basic Authentication per OPDS catalog.
 - Saved catalog list.
@@ -219,6 +220,18 @@ Recommended dependencies:
 - An EPUB parsing library such as `ebooklib`, or a small EPUB ZIP/XML extractor if dependency weight becomes an issue.
 
 Dependency choices should be confirmed during implementation planning against current package health and local project constraints.
+
+## Cross-Platform Support
+
+The MVP must run on Windows and Linux.
+
+- Use `pathlib.Path` for filesystem paths and avoid hard-coded path separators.
+- Use platform config defaults: `%APPDATA%\epub-tui\config.json` on Windows, `${XDG_CONFIG_HOME}/epub-tui/config.json` or `~/.config/epub-tui/config.json` on Linux.
+- Use atomic same-filesystem replacement for completed downloads and keep temporary download files in the destination directory.
+- Avoid shell-specific runtime behavior in the application code.
+- Terminal image support must be optional. If Sixel or another terminal graphics protocol is unavailable, the TUI must fall back to text cover placeholders.
+- Tests should avoid assumptions about case-sensitive filesystems, drive letters, path separators, terminal graphics support, and Windows file locking behavior.
+- Verification should run the core test suite on both Windows and Linux before release.
 
 ## Future Extensions
 

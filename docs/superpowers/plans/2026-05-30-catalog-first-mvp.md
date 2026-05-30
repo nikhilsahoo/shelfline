@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a Python Textual TUI that browses OPDS 1.x catalogs, supports optional Basic Auth, downloads one book at a time into a user-configured library path, manages downloaded books locally, displays cover images when terminal graphics are available, and previews EPUB text.
+**Goal:** Build a Python Textual TUI that works on Windows and Linux, browses OPDS 1.x catalogs, supports optional Basic Auth, downloads one book at a time into a user-configured library path, manages downloaded books locally, displays cover images when terminal graphics are available, and previews EPUB text.
 
 **Architecture:** Use a layered package where Textual screens call small core services. JSON config owns user-editable library/catalog settings, SQLite owns app-managed cache and book metadata, and catalog/download/reader modules are testable without launching the TUI.
 
@@ -37,6 +37,7 @@
 - `tests/test_downloads.py`: download workflow tests.
 - `tests/test_reader.py`: EPUB preview tests.
 - `tests/test_tui_smoke.py`: Textual smoke tests.
+- `tests/test_cross_platform.py`: Windows/Linux path and fallback behavior tests.
 
 ---
 
@@ -362,6 +363,12 @@ def test_default_config_path_uses_xdg_config_home(tmp_path: Path) -> None:
     )
 
     assert path == tmp_path / "epub-tui" / "config.json"
+
+
+def test_default_config_path_falls_back_to_linux_home(tmp_path: Path) -> None:
+    path = default_config_path(env={}, platform_name="posix", home=tmp_path / "home")
+
+    assert path == tmp_path / "home" / ".config" / "epub-tui" / "config.json"
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -2264,9 +2271,236 @@ git commit -m "feat: add CLI config entrypoint"
 
 ---
 
+### Task 11: Cross-Platform Verification
+
+**Files:**
+- Create: `tests/test_cross_platform.py`
+- Modify: `README.md`
+
+- [ ] **Step 1: Write cross-platform behavior tests**
+
+Create `tests/test_cross_platform.py`:
+
+```python
+from pathlib import Path, PureWindowsPath
+
+from epub_tui.config import default_config_path
+from epub_tui.downloads import partial_download_path, safe_replace
+from epub_tui.tui.widgets import CoverDisplay
+
+
+def test_default_config_path_windows_shape(tmp_path: Path) -> None:
+    path = default_config_path(env={"APPDATA": str(tmp_path)}, platform_name="nt")
+
+    assert path == tmp_path / "epub-tui" / "config.json"
+
+
+def test_default_config_path_linux_shape(tmp_path: Path) -> None:
+    path = default_config_path(env={}, platform_name="posix", home=tmp_path / "home")
+
+    assert path == tmp_path / "home" / ".config" / "epub-tui" / "config.json"
+
+
+def test_partial_download_path_stays_in_destination_directory() -> None:
+    destination = PureWindowsPath("C:/Users/Ada/Books")
+
+    partial = partial_download_path(destination, "Book.epub")
+
+    assert partial == PureWindowsPath("C:/Users/Ada/Books/Book.epub.part")
+
+
+def test_safe_replace_moves_file_to_final_path(tmp_path: Path) -> None:
+    partial = tmp_path / "book.epub.part"
+    final = tmp_path / "book.epub"
+    partial.write_bytes(b"book")
+
+    safe_replace(partial, final)
+
+    assert final.read_bytes() == b"book"
+    assert not partial.exists()
+
+
+def test_cover_display_falls_back_without_terminal_graphics(tmp_path: Path) -> None:
+    missing_image = tmp_path / "missing.jpg"
+    widget = CoverDisplay(title="Portable Book", author_line="Ada Writer", image_path=missing_image)
+
+    assert "Portable Book" in widget.renderable_text()
+```
+
+- [ ] **Step 2: Run cross-platform tests to verify they fail**
+
+Run: `pytest tests/test_cross_platform.py -v`
+
+Expected: FAIL with missing `partial_download_path` and `safe_replace`.
+
+- [ ] **Step 3: Add download path helpers**
+
+Modify `src/epub_tui/downloads.py`:
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path, PurePath
+from typing import Callable, TypeVar
+
+import httpx
+
+
+class DownloadError(RuntimeError):
+    pass
+
+
+PathT = TypeVar("PathT", bound=PurePath)
+
+
+def partial_download_path(destination_dir: PathT, filename: str) -> PathT:
+    return destination_dir / f"{filename}.part"
+
+
+def safe_replace(partial_path: Path, final_path: Path) -> None:
+    partial_path.replace(final_path)
+
+
+@dataclass(frozen=True)
+class DownloadProgress:
+    bytes_received: int
+    total_bytes: int | None
+
+    @property
+    def percent(self) -> float | None:
+        if self.total_bytes in {None, 0}:
+            return None
+        return round((self.bytes_received / self.total_bytes) * 100, 2)
+
+
+ProgressCallback = Callable[[DownloadProgress], None]
+
+
+class DownloadService:
+    def __init__(self, client: httpx.AsyncClient | None = None) -> None:
+        self._client = client or httpx.AsyncClient(timeout=60.0, follow_redirects=True)
+        self._active = False
+
+    async def download(
+        self,
+        *,
+        url: str,
+        destination_dir: Path,
+        filename: str,
+        auth: tuple[str, str] | None = None,
+        on_progress: ProgressCallback | None = None,
+    ) -> Path:
+        if self._active:
+            raise DownloadError("Another download is already active")
+
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        final_path = destination_dir / filename
+        partial_path = partial_download_path(destination_dir, filename)
+        if final_path.exists():
+            raise DownloadError(f"Download destination already exists: {final_path}")
+
+        self._active = True
+        try:
+            async with self._client.stream("GET", url, auth=auth) as response:
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    raise DownloadError(f"Download failed: HTTP {exc.response.status_code}") from exc
+
+                total_bytes = _content_length(response)
+                bytes_received = 0
+                with partial_path.open("wb") as handle:
+                    async for chunk in response.aiter_bytes():
+                        handle.write(chunk)
+                        bytes_received += len(chunk)
+                        if on_progress is not None:
+                            on_progress(DownloadProgress(bytes_received, total_bytes))
+            safe_replace(partial_path, final_path)
+            return final_path
+        except Exception:
+            partial_path.unlink(missing_ok=True)
+            raise
+        finally:
+            self._active = False
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+
+def _content_length(response: httpx.Response) -> int | None:
+    value = response.headers.get("Content-Length")
+    if value is None or not value.isdigit():
+        return None
+    return int(value)
+```
+
+- [ ] **Step 4: Update README with Windows and Linux commands**
+
+Modify `README.md` development section:
+
+````markdown
+## Development
+
+Windows PowerShell:
+
+```powershell
+python -m pip install -e ".[dev]"
+pytest
+```
+
+Linux shell:
+
+```bash
+python -m pip install -e '.[dev]'
+pytest
+```
+````
+
+- [ ] **Step 5: Run cross-platform and full tests locally**
+
+Run: `pytest tests/test_cross_platform.py -v`
+
+Expected: PASS.
+
+Run: `pytest -v`
+
+Expected: PASS.
+
+- [ ] **Step 6: Verify on both operating systems before release**
+
+On Windows PowerShell:
+
+```powershell
+python -m pip install -e ".[dev]"
+pytest -v
+python -m epub_tui --help
+```
+
+Expected: tests pass and help output includes `--config`.
+
+On Linux shell:
+
+```bash
+python -m pip install -e '.[dev]'
+pytest -v
+python -m epub_tui --help
+```
+
+Expected: tests pass and help output includes `--config`.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/epub_tui/downloads.py tests/test_cross_platform.py README.md
+git commit -m "test: add cross-platform verification"
+```
+
+---
+
 ## Self-Review
 
-- Spec coverage: OPDS 1.x parsing and cover image metadata are covered by Task 3. Basic Auth fetch and credential redaction are covered by Tasks 2 and 4. JSON config is covered by Task 2. SQLite cache/book metadata, including cover URLs, optional local cover paths, read/unread state, and soft deletion, is covered by Task 5. Single download workflow and progress callbacks are covered by Task 6. EPUB preview is covered by Task 7. Textual startup, catalog screen smoke coverage, library action bindings, busy indicators for outgoing calls, cover display fallback, and download progress display are covered by Task 8. End-to-end service integration and status callbacks for outgoing calls are covered by Task 9. CLI launch and usage docs are covered by Task 10.
+- Spec coverage: OPDS 1.x parsing and cover image metadata are covered by Task 3. Basic Auth fetch and credential redaction are covered by Tasks 2 and 4. JSON config is covered by Task 2. SQLite cache/book metadata, including cover URLs, optional local cover paths, read/unread state, and soft deletion, is covered by Task 5. Single download workflow and progress callbacks are covered by Task 6. EPUB preview is covered by Task 7. Textual startup, catalog screen smoke coverage, library action bindings, busy indicators for outgoing calls, cover display fallback, and download progress display are covered by Task 8. End-to-end service integration and status callbacks for outgoing calls are covered by Task 9. CLI launch and usage docs are covered by Task 10. Windows/Linux portability is covered by Task 11.
 - Scope boundaries: OPDS 2.x, multi-download queue, PDF/DjVu/CBR rendering, OAuth, annotations, sync, and full-text search are not implemented in this plan.
 - Type consistency: `AppConfig`, `CatalogConfig`, `CatalogFeed`, `CatalogEntry`, `AcquisitionLink`, `BookRecord`, `LibraryRepository`, `CatalogClient`, `DownloadProgress`, `DownloadService`, `CatalogWorkflow`, `StatusCallback`, `ProgressCallback`, and `EpubTuiApp` signatures are used consistently across tasks.
 - Red-flag scan: The plan contains no unresolved work markers.
