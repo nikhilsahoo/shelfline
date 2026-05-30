@@ -25,14 +25,13 @@ def build_app(
 
     explicit_config = args.config is not None
     config_path = args.config or default_config or default_config_path()
-    if not config_path.exists():
-        if explicit_config:
-            raise SystemExit(f"Config error: Config file does not exist: {config_path}")
-        return EpubTuiApp(config=None)
-    if not config_path.is_file():
-        raise SystemExit(f"Config error: Config path is not a file: {config_path}")
-
     try:
+        if not config_path.exists():
+            if explicit_config:
+                raise ConfigError(f"Config file does not exist: {config_path}")
+            return EpubTuiApp(config=None)
+        if not config_path.is_file():
+            raise ConfigError(f"Config path is not a file: {config_path}")
         config = load_config(config_path)
     except (ConfigError, OSError) as exc:
         raise SystemExit(f"Config error: {exc}") from exc

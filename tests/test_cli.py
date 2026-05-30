@@ -88,3 +88,22 @@ def test_build_app_exits_for_directory_config(tmp_path: Path) -> None:
         build_app(["--config", str(config_path)])
 
     assert f"Config path is not a file: {config_path}" in str(exc_info.value)
+
+
+def test_build_app_exits_cleanly_when_config_stat_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "config.json"
+
+    def raise_os_error(self: Path) -> bool:
+        if self == config_path:
+            raise PermissionError("stat denied")
+        return False
+
+    monkeypatch.setattr(Path, "exists", raise_os_error)
+
+    with pytest.raises(SystemExit) as exc_info:
+        build_app([], default_config=config_path)
+
+    assert "Config error: stat denied" in str(exc_info.value)
