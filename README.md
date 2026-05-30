@@ -4,9 +4,20 @@ Catalog-first terminal app for browsing OPDS 1.x catalogs, downloading books, an
 
 ## Development
 
+Windows PowerShell:
+
 ```powershell
 python -m pip install -e ".[dev]"
 python -m pytest -v
+python -m epub_tui --help
+```
+
+Linux shell:
+
+```shell
+python -m pip install -e '.[dev]'
+python -m pytest -v
+python -m epub_tui --help
 ```
 
 Run the app from an editable checkout with either the console script or module entrypoint:
@@ -30,6 +41,8 @@ Without `--config`, epub-tui looks for a config file at:
 - Linux/macOS fallback: `~/.config/epub-tui/config.json`
 
 If the config file is missing, the app opens the setup screen.
+
+Release verification should run the full test suite and `python -m epub_tui --help` on both Windows and Linux.
 
 Example config:
 

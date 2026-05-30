@@ -30,8 +30,8 @@ def partial_download_path(destination_dir: Path | PurePath, filename: str) -> Pa
     return destination_dir / f"{filename}.part"
 
 
-def safe_replace(partial_path: Path, final_path: Path) -> Path:
-    return partial_path.replace(final_path)
+def safe_replace(partial_path: Path, final_path: Path) -> None:
+    partial_path.replace(final_path)
 
 
 def _content_length(response: httpx.Response) -> int | None:
