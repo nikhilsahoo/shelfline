@@ -1,7 +1,8 @@
 from textual.app import App
 
 from epub_tui.config import AppConfig
-from epub_tui.tui.screens import CatalogsScreen, SetupScreen
+from epub_tui.library import LibraryRepository
+from epub_tui.tui.screens import CatalogsScreen, LibraryScreen, SetupScreen
 
 
 class EpubTuiApp(App[None]):
@@ -13,9 +14,16 @@ class EpubTuiApp(App[None]):
         ("x", "delete_book", "Delete Book"),
     ]
 
-    def __init__(self, config: AppConfig | None = None, **kwargs: object) -> None:
+    def __init__(
+        self,
+        config: AppConfig | None = None,
+        *,
+        library: LibraryRepository | None = None,
+        **kwargs: object,
+    ) -> None:
         super().__init__(**kwargs)
         self.config = config
+        self.library = library
 
     def on_mount(self) -> None:
         if self.config is None:
@@ -25,10 +33,22 @@ class EpubTuiApp(App[None]):
         self.push_screen(CatalogsScreen(self.config))
 
     def action_show_library(self) -> None:
+        if self.library is not None:
+            self.push_screen(LibraryScreen(library=self.library))
+            return
+
         self.notify("Library screen is not wired yet")
 
     def action_toggle_read(self) -> None:
+        if isinstance(self.screen, LibraryScreen):
+            self.screen.action_toggle_read()
+            return
+
         self.notify("Read/unread is available from the library screen")
 
     def action_delete_book(self) -> None:
+        if isinstance(self.screen, LibraryScreen):
+            self.screen.action_delete_book()
+            return
+
         self.notify("Delete is available from the library screen")
