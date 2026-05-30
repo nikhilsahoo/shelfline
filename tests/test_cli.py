@@ -6,8 +6,8 @@ from epub_tui.__main__ import build_app
 from epub_tui.app import EpubTuiApp
 
 
-def test_build_app_returns_textual_app() -> None:
-    app = build_app([])
+def test_build_app_returns_textual_app(tmp_path: Path) -> None:
+    app = build_app([], default_config=tmp_path / "missing.json")
     assert isinstance(app, EpubTuiApp)
 
 
@@ -69,3 +69,22 @@ def test_build_app_exits_for_invalid_config(tmp_path: Path) -> None:
         build_app(["--config", str(config_path)])
 
     assert "Config root must be a JSON object" in str(exc_info.value)
+
+
+def test_build_app_exits_for_missing_explicit_config(tmp_path: Path) -> None:
+    config_path = tmp_path / "missing.json"
+
+    with pytest.raises(SystemExit) as exc_info:
+        build_app(["--config", str(config_path)])
+
+    assert f"Config file does not exist: {config_path}" in str(exc_info.value)
+
+
+def test_build_app_exits_for_directory_config(tmp_path: Path) -> None:
+    config_path = tmp_path / "config-dir"
+    config_path.mkdir()
+
+    with pytest.raises(SystemExit) as exc_info:
+        build_app(["--config", str(config_path)])
+
+    assert f"Config path is not a file: {config_path}" in str(exc_info.value)

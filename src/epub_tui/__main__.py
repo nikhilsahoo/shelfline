@@ -23,13 +23,18 @@ def build_app(
     )
     args = parser.parse_args(argv)
 
+    explicit_config = args.config is not None
     config_path = args.config or default_config or default_config_path()
     if not config_path.exists():
+        if explicit_config:
+            raise SystemExit(f"Config error: Config file does not exist: {config_path}")
         return EpubTuiApp(config=None)
+    if not config_path.is_file():
+        raise SystemExit(f"Config error: Config path is not a file: {config_path}")
 
     try:
         config = load_config(config_path)
-    except ConfigError as exc:
+    except (ConfigError, OSError) as exc:
         raise SystemExit(f"Config error: {exc}") from exc
 
     return EpubTuiApp(config=config)
