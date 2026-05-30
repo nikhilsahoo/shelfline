@@ -12,7 +12,7 @@ Included in the MVP:
 - OPDS 1.x Atom catalog browsing.
 - Optional Basic Authentication per OPDS catalog.
 - Saved catalog list.
-- Single active download workflow.
+- Single active download workflow with visible progress.
 - User-configured library path required before downloads.
 - Human-editable JSON configuration for library path and saved catalogs.
 - SQLite-backed app-managed cache and downloaded-book metadata.
@@ -58,7 +58,7 @@ MVP screens:
 - `CatalogAuthScreen` or modal: optional Basic Auth username/password when adding or editing a catalog.
 - `FeedScreen`: browse OPDS navigation/acquisition feeds with breadcrumb and back stack.
 - `EntryScreen`: show item details and acquisition/download options.
-- `DownloadStatus`: modal or bottom panel for the single active download.
+- `DownloadStatus`: modal or bottom panel for the single active download, with a progress bar when total size is known and an indeterminate byte counter when it is not.
 - `LibraryScreen`: show downloaded items and stored metadata, mark books read/unread, delete local books, and open EPUB preview.
 - `EpubPreviewScreen`: scrollable plain-text preview for downloaded EPUBs.
 
@@ -108,6 +108,13 @@ Recoverable errors:
 - Local book deletion failure.
 
 Errors should show clear messages and preserve a retry/back path.
+
+Download progress:
+
+- The download service emits `DownloadProgress` updates with `bytes_received`, optional `total_bytes`, and optional percentage.
+- When the HTTP response includes `Content-Length`, the TUI shows a determinate progress bar.
+- When total size is unknown, the TUI shows bytes received and an indeterminate activity state.
+- Progress callbacks must not log credentials or acquisition URLs containing embedded credentials.
 
 ## OPDS And Authentication
 
@@ -173,6 +180,7 @@ Core tests:
 - Basic Auth fetch tests that verify credentials are sent when configured and omitted when not configured.
 - Credential redaction tests for logs/errors/status messages.
 - Download tests with mocked HTTP responses, including success, interruption, failure, and duplicate filenames.
+- Download progress tests for known `Content-Length` and unknown total size.
 - Config tests for loading, saving, validating, and preserving human-editable JSON.
 - Library tests using temporary SQLite databases and temporary library directories.
 - Library management tests for mark read/unread, list hiding deleted books by default, and local file deletion.

@@ -22,10 +22,10 @@
 - `src/epub_tui/catalog/parser.py`: OPDS 1.x Atom normalization from feedparser output.
 - `src/epub_tui/catalog/client.py`: HTTP fetching with optional Basic Auth.
 - `src/epub_tui/library.py`: SQLite schema plus book/cache repositories with read/unread and deletion operations.
-- `src/epub_tui/downloads.py`: single download service with temporary-file completion.
+- `src/epub_tui/downloads.py`: single download service with progress callbacks and temporary-file completion.
 - `src/epub_tui/reader.py`: EPUB text extraction.
 - `src/epub_tui/tui/screens.py`: Textual screens for setup, catalogs, feeds, entries, library, preview.
-- `src/epub_tui/tui/widgets.py`: reusable list/detail/status widgets, including graceful cover image display.
+- `src/epub_tui/tui/widgets.py`: reusable list/detail/status widgets, including graceful cover image display and download progress display.
 - `tests/conftest.py`: shared fixtures.
 - `tests/fixtures/opds/navigation.xml`: OPDS navigation feed fixture.
 - `tests/fixtures/opds/acquisition.xml`: OPDS acquisition feed fixture.
@@ -129,6 +129,7 @@ pytest
 - OPDS 1.x Atom catalog browsing
 - Optional HTTP Basic Auth per catalog
 - One active download at a time
+- Download progress bar for known totals and byte counter for unknown totals
 - JSON config for library path and saved catalogs
 - SQLite metadata/cache
 - Local library management: mark read/unread and delete downloaded books
@@ -1272,7 +1273,7 @@ import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
-from epub_tui.downloads import DownloadError, DownloadService
+from epub_tui.downloads import DownloadError, DownloadProgress, DownloadService
 
 
 @pytest.mark.asyncio
@@ -1317,6 +1318,44 @@ async def test_download_removes_partial_file_on_failure(tmp_path: Path, httpx_mo
         )
 
     assert not (tmp_path / "book.epub.part").exists()
+
+
+@pytest.mark.asyncio
+async def test_download_reports_progress_with_known_total(tmp_path: Path, httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        url="https://example.test/book.epub",
+        content=b"book bytes",
+        headers={"Content-Length": "10"},
+    )
+    service = DownloadService(httpx.AsyncClient())
+    updates: list[DownloadProgress] = []
+
+    await service.download(
+        url="https://example.test/book.epub",
+        destination_dir=tmp_path,
+        filename="book.epub",
+        on_progress=updates.append,
+    )
+
+    assert updates[-1] == DownloadProgress(bytes_received=10, total_bytes=10)
+    assert updates[-1].percent == 100.0
+
+
+@pytest.mark.asyncio
+async def test_download_reports_progress_without_known_total(tmp_path: Path, httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(url="https://example.test/book.epub", content=b"book")
+    service = DownloadService(httpx.AsyncClient())
+    updates: list[DownloadProgress] = []
+
+    await service.download(
+        url="https://example.test/book.epub",
+        destination_dir=tmp_path,
+        filename="book.epub",
+        on_progress=updates.append,
+    )
+
+    assert updates[-1] == DownloadProgress(bytes_received=4, total_bytes=None)
+    assert updates[-1].percent is None
 ```
 
 - [ ] **Step 2: Run download tests to verify they fail**
@@ -1332,13 +1371,30 @@ Create `src/epub_tui/downloads.py`:
 ```python
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 import httpx
 
 
 class DownloadError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class DownloadProgress:
+    bytes_received: int
+    total_bytes: int | None
+
+    @property
+    def percent(self) -> float | None:
+        if self.total_bytes in {None, 0}:
+            return None
+        return round((self.bytes_received / self.total_bytes) * 100, 2)
+
+
+ProgressCallback = Callable[[DownloadProgress], None]
 
 
 class DownloadService:
@@ -1353,6 +1409,7 @@ class DownloadService:
         destination_dir: Path,
         filename: str,
         auth: tuple[str, str] | None = None,
+        on_progress: ProgressCallback | None = None,
     ) -> Path:
         if self._active:
             raise DownloadError("Another download is already active")
@@ -1371,9 +1428,14 @@ class DownloadService:
                 except httpx.HTTPStatusError as exc:
                     raise DownloadError(f"Download failed: HTTP {exc.response.status_code}") from exc
 
+                total_bytes = _content_length(response)
+                bytes_received = 0
                 with partial_path.open("wb") as handle:
                     async for chunk in response.aiter_bytes():
                         handle.write(chunk)
+                        bytes_received += len(chunk)
+                        if on_progress is not None:
+                            on_progress(DownloadProgress(bytes_received, total_bytes))
             partial_path.replace(final_path)
             return final_path
         except Exception:
@@ -1384,6 +1446,13 @@ class DownloadService:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+
+def _content_length(response: httpx.Response) -> int | None:
+    value = response.headers.get("Content-Length")
+    if value is None or not value.isdigit():
+        return None
+    return int(value)
 ```
 
 - [ ] **Step 4: Run download tests**
@@ -1580,6 +1649,26 @@ def test_cover_widget_falls_back_to_text_when_image_missing(tmp_path) -> None:
 
     assert "Sample Book" in widget.renderable_text()
     assert "Ada Writer" in widget.renderable_text()
+
+
+def test_download_progress_widget_renders_known_percent() -> None:
+    from epub_tui.downloads import DownloadProgress
+    from epub_tui.tui.widgets import DownloadProgressDisplay
+
+    widget = DownloadProgressDisplay()
+    widget.set_progress(DownloadProgress(bytes_received=50, total_bytes=100))
+
+    assert "50.0%" in widget.renderable_text()
+
+
+def test_download_progress_widget_renders_unknown_total() -> None:
+    from epub_tui.downloads import DownloadProgress
+    from epub_tui.tui.widgets import DownloadProgressDisplay
+
+    widget = DownloadProgressDisplay()
+    widget.set_progress(DownloadProgress(bytes_received=4096, total_bytes=None))
+
+    assert "4096 bytes" in widget.renderable_text()
 ```
 
 - [ ] **Step 2: Run TUI smoke tests to verify they fail**
@@ -1603,7 +1692,9 @@ Create `src/epub_tui/tui/widgets.py`:
 ```python
 from pathlib import Path
 
-from textual.widgets import Static
+from textual.widgets import ProgressBar, Static
+
+from epub_tui.downloads import DownloadProgress
 
 
 class StatusLine(Static):
@@ -1632,6 +1723,29 @@ class CoverDisplay(Static):
             except Exception:
                 return self.renderable_text()
         return self.renderable_text()
+
+
+class DownloadProgressDisplay(Static):
+    def __init__(self) -> None:
+        self._progress = DownloadProgress(bytes_received=0, total_bytes=None)
+        super().__init__(self.renderable_text())
+
+    def set_progress(self, progress: DownloadProgress) -> None:
+        self._progress = progress
+        self.update(self.renderable_text())
+
+    def renderable_text(self) -> str:
+        if self._progress.percent is None:
+            return f"{self._progress.bytes_received} bytes downloaded"
+        return f"{self._progress.percent}% downloaded"
+
+
+class DownloadProgressBar(ProgressBar):
+    def set_progress(self, progress: DownloadProgress) -> None:
+        if progress.total_bytes is None:
+            self.update(total=100, progress=0)
+        else:
+            self.update(total=progress.total_bytes, progress=progress.bytes_received)
 ```
 
 Create `src/epub_tui/tui/screens.py`:
@@ -2013,6 +2127,7 @@ Example config:
 - OPDS 1.x Atom catalog browsing
 - Optional HTTP Basic Auth per catalog
 - One active download at a time
+- Download progress bar for known totals and byte counter for unknown totals
 - JSON config for library path and saved catalogs
 - SQLite metadata/cache
 - Local library management: mark read/unread and delete downloaded books
@@ -2041,7 +2156,7 @@ git commit -m "feat: add CLI config entrypoint"
 
 ## Self-Review
 
-- Spec coverage: OPDS 1.x parsing and cover image metadata are covered by Task 3. Basic Auth fetch and credential redaction are covered by Tasks 2 and 4. JSON config is covered by Task 2. SQLite cache/book metadata, including cover URLs, optional local cover paths, read/unread state, and soft deletion, is covered by Task 5. Single download workflow is covered by Task 6. EPUB preview is covered by Task 7. Textual startup, catalog screen smoke coverage, library action bindings, and cover display fallback are covered by Task 8. End-to-end service integration is covered by Task 9. CLI launch and usage docs are covered by Task 10.
+- Spec coverage: OPDS 1.x parsing and cover image metadata are covered by Task 3. Basic Auth fetch and credential redaction are covered by Tasks 2 and 4. JSON config is covered by Task 2. SQLite cache/book metadata, including cover URLs, optional local cover paths, read/unread state, and soft deletion, is covered by Task 5. Single download workflow and progress callbacks are covered by Task 6. EPUB preview is covered by Task 7. Textual startup, catalog screen smoke coverage, library action bindings, cover display fallback, and download progress display are covered by Task 8. End-to-end service integration is covered by Task 9. CLI launch and usage docs are covered by Task 10.
 - Scope boundaries: OPDS 2.x, multi-download queue, PDF/DjVu/CBR rendering, OAuth, annotations, sync, and full-text search are not implemented in this plan.
-- Type consistency: `AppConfig`, `CatalogConfig`, `CatalogFeed`, `CatalogEntry`, `AcquisitionLink`, `BookRecord`, `LibraryRepository`, `CatalogClient`, `DownloadService`, `CatalogWorkflow`, and `EpubTuiApp` signatures are used consistently across tasks.
+- Type consistency: `AppConfig`, `CatalogConfig`, `CatalogFeed`, `CatalogEntry`, `AcquisitionLink`, `BookRecord`, `LibraryRepository`, `CatalogClient`, `DownloadProgress`, `DownloadService`, `CatalogWorkflow`, and `EpubTuiApp` signatures are used consistently across tasks.
 - Red-flag scan: The plan contains no unresolved work markers.
