@@ -16,6 +16,7 @@ from epub_tui.library import BookRecord, LibraryRepository, LibrarySearch
 from epub_tui.reader import EpubPreview, extract_epub_preview
 from epub_tui.services import CatalogWorkflow
 from epub_tui.tui.layout import AppShell, replace_region
+from epub_tui.tui.reader import EpubReaderScreen
 from epub_tui.tui.widgets import (
     BusyIndicator,
     CoverDisplay,
@@ -601,7 +602,7 @@ class LibraryScreen(Screen[None]):
         if book.media_type != "application/epub+zip":
             self._set_status("Preview is not implemented for this format")
             return
-        self.app.push_screen(EpubPreviewScreen(extract_epub_preview(book.local_file_path)))
+        self.app.push_screen(EpubReaderScreen(extract_epub_preview(book.local_file_path)))
 
     def action_open_selected(self) -> None:
         if self.search_active:

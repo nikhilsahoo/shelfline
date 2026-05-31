@@ -12,6 +12,7 @@ from epub_tui.config import AppConfig, CatalogConfig
 from epub_tui.downloads import DownloadError, DownloadProgress
 from epub_tui.library import BookRecord, LibraryRepository
 from epub_tui.reader import EpubOutlineItem, EpubPreview, EpubSection
+from epub_tui.tui.reader import EpubReaderScreen
 from epub_tui.tui.screens import (
     CatalogAuthScreen,
     CatalogsScreen,
@@ -524,7 +525,7 @@ async def test_library_screen_renders_books_and_updates_repository(tmp_path: Pat
 
 
 @pytest.mark.asyncio
-async def test_library_screen_selects_and_opens_epub_preview(tmp_path: Path) -> None:
+async def test_library_screen_selects_and_opens_epub_reader(tmp_path: Path) -> None:
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
     repo.add_book(_book(tmp_path, is_read=False))
@@ -541,7 +542,7 @@ async def test_library_screen_selects_and_opens_epub_preview(tmp_path: Path) -> 
 
         await pilot.press("enter")
 
-        assert isinstance(app.screen, EpubPreviewScreen)
+        assert isinstance(app.screen, EpubReaderScreen)
 
 
 @pytest.mark.asyncio

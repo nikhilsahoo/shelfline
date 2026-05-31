@@ -10,6 +10,7 @@ from epub_tui.tui.screens import (
     LibraryScreen,
     SetupScreen,
 )
+from epub_tui.tui.reader import EpubReaderScreen
 from epub_tui.tui.widgets import BusyIndicator, CoverDisplay, DownloadProgressDisplay, StatusLine
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "DownloadProgressDisplay",
     "DownloadStatusScreen",
     "EntryScreen",
+    "EpubReaderScreen",
     "EpubPreviewScreen",
     "FeedScreen",
     "LibraryScreen",
