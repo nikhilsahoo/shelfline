@@ -44,6 +44,29 @@ If the config file is missing, the app opens the setup screen.
 
 Release verification should run the full test suite and `python -m epub_tui --help` on both Windows and Linux.
 
+## Usage
+
+On first run, enter an existing library/download directory. The app stores its JSON config at the default platform path unless `--config` is provided.
+
+From the catalog screen, add OPDS catalogs with `a` or the `New catalog` button. Catalogs may include Basic Auth credentials either in the JSON config or through the TUI add-catalog form.
+
+Common keys:
+
+- `c`: show catalogs
+- `a`: add a catalog
+- `l`: show library
+- `j` / `down`: move selection down
+- `k` / `up`: move selection up
+- `enter`: open selected item
+- `b`: go back from feed/download screens
+- `d`: download the selected acquisition from an entry screen
+- `m`: mark a library book read/unread
+- `x`: delete a library book
+- `r`: refresh the library
+- `q`: quit
+
+Catalog feeds show breadcrumbs for nested OPDS folders and label rows as `[Folder]`, `[Book]`, or `[Entry]`. Download status screens show progress where the server reports a content length and an indeterminate byte counter otherwise.
+
 Example config:
 
 ```json
@@ -79,3 +102,11 @@ Example config:
 - Local library management: mark read/unread and delete downloaded books
 - Sixel/terminal graphics cover display when supported, with text fallback
 - EPUB text preview
+
+## MVP 1 limits
+
+- OPDS 2.x is not supported yet.
+- OAuth and browser-based authentication are not supported yet.
+- EPUB has a basic text preview; PDF, DjVu, CBR, and CBZ are downloaded and tracked but not rendered in the terminal yet.
+- Downloads are intentionally single-file, not queued.
+- Search, annotations, sync, and persistent reading position are outside MVP 1.
