@@ -151,6 +151,117 @@ async def test_reader_screen_uses_custom_key_hint_footer() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reader_screen_key_hint_includes_table_of_contents() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(EpubReaderScreen(_preview()))
+
+        assert "t toc" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
+
+
+@pytest.mark.asyncio
+async def test_reader_screen_t_opens_table_of_contents_with_outline_items() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EpubReaderScreen(_preview()))
+
+        await pilot.press("t")
+
+        assert app.screen.__class__.__name__ == "ReaderTocScreen"
+        assert "Chapter One" in str(app.screen.query_one("#toc-list").render())
+        assert "Chapter Two" in str(app.screen.query_one("#toc-list").render())
+        assert list(app.screen.query(Footer)) == []
+
+
+@pytest.mark.asyncio
+async def test_reader_toc_j_and_k_change_selection() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EpubReaderScreen(_preview()))
+        await pilot.press("t")
+
+        toc = app.screen
+        assert toc.__class__.__name__ == "ReaderTocScreen"
+        assert toc.selected_index == 0
+
+        await pilot.press("j")
+        assert toc.selected_index == 1
+
+        await pilot.press("k")
+        assert toc.selected_index == 0
+
+
+@pytest.mark.asyncio
+async def test_reader_toc_enter_jumps_to_selected_section_and_saves_progress(
+    tmp_path: Path,
+) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    book_path = tmp_path / "books" / "reader-book.epub"
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test(size=(80, 20)) as pilot:
+        await app.push_screen(
+            EpubReaderScreen(_long_preview(), library=repo, book_path=book_path)
+        )
+        reader = app.screen
+        assert isinstance(reader, EpubReaderScreen)
+        reader_body = reader.query_one("#reader-body", VerticalScroll)
+        await _scroll_reader_body(reader_body, y=20, pilot=pilot)
+
+        await pilot.press("t")
+        await pilot.press("j")
+        await pilot.press("enter")
+
+        assert app.screen is reader
+        assert reader.section_index == 1
+        assert "Chapter Two" in str(reader.query_one("#reader-heading").renderable)
+        assert "Second section line 0" in str(reader.query_one("#reader-body-text").render())
+        assert "2 / 2" in str(reader.query_one("#reader-progress").renderable)
+        assert reader_body.scroll_y == 0
+        progress = repo.get_reading_progress(book_path)
+        assert progress is not None
+        assert progress.section_index == 1
+        assert progress.position == 0
+
+
+@pytest.mark.asyncio
+async def test_reader_toc_b_dismisses_without_changing_reader_section() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EpubReaderScreen(_preview()))
+        reader = app.screen
+        assert isinstance(reader, EpubReaderScreen)
+
+        await pilot.press("t")
+        await pilot.press("j")
+        await pilot.press("b")
+
+        assert app.screen is reader
+        assert reader.section_index == 0
+        assert "Chapter One" in str(reader.query_one("#reader-heading").renderable)
+
+
+@pytest.mark.asyncio
+async def test_reader_toc_falls_back_to_section_headings_when_outline_is_empty() -> None:
+    preview = EpubPreview(title="Reader Title", outline=(), sections=_preview().sections)
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EpubReaderScreen(preview))
+
+        await pilot.press("t")
+
+        assert app.screen.__class__.__name__ == "ReaderTocScreen"
+        assert "Chapter One" in str(app.screen.query_one("#toc-list").render())
+        assert "Chapter Two" in str(app.screen.query_one("#toc-list").render())
+
+
+@pytest.mark.asyncio
 async def test_reader_screen_body_is_scrollable() -> None:
     app = EpubTuiApp(config=None)
 

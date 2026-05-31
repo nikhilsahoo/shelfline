@@ -8,7 +8,7 @@ from textual.screen import Screen
 from textual.widgets import Header, Static
 
 from epub_tui.library import Bookmark, LibraryRepository, ReadingProgress
-from epub_tui.reader import EpubPreview
+from epub_tui.reader import EpubOutlineItem, EpubPreview
 from epub_tui.tui.layout import KeyHintFooter
 from epub_tui.tui.widgets import StatusLine
 
@@ -28,11 +28,83 @@ class ReaderChrome(Container):
         yield StatusLine(self.progress, id="reader-progress", classes="reader-progress")
 
 
+class ReaderTocScreen(Screen[None]):
+    KEY_HINT = "Keys: j down | k up | enter jump | b back"
+    BINDINGS = [
+        ("j", "cursor_down", "Down"),
+        ("k", "cursor_up", "Up"),
+        ("enter", "jump_to_section", "Jump"),
+        ("b", "dismiss_toc", "Back"),
+    ]
+
+    def __init__(self, reader: EpubReaderScreen, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+        self.reader = reader
+        self.entries = self._toc_entries(reader.preview)
+        self.selected_index = self._initial_selected_index()
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with Container(id="toc-surface"):
+            yield StatusLine("Table of Contents", id="toc-title")
+            yield Static(self._render_entries(), id="toc-list")
+        yield KeyHintFooter(self.KEY_HINT)
+
+    def action_cursor_down(self) -> None:
+        if not self.entries:
+            return
+        self.selected_index = min(self.selected_index + 1, len(self.entries) - 1)
+        self._refresh_entries()
+
+    def action_cursor_up(self) -> None:
+        if not self.entries:
+            return
+        self.selected_index = max(self.selected_index - 1, 0)
+        self._refresh_entries()
+
+    def action_jump_to_section(self) -> None:
+        if not self.entries:
+            self.app.pop_screen()
+            return
+        self.reader.jump_to_section(self.entries[self.selected_index].section_index)
+        self.app.pop_screen()
+
+    def action_dismiss_toc(self) -> None:
+        self.app.pop_screen()
+
+    def _initial_selected_index(self) -> int:
+        for index, entry in enumerate(self.entries):
+            if entry.section_index == self.reader.section_index:
+                return index
+        return 0
+
+    def _refresh_entries(self) -> None:
+        self.query_one("#toc-list", Static).update(self._render_entries())
+
+    def _render_entries(self) -> str:
+        if not self.entries:
+            return "No table of contents available"
+        lines = []
+        for index, entry in enumerate(self.entries):
+            prefix = ">" if index == self.selected_index else " "
+            lines.append(f"{prefix} {entry.title}")
+        return "\n".join(lines)
+
+    def _toc_entries(self, preview: EpubPreview) -> tuple[EpubOutlineItem, ...]:
+        if preview.outline:
+            return preview.outline
+        return tuple(
+            EpubOutlineItem(title=section.heading, section_index=index)
+            for index, section in enumerate(preview.sections)
+        )
+
+
 class EpubReaderScreen(Screen[None]):
-    KEY_HINT = "Keys: n next | p previous | m bookmark | b back | l library | c catalogs"
+    KEY_HINT = "Keys: n next | p previous | t toc | m bookmark | b back | l library | c catalogs"
     BINDINGS = [
         ("n", "next_section", "Next"),
         ("p", "previous_section", "Previous"),
+        ("t", "table_of_contents", "TOC"),
         ("m", "add_bookmark", "Bookmark"),
         ("b", "go_back", "Back"),
     ]
@@ -90,6 +162,9 @@ class EpubReaderScreen(Screen[None]):
         self._refresh_section()
         self._save_progress()
 
+    def action_table_of_contents(self) -> None:
+        self.app.push_screen(ReaderTocScreen(self))
+
     def action_go_back(self) -> None:
         if len(self.app.screen_stack) > 1:
             self.app.pop_screen()
@@ -126,6 +201,11 @@ class EpubReaderScreen(Screen[None]):
             return
 
         self._set_status("Bookmark added")
+
+    def jump_to_section(self, section_index: int) -> None:
+        self.section_index = self._clamp_section_index(section_index)
+        self._refresh_section()
+        self._save_progress()
 
     def _refresh_section(self) -> None:
         section = self.preview.section_at(self.section_index)
