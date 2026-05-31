@@ -37,11 +37,25 @@ class EpubTuiApp(App[None]):
         self.library = library or getattr(workflow, "library", None)
 
     def on_mount(self) -> None:
-        if self.config is None:
-            self.push_screen(SetupScreen())
-            return
+        self.push_screen(self._initial_screen())
 
-        self.push_screen(CatalogsScreen(self.config, workflow=self.workflow))
+    def _initial_screen(self) -> SetupScreen | CatalogsScreen | LibraryScreen:
+        if self.config is None:
+            return SetupScreen()
+
+        if self.config.catalogs and self._library_has_books():
+            return LibraryScreen(library=self.library)
+
+        return CatalogsScreen(self.config, workflow=self.workflow)
+
+    def _library_has_books(self) -> bool:
+        if self.library is None:
+            return False
+
+        try:
+            return bool(self.library.list_books())
+        except Exception:
+            return False
 
     def apply_config(self, config: AppConfig) -> None:
         self.config = config

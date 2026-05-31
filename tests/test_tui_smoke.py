@@ -8,7 +8,8 @@ import pytest
 from epub_tui.app import EpubTuiApp
 from epub_tui.config import AppConfig, CatalogConfig
 from epub_tui.downloads import DownloadProgress
-from epub_tui.tui.screens import CatalogsScreen, SetupScreen
+from epub_tui.library import BookRecord, LibraryRepository
+from epub_tui.tui.screens import CatalogsScreen, LibraryScreen, SetupScreen
 from epub_tui.tui.widgets import CatalogList, CatalogRow, CoverDisplay, DownloadProgressDisplay
 
 
@@ -22,12 +23,72 @@ async def test_app_opens_setup_screen_without_config() -> None:
 
 
 @pytest.mark.asyncio
-async def test_app_opens_catalog_screen_with_config(tmp_path: Path) -> None:
+async def test_app_opens_catalog_screen_with_config_and_no_catalogs(tmp_path: Path) -> None:
+    config = AppConfig(library_path=tmp_path, catalogs=[])
+    app = EpubTuiApp(config=config)
+
+    async with app.run_test():
+        assert isinstance(app.screen, CatalogsScreen)
+
+
+@pytest.mark.asyncio
+async def test_app_opens_catalog_screen_with_config_catalogs_and_empty_library(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
     config = AppConfig(
         library_path=tmp_path,
         catalogs=[CatalogConfig(name="Standard Ebooks", url="https://standardebooks.org/opds")],
     )
-    app = EpubTuiApp(config=config)
+    app = EpubTuiApp(config=config, library=repo)
+
+    async with app.run_test():
+        assert isinstance(app.screen, CatalogsScreen)
+
+
+@pytest.mark.asyncio
+async def test_app_opens_library_screen_with_config_catalogs_and_books(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(
+        BookRecord(
+            title="Interesting Book",
+            authors=["Ada Lovelace"],
+            identifiers=["urn:book:interesting"],
+            source_catalog="Standard Ebooks",
+            source_entry_url="https://standardebooks.org/opds/book",
+            acquisition_url="https://standardebooks.org/books/interesting.epub",
+            media_type="application/epub+zip",
+            cover_image_url=None,
+            cover_image_path=None,
+            local_file_path=tmp_path / "Interesting Book.epub",
+        )
+    )
+    config = AppConfig(
+        library_path=tmp_path,
+        catalogs=[CatalogConfig(name="Standard Ebooks", url="https://standardebooks.org/opds")],
+    )
+    app = EpubTuiApp(config=config, library=repo)
+
+    async with app.run_test():
+        assert isinstance(app.screen, LibraryScreen)
+
+
+@pytest.mark.asyncio
+async def test_app_opens_catalog_screen_when_library_check_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+
+    def fail_list_books() -> list[BookRecord]:
+        raise OSError("database unavailable")
+
+    monkeypatch.setattr(repo, "list_books", fail_list_books)
+    config = AppConfig(
+        library_path=tmp_path,
+        catalogs=[CatalogConfig(name="Standard Ebooks", url="https://standardebooks.org/opds")],
+    )
+    app = EpubTuiApp(config=config, library=repo)
 
     async with app.run_test():
         assert isinstance(app.screen, CatalogsScreen)
