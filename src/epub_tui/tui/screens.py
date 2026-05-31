@@ -93,6 +93,7 @@ class CatalogsScreen(Screen[None]):
     KEY_HINT = "Keys: enter open | j/k select | a add catalog | l library"
     BINDINGS = [
         Binding("enter", "open_selected", "Open", priority=True),
+        Binding("a", "toggle_add_catalog", "Add Catalog", priority=True),
         Binding("j", "cursor_down", "Down", priority=True),
         Binding("down", "cursor_down", "Down", priority=True),
         Binding("k", "cursor_up", "Up", priority=True),

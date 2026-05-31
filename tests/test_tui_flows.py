@@ -1179,6 +1179,32 @@ async def test_catalog_screen_hides_add_form_until_requested(tmp_path: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_catalog_screen_add_binding_toggles_form_without_pushing_screen(
+    tmp_path: Path,
+) -> None:
+    config = AppConfig(library_path=tmp_path, catalogs=[])
+    app = EpubTuiApp(config=config)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, CatalogsScreen)
+        assert screen.query_one("#catalog-form").display is False
+
+        await pilot.press("a")
+        await pilot.pause()
+
+        assert app.screen is screen
+        assert screen.query_one("#catalog-form").display is True
+
+        await pilot.press("a")
+        await pilot.pause()
+
+        assert app.screen is screen
+        assert screen.query_one("#catalog-form").display is False
+
+
+@pytest.mark.asyncio
 async def test_feed_screen_can_drill_down_multiple_navigation_levels() -> None:
     catalog = CatalogConfig(name="Example", url="https://example.test/opds")
     root_feed = CatalogFeed(
