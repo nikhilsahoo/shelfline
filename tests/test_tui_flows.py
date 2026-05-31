@@ -164,7 +164,12 @@ def _book(tmp_path: Path, *, title: str = "Interesting Book", is_read: bool = Fa
 
 @pytest.mark.asyncio
 async def test_feed_screen_renders_feed_entries_and_busy_states() -> None:
-    feed = _feed()
+    feed = CatalogFeed(
+        title="Example Feed",
+        source_url="https://example.test/opds",
+        updated="2026-05-30",
+        entries=[_navigation_entry(), _entry()],
+    )
     app = EpubTuiApp(config=None)
 
     async with app.run_test():
@@ -173,6 +178,9 @@ async def test_feed_screen_renders_feed_entries_and_busy_states() -> None:
 
         rendered = str(screen.query_one("#feed-body").renderable)
         assert "Example Feed" in rendered
+        assert "Catalog > Example Feed" in rendered
+        assert "[Folder] Fiction" in rendered
+        assert "[Book] Interesting Book" in rendered
         assert "Interesting Book" in rendered
 
         screen.begin_fetch("Fetching feed")
@@ -278,7 +286,7 @@ async def test_feed_screen_selection_moves_before_opening_entry() -> None:
         await app.push_screen(FeedScreen(feed))
         await pilot.press("j")
 
-        assert "> 2. Interesting Book" in str(app.screen.query_one("#feed-body").renderable)
+        assert "> 2. [Book] Interesting Book" in str(app.screen.query_one("#feed-body").renderable)
         await pilot.press("enter")
 
         assert isinstance(app.screen, EntryScreen)
@@ -309,7 +317,38 @@ async def test_feed_screen_navigation_entry_fetches_next_feed() -> None:
 
         assert isinstance(app.screen, FeedScreen)
         assert app.screen.feed.title == "Fiction Feed"
+        assert "Root Feed > Fiction Feed" in str(app.screen.query_one("#feed-body").renderable)
         assert workflow.fetch_urls == ["https://example.test/opds/fiction"]
+
+
+@pytest.mark.asyncio
+async def test_feed_screen_back_binding_returns_to_parent_feed() -> None:
+    next_feed = CatalogFeed(
+        title="Fiction Feed",
+        source_url="https://example.test/opds/fiction",
+        updated=None,
+        entries=[_entry()],
+    )
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FakeWorkflow(feed=next_feed)
+    feed = CatalogFeed(
+        title="Root Feed",
+        source_url="https://example.test/opds",
+        updated=None,
+        entries=[_navigation_entry()],
+    )
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(feed, catalog=catalog, workflow=workflow))
+        await pilot.press("enter")
+        assert isinstance(app.screen, FeedScreen)
+        assert app.screen.feed.title == "Fiction Feed"
+
+        await pilot.press("b")
+
+        assert isinstance(app.screen, FeedScreen)
+        assert app.screen.feed.title == "Root Feed"
 
 
 @pytest.mark.asyncio

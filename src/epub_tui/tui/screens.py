@@ -208,9 +208,10 @@ class CatalogsScreen(Screen[None]):
 
 
 class FeedScreen(Screen[None]):
-    KEY_HINT = "Keys: enter open | j/k select | c catalogs | l library"
+    KEY_HINT = "Keys: enter open | j/k select | b back | c catalogs | l library"
     BINDINGS = [
         ("enter", "open_selected", "Open"),
+        ("b", "go_back", "Back"),
         ("j", "cursor_down", "Down"),
         ("down", "cursor_down", "Down"),
         ("k", "cursor_up", "Up"),
@@ -223,12 +224,14 @@ class FeedScreen(Screen[None]):
         *,
         catalog: CatalogConfig | None = None,
         workflow: CatalogWorkflow | None = None,
+        breadcrumbs: list[str] | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self.feed = feed
         self.catalog = catalog
         self.workflow = workflow
+        self.breadcrumbs = list(breadcrumbs) if breadcrumbs is not None else ["Catalog", feed.title]
         self.selected_index = 0
 
     def compose(self) -> ComposeResult:
@@ -267,13 +270,26 @@ class FeedScreen(Screen[None]):
                 on_status=lambda message: self._begin_outgoing_call(message),
             )
             self.finish_outgoing_call("Catalog loaded")
-            await self.app.push_screen(FeedScreen(feed, catalog=self.catalog, workflow=self.workflow))
+            await self.app.push_screen(
+                FeedScreen(
+                    feed,
+                    catalog=self.catalog,
+                    workflow=self.workflow,
+                    breadcrumbs=[*self.breadcrumbs, feed.title],
+                )
+            )
             return
 
         await self.app.push_screen(EntryScreen(entry, catalog=self.catalog, workflow=self.workflow))
 
     async def action_open_selected(self) -> None:
         await self.open_entry(self.selected_index)
+
+    def action_go_back(self) -> None:
+        if len(self.app.screen_stack) <= 1:
+            self.finish_outgoing_call("No parent feed")
+            return
+        self.app.pop_screen()
 
     def action_cursor_down(self) -> None:
         self._move_selection(1)
@@ -295,7 +311,7 @@ class FeedScreen(Screen[None]):
         self.query_one("#status-line", StatusLine).set_message(message)
 
     def _feed_text(self) -> str:
-        lines = [self.feed.title, self.feed.source_url]
+        lines = [" > ".join(self.breadcrumbs), self.feed.source_url]
         if self.feed.updated:
             lines.append(f"Updated: {self.feed.updated}")
         if not self.feed.entries:
@@ -305,8 +321,15 @@ class FeedScreen(Screen[None]):
         for index, entry in enumerate(self.feed.entries, start=1):
             authors = ", ".join(entry.authors) if entry.authors else "Unknown author"
             marker = ">" if index - 1 == self.selected_index else " "
-            lines.append(f"{marker} {index}. {entry.title} - {authors}")
+            lines.append(f"{marker} {index}. {self._entry_kind(entry)} {entry.title} - {authors}")
         return "\n".join(lines)
+
+    def _entry_kind(self, entry: CatalogEntry) -> str:
+        if entry.navigation_url is not None:
+            return "[Folder]"
+        if entry.acquisition_links:
+            return "[Book]"
+        return "[Entry]"
 
 
 class EntryScreen(Screen[None]):
