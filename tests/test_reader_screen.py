@@ -50,6 +50,24 @@ def _long_preview() -> EpubPreview:
     )
 
 
+def _long_outline_preview(section_count: int = 40) -> EpubPreview:
+    sections = tuple(
+        EpubSection(
+            heading=f"Chapter {index + 1}",
+            text=f"Section {index + 1} body.",
+        )
+        for index in range(section_count)
+    )
+    return EpubPreview(
+        title="Reader Title",
+        outline=tuple(
+            EpubOutlineItem(title=section.heading, section_index=index)
+            for index, section in enumerate(sections)
+        ),
+        sections=sections,
+    )
+
+
 async def _scroll_reader_body(reader_body: VerticalScroll, *, y: int, pilot: Pilot) -> None:
     for _ in range(10):
         reader_body.scroll_to(y=y, animate=False)
@@ -192,6 +210,26 @@ async def test_reader_toc_j_and_k_change_selection() -> None:
 
         await pilot.press("k")
         assert toc.selected_index == 0
+
+
+@pytest.mark.asyncio
+async def test_reader_toc_scrolls_to_keep_long_outline_selection_visible() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test(size=(80, 12)) as pilot:
+        await app.push_screen(EpubReaderScreen(_long_outline_preview()))
+        await pilot.press("t")
+
+        toc_list = app.screen.query_one("#toc-list", VerticalScroll)
+        assert toc_list.scroll_y == 0
+
+        for _ in range(25):
+            await pilot.press("j")
+
+        assert app.screen.selected_index == 25
+        assert toc_list.scroll_y > 0
+        selected_row = app.screen.query_one("#toc-row-25")
+        assert toc_list.region.y <= selected_row.region.y < toc_list.region.bottom
 
 
 @pytest.mark.asyncio

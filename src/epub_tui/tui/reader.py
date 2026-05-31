@@ -28,6 +28,88 @@ class ReaderChrome(Container):
         yield StatusLine(self.progress, id="reader-progress", classes="reader-progress")
 
 
+class ReaderTocRow(Static):
+    def __init__(
+        self,
+        entry: EpubOutlineItem,
+        *,
+        index: int,
+        selected: bool = False,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.entry = entry
+        self.index = index
+        self.selected = selected
+
+    def compose(self) -> ComposeResult:
+        yield Static(self._row_text(), classes="toc-row-title")
+
+    def set_selected(self, selected: bool) -> None:
+        self.selected = selected
+        self.query_one(".toc-row-title", Static).update(self._row_text())
+
+    def _row_text(self) -> str:
+        prefix = ">" if self.selected else " "
+        return f"{prefix} {self.entry.title}"
+
+
+class ReaderTocList(VerticalScroll):
+    def __init__(
+        self,
+        entries: tuple[EpubOutlineItem, ...],
+        *,
+        selected_index: int = 0,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(id="toc-list", classes="toc-list", **kwargs)
+        self.entries = entries
+        self.selected_index = selected_index
+
+    def compose(self) -> ComposeResult:
+        empty_state = Static(
+            "No table of contents available",
+            id="toc-empty",
+            classes="empty-state",
+        )
+        empty_state.display = not self.entries
+        yield empty_state
+        yield from self._row_widgets()
+
+    def render(self) -> str:
+        if not self.entries:
+            return "No table of contents available"
+        return "\n".join(
+            self._row_text(entry, index) for index, entry in enumerate(self.entries)
+        )
+
+    def set_selected_index(self, selected_index: int) -> None:
+        self.selected_index = selected_index
+        selected_row: ReaderTocRow | None = None
+        for row in self.query(ReaderTocRow):
+            selected = row.index == selected_index
+            row.set_selected(selected)
+            if selected:
+                selected_row = row
+        if selected_row is not None:
+            self.scroll_to_widget(selected_row, animate=False, immediate=True)
+
+    def _row_widgets(self) -> list[ReaderTocRow]:
+        return [
+            ReaderTocRow(
+                entry,
+                id=f"toc-row-{index}",
+                index=index,
+                selected=index == self.selected_index,
+            )
+            for index, entry in enumerate(self.entries)
+        ]
+
+    def _row_text(self, entry: EpubOutlineItem, index: int) -> str:
+        prefix = ">" if index == self.selected_index else " "
+        return f"{prefix} {entry.title}"
+
+
 class ReaderTocScreen(Screen[None]):
     KEY_HINT = "Keys: j down | k up | enter jump | b back"
     BINDINGS = [
@@ -47,20 +129,20 @@ class ReaderTocScreen(Screen[None]):
         yield Header()
         with Container(id="toc-surface"):
             yield StatusLine("Table of Contents", id="toc-title")
-            yield Static(self._render_entries(), id="toc-list")
+            yield ReaderTocList(self.entries, selected_index=self.selected_index)
         yield KeyHintFooter(self.KEY_HINT)
 
     def action_cursor_down(self) -> None:
         if not self.entries:
             return
         self.selected_index = min(self.selected_index + 1, len(self.entries) - 1)
-        self._refresh_entries()
+        self._refresh_selection()
 
     def action_cursor_up(self) -> None:
         if not self.entries:
             return
         self.selected_index = max(self.selected_index - 1, 0)
-        self._refresh_entries()
+        self._refresh_selection()
 
     def action_jump_to_section(self) -> None:
         if not self.entries:
@@ -78,17 +160,10 @@ class ReaderTocScreen(Screen[None]):
                 return index
         return 0
 
-    def _refresh_entries(self) -> None:
-        self.query_one("#toc-list", Static).update(self._render_entries())
-
-    def _render_entries(self) -> str:
-        if not self.entries:
-            return "No table of contents available"
-        lines = []
-        for index, entry in enumerate(self.entries):
-            prefix = ">" if index == self.selected_index else " "
-            lines.append(f"{prefix} {entry.title}")
-        return "\n".join(lines)
+    def _refresh_selection(self) -> None:
+        self.query_one("#toc-list", ReaderTocList).set_selected_index(
+            self.selected_index
+        )
 
     def _toc_entries(self, preview: EpubPreview) -> tuple[EpubOutlineItem, ...]:
         if preview.outline:
