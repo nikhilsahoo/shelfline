@@ -17,7 +17,7 @@ from epub_tui.reader import EpubPreview, ReaderError, extract_epub_preview
 from epub_tui.services import CatalogWorkflow
 from epub_tui.tui.layout import AppShell, KeyHintFooter, replace_region
 from epub_tui.tui.reader import EpubReaderScreen
-from epub_tui.tui.theme import BASIC_AUTH_LABEL, BOOK_LABEL, ENTRY_LABEL, FOLDER_LABEL, NO_AUTH_LABEL
+from epub_tui.tui.theme import BASIC_AUTH_LABEL, NO_AUTH_LABEL
 from epub_tui.tui.widgets import (
     BusyIndicator,
     CoverDisplay,
@@ -395,23 +395,6 @@ class FeedScreen(Screen[None]):
             self.feed.entries,
             self.selected_index,
         )
-
-    def _entry_kind(self, entry: CatalogEntry) -> str:
-        if entry.navigation_url is not None:
-            return FOLDER_LABEL.text
-        if entry.acquisition_links:
-            return BOOK_LABEL.text
-        return ENTRY_LABEL.text
-
-    def _entry_label(self, entry: CatalogEntry) -> str:
-        label = f"{self._entry_kind(entry)} {entry.title}"
-        if entry.navigation_url is not None:
-            return label
-        if entry.authors:
-            return f"{label} - {', '.join(entry.authors)}"
-        if entry.acquisition_links:
-            return f"{label} - Unknown author"
-        return label
 
 
 class EntryScreen(Screen[None]):

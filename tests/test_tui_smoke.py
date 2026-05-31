@@ -10,6 +10,7 @@ from epub_tui.config import AppConfig, CatalogConfig
 from epub_tui.downloads import DownloadProgress
 from epub_tui.library import BookRecord, LibraryRepository
 from epub_tui.tui.screens import CatalogsScreen, LibraryScreen, SetupScreen
+from epub_tui.tui.theme import BASIC_AUTH_LABEL, NO_AUTH_LABEL
 from epub_tui.tui.widgets import CatalogList, CatalogRow, CoverDisplay, DownloadProgressDisplay
 
 
@@ -122,8 +123,8 @@ async def test_catalog_screen_renders_saved_catalogs(tmp_path: Path) -> None:
     assert "Standard Ebooks" in str(text)
     assert "Feedbooks" in str(text)
     assert "https://standardebooks.org/opds" in str(text)
-    assert "— No auth" in str(text)
-    assert "🔒 Basic auth" in str(text)
+    assert NO_AUTH_LABEL.text in str(text)
+    assert BASIC_AUTH_LABEL.text in str(text)
 
 
 @pytest.mark.asyncio

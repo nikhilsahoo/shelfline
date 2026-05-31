@@ -27,6 +27,16 @@ from epub_tui.tui.screens import (
     LibraryScreen,
     SetupScreen,
 )
+from epub_tui.tui.theme import (
+    BOOK_LABEL,
+    DOWNLOADS_LABEL,
+    FOLDER_LABEL,
+    LOCAL_PATH_LABEL,
+    OPEN_PREVIEW_LABEL,
+    READ_LABEL,
+    UNREAD_LABEL,
+    glyph,
+)
 from epub_tui.tui.widgets import CatalogList, FeedEntryList, LibraryBookList
 
 
@@ -220,9 +230,9 @@ async def test_feed_screen_renders_feed_entries_and_busy_states() -> None:
         rendered = str(screen.query_one("#feed-body").renderable)
         assert "Example Feed" in rendered
         assert "Catalog > Example Feed" in rendered
-        assert "📁 Folder Fiction" in rendered
-        assert "📁 Folder Fiction - Unknown author" not in rendered
-        assert "📖 Book Interesting Book" in rendered
+        assert f"{FOLDER_LABEL.text} Fiction" in rendered
+        assert f"{FOLDER_LABEL.text} Fiction - Unknown author" not in rendered
+        assert f"{BOOK_LABEL.text} Interesting Book" in rendered
         assert "Interesting Book" in rendered
 
         screen.begin_fetch("Fetching feed")
@@ -478,7 +488,9 @@ async def test_feed_screen_selection_moves_before_opening_entry() -> None:
         await app.push_screen(FeedScreen(feed))
         await pilot.press("j")
 
-        assert "> 2. 📖 Book Interesting Book" in str(app.screen.query_one("#feed-body").renderable)
+        rendered = str(app.screen.query_one("#feed-body").renderable)
+        assert "> 2." in rendered
+        assert f"{BOOK_LABEL.text} Interesting Book" in rendered
         await pilot.press("enter")
 
         assert isinstance(app.screen, EntryScreen)
@@ -613,8 +625,8 @@ async def test_entry_screen_renders_cover_fallback_and_all_acquisitions() -> Non
 
     assert "Interesting Book" in rendered
     assert "A small but useful book." in rendered
-    assert "⬇ Downloads:" in rendered
-    assert "> ⬇ EPUB - application/epub+zip" in rendered
+    assert f"{DOWNLOADS_LABEL.text}:" in rendered
+    assert f"> {glyph(DOWNLOADS_LABEL)} EPUB - application/epub+zip" in rendered
     assert "application/epub+zip" in rendered
     assert "application/pdf" in rendered
     assert "Ada Lovelace" in cover
@@ -802,7 +814,7 @@ async def test_entry_screen_selection_moves_before_downloading(tmp_path: Path) -
         await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
         await pilot.press("j")
 
-        assert "> ⬇ PDF" in str(app.screen.query_one("#entry-body").renderable)
+        assert f"> {glyph(DOWNLOADS_LABEL)} PDF" in str(app.screen.query_one("#entry-body").renderable)
         await pilot.press("d")
 
         assert isinstance(app.screen, DownloadStatusScreen)
@@ -838,11 +850,11 @@ async def test_library_screen_renders_books_and_updates_repository(tmp_path: Pat
         await app.push_screen(LibraryScreen(library=repo))
         screen = app.screen
         assert "Interesting Book" in str(screen.query_one("#library-body").renderable)
-        assert "○ Unread" in str(screen.query_one("#library-body").renderable)
+        assert UNREAD_LABEL.text in str(screen.query_one("#library-body").renderable)
 
         screen.action_toggle_read()
         assert repo.list_books()[0].is_read is True
-        assert "✓ Read" in str(screen.query_one("#library-body").renderable)
+        assert READ_LABEL.text in str(screen.query_one("#library-body").renderable)
 
         screen.action_delete_book()
         assert repo.list_books() == []
@@ -862,11 +874,11 @@ async def test_library_screen_detail_pane_shows_selected_book_metadata_on_mount(
         rendered = _visible_library_detail_text(app.screen)
         assert "Dune" in rendered
         assert "Ada Lovelace" in rendered
-        assert "○ Unread" in rendered
+        assert "Unread" in rendered
         assert "application/epub+zip" in rendered
         assert "Example" in rendered
-        assert f"⌂ Local path: {tmp_path / 'books' / 'Dune.epub'}" in rendered
-        assert "↵ Open/preview: Enter preview" in rendered
+        assert f"{LOCAL_PATH_LABEL.text}: {tmp_path / 'books' / 'Dune.epub'}" in rendered
+        assert f"{OPEN_PREVIEW_LABEL.text}: Enter preview" in rendered
 
 
 @pytest.mark.asyncio
@@ -881,14 +893,16 @@ async def test_library_screen_detail_pane_updates_when_selection_moves(tmp_path:
         await app.push_screen(LibraryScreen(library=repo))
         rendered = _visible_library_detail_text(app.screen)
         assert "Dune" in rendered
-        assert "Read status: ○ Unread" in rendered
+        assert "Read status:" in rendered
+        assert "Unread" in rendered
         assert "Foundation" not in rendered
 
         await pilot.press("j")
 
         rendered = _visible_library_detail_text(app.screen)
         assert "Foundation" in rendered
-        assert "Read status: ✓ Read" in rendered
+        assert "Read status:" in rendered
+        assert "Read" in rendered
         assert "Status: Selected Foundation" in rendered
         assert "Dune" not in rendered
 
@@ -907,14 +921,16 @@ async def test_library_screen_detail_pane_updates_when_read_status_toggles(tmp_p
         screen = app.screen
         rendered = _visible_library_detail_text(screen)
         assert "Dune" in rendered
-        assert "Read status: ○ Unread" in rendered
+        assert "Read status:" in rendered
+        assert "Unread" in rendered
 
         screen.action_toggle_read()
         await pilot.pause()
 
         rendered = _visible_library_detail_text(screen)
         assert "Dune" in rendered
-        assert "Read status: ✓ Read" in rendered
+        assert "Read status:" in rendered
+        assert "Read" in rendered
         assert "Status: Read status updated" in rendered
 
 
@@ -936,7 +952,8 @@ async def test_library_screen_detail_pane_updates_when_selected_book_is_deleted(
 
         rendered = _visible_library_detail_text(screen)
         assert "Foundation" in rendered
-        assert "Read status: ✓ Read" in rendered
+        assert "Read status:" in rendered
+        assert "Read" in rendered
         assert "Status: Book deleted" in rendered
         assert "Dune" not in rendered
 
@@ -944,7 +961,7 @@ async def test_library_screen_detail_pane_updates_when_selected_book_is_deleted(
         await pilot.pause()
 
         rendered = _visible_library_detail_text(screen)
-        assert "📖 No downloaded books" in rendered
+        assert "No downloaded books" in rendered
         assert "Status: Book deleted" in rendered
         assert "Foundation" not in rendered
 
@@ -959,7 +976,7 @@ async def test_library_screen_detail_pane_shows_empty_message_for_empty_library(
         await app.push_screen(LibraryScreen(library=repo))
 
         rendered = _visible_library_detail_text(app.screen)
-        assert "📖 No downloaded books" in rendered
+        assert "No downloaded books" in rendered
         assert "Catalogs" in rendered
 
 
@@ -981,10 +998,10 @@ async def test_library_screen_uses_book_row_widgets_for_selection(tmp_path: Path
         assert rows[0].has_class("selected")
         assert not rows[1].has_class("selected")
         assert "Ada Lovelace" in str(rows[0].renderable)
-        assert "○ Unread" in str(rows[0].renderable)
-        assert "✓ Read" in str(rows[1].renderable)
+        assert "Unread" in str(rows[0].renderable)
+        assert "Read" in str(rows[1].renderable)
         assert "application/epub+zip" in str(rows[0].renderable)
-        assert f"⌂ Local path: {tmp_path}" in str(rows[0].renderable)
+        assert f"{LOCAL_PATH_LABEL.text}: {tmp_path}" in str(rows[0].renderable)
 
         await pilot.press("j")
 
@@ -1116,8 +1133,8 @@ async def test_library_screen_refresh_binding_loads_new_books(tmp_path: Path) ->
 
     async with app.run_test() as pilot:
         await app.push_screen(LibraryScreen(library=repo))
-        assert "📖 No downloaded books" in str(app.screen.query_one("#library-body").renderable)
-        assert "📖 No downloaded books" in _visible_library_detail_text(app.screen)
+        assert "No downloaded books" in str(app.screen.query_one("#library-body").renderable)
+        assert "No downloaded books" in _visible_library_detail_text(app.screen)
 
         repo.add_book(_book(tmp_path, is_read=False))
         await pilot.press("r")
@@ -1157,11 +1174,11 @@ async def test_library_screen_filters_books_by_search_text(tmp_path: Path) -> No
         await pilot.press("enter")
 
         rendered = str(app.screen.query_one("#library-body").renderable)
-        assert "📖 No downloaded books" in rendered
+        assert "No downloaded books" in rendered
         assert "Dune" not in rendered
         assert "Foundation" not in rendered
         detail = _visible_library_detail_text(app.screen)
-        assert "📖 No downloaded books" in detail
+        assert "No downloaded books" in detail
         assert "Status: Search: missing" in detail
         assert "Dune" not in detail
         assert "Foundation" not in detail
@@ -1231,7 +1248,7 @@ async def test_library_screen_rows_show_format_catalog_and_progress(tmp_path: Pa
 
         assert "application/epub+zip" in rendered
         assert "Example" in rendered
-        assert "✓ Read" in rendered
+        assert "Read" in rendered
 
 
 @pytest.mark.asyncio
