@@ -874,7 +874,7 @@ async def test_library_screen_detail_pane_shows_selected_book_metadata_on_mount(
         rendered = _visible_library_detail_text(app.screen)
         assert "Dune" in rendered
         assert "Ada Lovelace" in rendered
-        assert "Unread" in rendered
+        assert UNREAD_LABEL.text in rendered
         assert "application/epub+zip" in rendered
         assert "Example" in rendered
         assert f"{LOCAL_PATH_LABEL.text}: {tmp_path / 'books' / 'Dune.epub'}" in rendered
@@ -894,7 +894,7 @@ async def test_library_screen_detail_pane_updates_when_selection_moves(tmp_path:
         rendered = _visible_library_detail_text(app.screen)
         assert "Dune" in rendered
         assert "Read status:" in rendered
-        assert "Unread" in rendered
+        assert UNREAD_LABEL.text in rendered
         assert "Foundation" not in rendered
 
         await pilot.press("j")
@@ -902,7 +902,7 @@ async def test_library_screen_detail_pane_updates_when_selection_moves(tmp_path:
         rendered = _visible_library_detail_text(app.screen)
         assert "Foundation" in rendered
         assert "Read status:" in rendered
-        assert "Read" in rendered
+        assert READ_LABEL.text in rendered
         assert "Status: Selected Foundation" in rendered
         assert "Dune" not in rendered
 
@@ -922,7 +922,7 @@ async def test_library_screen_detail_pane_updates_when_read_status_toggles(tmp_p
         rendered = _visible_library_detail_text(screen)
         assert "Dune" in rendered
         assert "Read status:" in rendered
-        assert "Unread" in rendered
+        assert UNREAD_LABEL.text in rendered
 
         screen.action_toggle_read()
         await pilot.pause()
@@ -930,7 +930,7 @@ async def test_library_screen_detail_pane_updates_when_read_status_toggles(tmp_p
         rendered = _visible_library_detail_text(screen)
         assert "Dune" in rendered
         assert "Read status:" in rendered
-        assert "Read" in rendered
+        assert READ_LABEL.text in rendered
         assert "Status: Read status updated" in rendered
 
 
@@ -953,7 +953,7 @@ async def test_library_screen_detail_pane_updates_when_selected_book_is_deleted(
         rendered = _visible_library_detail_text(screen)
         assert "Foundation" in rendered
         assert "Read status:" in rendered
-        assert "Read" in rendered
+        assert READ_LABEL.text in rendered
         assert "Status: Book deleted" in rendered
         assert "Dune" not in rendered
 
