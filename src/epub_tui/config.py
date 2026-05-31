@@ -130,6 +130,10 @@ def _parse_catalog(raw: Any) -> CatalogConfig:
         password_ref = auth_raw.get("password_ref")
         if not isinstance(username, str):
             raise ConfigError(f"Catalog {name} auth requires username")
+        if "password" in auth_raw and not isinstance(password, str):
+            raise ConfigError(f"Catalog {name} auth password must be a string")
+        if "password_ref" in auth_raw and not isinstance(password_ref, str):
+            raise ConfigError(f"Catalog {name} auth password_ref must be a string")
         if not isinstance(password, str) and not isinstance(password_ref, str):
             raise ConfigError(f"Catalog {name} auth requires password or password_ref")
         auth = {"username": username}

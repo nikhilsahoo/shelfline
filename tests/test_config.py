@@ -355,6 +355,58 @@ def test_rejects_incomplete_basic_auth(tmp_path: Path) -> None:
         load_config(config_path)
 
 
+def test_rejects_non_string_auth_password_even_with_password_ref(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "library_path": str(tmp_path / "library"),
+                "catalogs": [
+                    {
+                        "name": "Broken",
+                        "url": "https://example.test/opds",
+                        "auth": {
+                            "username": "alice",
+                            "password": 123,
+                            "password_ref": "epub-tui:Broken",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match="password must be a string"):
+        load_config(config_path)
+
+
+def test_rejects_non_string_auth_password_ref_even_with_password(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "library_path": str(tmp_path / "library"),
+                "catalogs": [
+                    {
+                        "name": "Broken",
+                        "url": "https://example.test/opds",
+                        "auth": {
+                            "username": "alice",
+                            "password": "secret",
+                            "password_ref": 123,
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match="password_ref must be a string"):
+        load_config(config_path)
+
+
 def test_redact_config_hides_password(tmp_path: Path) -> None:
     config = AppConfig(
         library_path=tmp_path / "books",
