@@ -82,7 +82,7 @@ def test_epub_preview_section_at_clamps_to_valid_range() -> None:
 def test_epub_preview_next_section_index_clamps_at_last_section() -> None:
     preview = _preview_with_sections("One", "Two", "Three")
 
-    assert preview.next_section_index(-5) == 0
+    assert preview.next_section_index(-5) == 1
     assert preview.next_section_index(0) == 1
     assert preview.next_section_index(1) == 2
     assert preview.next_section_index(2) == 2
@@ -96,7 +96,16 @@ def test_epub_preview_previous_section_index_clamps_at_zero() -> None:
     assert preview.previous_section_index(0) == 0
     assert preview.previous_section_index(1) == 0
     assert preview.previous_section_index(2) == 1
-    assert preview.previous_section_index(99) == 2
+    assert preview.previous_section_index(99) == 1
+
+
+def test_epub_preview_empty_sections_have_explicit_navigation_behavior() -> None:
+    preview = _preview_with_sections()
+
+    with pytest.raises(ReaderError, match="has no readable text sections"):
+        preview.section_at(0)
+    assert preview.next_section_index(0) == 0
+    assert preview.previous_section_index(0) == 0
 
 
 def test_title_falls_back_to_path_stem_when_metadata_is_missing(tmp_path: Path) -> None:

@@ -32,15 +32,19 @@ class EpubPreview:
         return len(self.sections)
 
     def section_at(self, index: int) -> EpubSection:
+        if not self.sections:
+            raise ReaderError("EPUB preview has no readable text sections")
         return self.sections[self._clamp_section_index(index)]
 
     def next_section_index(self, index: int) -> int:
-        return self._clamp_section_index(index + 1)
+        return self._clamp_section_index(self._clamp_section_index(index) + 1)
 
     def previous_section_index(self, index: int) -> int:
-        return self._clamp_section_index(index - 1)
+        return self._clamp_section_index(self._clamp_section_index(index) - 1)
 
     def _clamp_section_index(self, index: int) -> int:
+        if not self.sections:
+            return 0
         return max(0, min(index, self.section_count - 1))
 
 
