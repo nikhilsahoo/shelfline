@@ -1,0 +1,62 @@
+#app-shell {
+    height: 100%;
+    layout: vertical;
+}
+
+#shell-header {
+    dock: top;
+    height: 1;
+    content-align: left middle;
+    background: $surface;
+    color: $text;
+    text-style: bold;
+}
+
+#shell-body {
+    height: 1fr;
+}
+
+#main-region {
+    width: 2fr;
+    min-width: 40;
+    padding: 1;
+}
+
+#detail-region {
+    width: 1fr;
+    min-width: 24;
+    padding: 1;
+    border-left: solid $primary;
+}
+
+#key-hints {
+    dock: bottom;
+    height: 1;
+    content-align: left middle;
+    background: $surface;
+    color: $text-muted;
+}
+
+.state-error {
+    color: $error;
+}
+
+.state-success {
+    color: $success;
+}
+
+.state-warning {
+    color: $warning;
+}
+
+.kind-folder {
+    color: $accent;
+}
+
+.kind-book {
+    color: $success;
+}
+
+.kind-entry {
+    color: $text-muted;
+}

@@ -15,12 +15,29 @@ from epub_tui.downloads import DownloadError, DownloadProgress
 from epub_tui.library import BookRecord, LibraryRepository
 from epub_tui.reader import EpubPreview, extract_epub_preview
 from epub_tui.services import CatalogWorkflow
+from epub_tui.tui.layout import AppShell, replace_region
 from epub_tui.tui.widgets import (
     BusyIndicator,
     CoverDisplay,
     DownloadProgressDisplay,
     StatusLine,
 )
+
+
+class CatalogForm(Container):
+    def __init__(self) -> None:
+        super().__init__(id="catalog-form")
+
+    def compose(self) -> ComposeResult:
+        yield Input(placeholder="Catalog name", id="catalog-name")
+        yield Input(placeholder="OPDS URL", id="catalog-url")
+        yield Input(placeholder="Basic Auth username", id="catalog-username")
+        yield Input(placeholder="Basic Auth password", password=True, id="catalog-password")
+        yield Button("Add catalog", id="add-catalog")
+
+
+def _catalog_form() -> CatalogForm:
+    return CatalogForm()
 
 
 class SetupScreen(Screen[None]):
@@ -82,20 +99,20 @@ class CatalogsScreen(Screen[None]):
         self.selected_index = 0
 
     def compose(self) -> ComposeResult:
-        yield Header()
-        yield StatusLine(self._catalog_text(), id="catalog-list")
-        yield Button("New catalog", id="show-add-catalog")
-        with Container(id="catalog-form"):
-            yield Input(placeholder="Catalog name", id="catalog-name")
-            yield Input(placeholder="OPDS URL", id="catalog-url")
-            yield Input(placeholder="Basic Auth username", id="catalog-username")
-            yield Input(placeholder="Basic Auth password", password=True, id="catalog-password")
-            yield Button("Add catalog", id="add-catalog")
-        yield BusyIndicator(id="busy-indicator")
-        yield StatusLine(self.KEY_HINT, id="status-line")
-        yield Footer()
+        yield AppShell(area="Catalogs", key_hints=self.KEY_HINT)
 
     def on_mount(self) -> None:
+        replace_region(
+            self.query_one("#main-region"),
+            StatusLine(self._catalog_text(), id="catalog-list"),
+            Button("New catalog", id="show-add-catalog"),
+            _catalog_form(),
+            BusyIndicator(id="busy-indicator"),
+        )
+        replace_region(
+            self.query_one("#detail-region"),
+            StatusLine(self.KEY_HINT, id="status-line"),
+        )
         self.query_one("#catalog-form", Container).display = self.show_add_form
         self.app.set_focus(None)
         self.call_after_refresh(lambda: self.app.set_focus(None))
@@ -514,10 +531,17 @@ class LibraryScreen(Screen[None]):
             self.books = self.library.list_books()
 
     def compose(self) -> ComposeResult:
-        yield Header()
-        yield StatusLine(self._library_text(), id="library-body")
-        yield StatusLine(self.KEY_HINT, id="status-line")
-        yield Footer()
+        yield AppShell(area="Library", key_hints=self.KEY_HINT)
+
+    def on_mount(self) -> None:
+        replace_region(
+            self.query_one("#main-region"),
+            StatusLine(self._library_text(), id="library-body"),
+        )
+        replace_region(
+            self.query_one("#detail-region"),
+            StatusLine(self.KEY_HINT, id="status-line"),
+        )
 
     def action_toggle_read(self) -> None:
         book = self.selected_book

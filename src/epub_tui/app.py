@@ -10,6 +10,7 @@ from epub_tui.tui.screens import CatalogsScreen, LibraryScreen, SetupScreen
 
 class EpubTuiApp(App[None]):
     TITLE = "epub-tui"
+    CSS_PATH = "tui/app.tcss"
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("c", "show_catalogs", "Catalogs"),
