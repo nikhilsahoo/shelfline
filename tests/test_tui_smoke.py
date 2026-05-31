@@ -9,7 +9,7 @@ from epub_tui.app import EpubTuiApp
 from epub_tui.config import AppConfig, CatalogConfig
 from epub_tui.downloads import DownloadProgress
 from epub_tui.tui.screens import CatalogsScreen, SetupScreen
-from epub_tui.tui.widgets import CoverDisplay, DownloadProgressDisplay
+from epub_tui.tui.widgets import CatalogList, CatalogRow, CoverDisplay, DownloadProgressDisplay
 
 
 @pytest.mark.asyncio
@@ -45,10 +45,31 @@ async def test_catalog_screen_renders_saved_catalogs(tmp_path: Path) -> None:
     app = EpubTuiApp(config=config)
 
     async with app.run_test():
-        text = app.screen.query_one("#catalog-list").renderable
+        catalog_list = app.screen.query_one("#catalog-list")
+        rows = list(app.screen.query("#catalog-list .catalog-row"))
+        text = catalog_list.renderable
 
+    assert isinstance(catalog_list, CatalogList)
+    assert all(isinstance(row, CatalogRow) for row in rows)
+    assert [row.id for row in rows] == ["catalog-row-0", "catalog-row-1"]
+    assert rows[0].has_class("selected")
+    assert not rows[1].has_class("selected")
     assert "Standard Ebooks" in str(text)
     assert "Feedbooks" in str(text)
+    assert "https://standardebooks.org/opds" in str(text)
+    assert "No auth" in str(text)
+
+
+@pytest.mark.asyncio
+async def test_catalog_screen_uses_bottom_action_area(tmp_path: Path) -> None:
+    config = AppConfig(library_path=tmp_path, catalogs=[])
+    app = EpubTuiApp(config=config)
+
+    async with app.run_test():
+        action_area = app.screen.query_one("#catalog-actions")
+        button = app.screen.query_one("#show-add-catalog")
+        assert button.parent is action_area
+        assert action_area.parent.id == "main-region"
 
 
 @pytest.mark.asyncio

@@ -20,6 +20,7 @@ from epub_tui.tui.reader import EpubReaderScreen
 from epub_tui.tui.widgets import (
     BusyIndicator,
     CoverDisplay,
+    CatalogList,
     EntryDetailView,
     FeedEntryList,
     LibraryBookList,
@@ -42,6 +43,14 @@ class CatalogForm(Container):
 
 def _catalog_form() -> CatalogForm:
     return CatalogForm()
+
+
+class CatalogActions(Container):
+    def __init__(self) -> None:
+        super().__init__(id="catalog-actions")
+
+    def compose(self) -> ComposeResult:
+        yield Button("New catalog", id="show-add-catalog")
 
 
 class SetupScreen(Screen[None]):
@@ -110,14 +119,14 @@ class CatalogsScreen(Screen[None]):
     def on_mount(self) -> None:
         replace_region(
             self.query_one("#main-region"),
-            StatusLine(self._catalog_text(), id="catalog-list"),
-            Button("New catalog", id="show-add-catalog"),
-            _catalog_form(),
+            CatalogList(self.config.catalogs, selected_index=self.selected_index),
             BusyIndicator(id="busy-indicator"),
+            _catalog_form(),
+            CatalogActions(),
         )
         replace_region(
             self.query_one("#detail-region"),
-            StatusLine("Ready", id="status-line"),
+            StatusLine(self._selected_catalog_detail(), id="status-line"),
         )
         self.query_one("#catalog-form", Container).display = self.show_add_form
         self.app.set_focus(None)
@@ -165,10 +174,8 @@ class CatalogsScreen(Screen[None]):
         if not self.config.catalogs:
             return
         self.selected_index = max(0, min(len(self.config.catalogs) - 1, self.selected_index + delta))
-        self.query_one("#catalog-list", StatusLine).set_message(self._catalog_text())
-        self.query_one("#status-line", StatusLine).set_message(
-            f"Selected {self.config.catalogs[self.selected_index].name}"
-        )
+        self.query_one("#catalog-list", CatalogList).set_selected_index(self.selected_index)
+        self.query_one("#status-line", StatusLine).set_message(self._selected_catalog_detail())
 
     def add_catalog_from_inputs(self) -> None:
         name = self.query_one("#catalog-name", Input).value.strip()
@@ -193,8 +200,14 @@ class CatalogsScreen(Screen[None]):
         self.app.add_catalog(catalog)  # type: ignore[attr-defined]
         if getattr(self.app, "config", None) is not None:
             self.config = self.app.config  # type: ignore[assignment]
-        self.query_one("#catalog-list", StatusLine).set_message(self._catalog_text())
-        self.query_one("#status-line", StatusLine).set_message("Catalog added")
+        self.selected_index = len(self.config.catalogs) - 1
+        self.query_one("#catalog-list", CatalogList).set_catalogs(
+            self.config.catalogs,
+            self.selected_index,
+        )
+        self.query_one("#status-line", StatusLine).set_message(
+            self._selected_catalog_detail("Catalog added")
+        )
         self.query_one("#catalog-name", Input).value = ""
         self.query_one("#catalog-url", Input).value = ""
         self.query_one("#catalog-username", Input).value = ""
@@ -212,7 +225,9 @@ class CatalogsScreen(Screen[None]):
         form = self.query_one("#catalog-form", Container)
         form.display = not form.display
         self.query_one("#status-line", StatusLine).set_message(
-            "Add catalog form shown" if form.display else "Add catalog form hidden"
+            self._selected_catalog_detail(
+                "Add catalog form shown" if form.display else "Add catalog form hidden"
+            )
         )
 
     def _validate_catalog_input(self, name: str, url: str) -> str | None:
@@ -226,11 +241,19 @@ class CatalogsScreen(Screen[None]):
         return None
 
     def _catalog_text(self) -> str:
+        return CatalogList.render_text(self.config.catalogs, self.selected_index)
+
+    def _selected_catalog_detail(self, hint: str = "Press Enter to open") -> str:
         if not self.config.catalogs:
-            return "No catalogs configured"
-        return "\n".join(
-            f"{'>' if index == self.selected_index else ' '} {catalog.name}"
-            for index, catalog in enumerate(self.config.catalogs)
+            empty_hint = hint if hint != "Press Enter to open" else "Press a to add a catalog"
+            return f"No catalog selected\n{empty_hint}"
+        catalog = self.config.catalogs[self.selected_index]
+        auth_status = "Basic auth configured" if catalog.auth else "No auth configured"
+        return (
+            f"{catalog.name}\n"
+            f"{catalog.url}\n"
+            f"{auth_status}\n"
+            f"{hint}"
         )
 
 

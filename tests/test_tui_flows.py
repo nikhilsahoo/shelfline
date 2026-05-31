@@ -27,7 +27,7 @@ from epub_tui.tui.screens import (
     LibraryScreen,
     SetupScreen,
 )
-from epub_tui.tui.widgets import FeedEntryList, LibraryBookList
+from epub_tui.tui.widgets import CatalogList, FeedEntryList, LibraryBookList
 
 
 class FakeWorkflow:
@@ -402,12 +402,34 @@ async def test_catalog_screen_selection_moves_before_opening() -> None:
     async with app.run_test() as pilot:
         await pilot.press("j")
 
-        assert "> Second" in str(app.screen.query_one("#catalog-list").renderable)
+        assert "> 2. Second" in str(app.screen.query_one("#catalog-list").renderable)
+        rows = list(app.screen.query("#catalog-list .catalog-row"))
+        assert not rows[0].has_class("selected")
+        assert rows[1].has_class("selected")
+        assert "Second" in str(app.screen.query_one("#status-line").renderable)
+        assert "https://second.test/opds" in str(app.screen.query_one("#status-line").renderable)
         await pilot.press("enter")
 
         assert isinstance(app.screen, FeedScreen)
         assert workflow.fetch_urls == [None]
         assert app.screen.catalog == catalogs[1]
+
+
+@pytest.mark.asyncio
+async def test_catalog_screen_empty_state_uses_catalog_list_widget(tmp_path: Path) -> None:
+    config = AppConfig(library_path=tmp_path, catalogs=[])
+    app = EpubTuiApp(config=config)
+
+    async with app.run_test():
+        catalog_list = app.screen.query_one("#catalog-list")
+        rows = list(app.screen.query("#catalog-list .catalog-row"))
+        rendered = str(catalog_list.renderable)
+        detail = str(app.screen.query_one("#status-line").renderable)
+
+    assert isinstance(catalog_list, CatalogList)
+    assert rows == []
+    assert "No catalogs configured" in rendered
+    assert "Press a to add a catalog" in detail
 
 
 @pytest.mark.asyncio

@@ -10,6 +10,7 @@ from textual.containers import Container, VerticalScroll
 from textual.widgets import Static
 
 from epub_tui.catalog.models import AcquisitionLink, CatalogEntry
+from epub_tui.config import CatalogConfig
 from epub_tui.downloads import DownloadProgress
 from epub_tui.library import BookRecord
 
@@ -46,6 +47,134 @@ class StatusLine(Static):
     def set_message(self, message: str) -> None:
         self._renderable = message
         self.update(message)
+
+
+class CatalogRow(Container):
+    def __init__(
+        self,
+        catalog: CatalogConfig,
+        *,
+        index: int,
+        selected: bool = False,
+        **kwargs: object,
+    ) -> None:
+        self.catalog = catalog
+        self.index = index
+        self.selected = selected
+        auth_class = "auth-basic" if catalog.auth else "auth-none"
+        classes = f"catalog-row {auth_class}"
+        if selected:
+            classes = f"{classes} selected"
+        super().__init__(id=f"catalog-row-{index}", classes=classes, **kwargs)
+
+    @property
+    def renderable(self) -> str:
+        return self._row_text()
+
+    def compose(self) -> ComposeResult:
+        yield Static(">" if self.selected else " ", classes="row-marker")
+        yield Static(f"{self.index + 1}.", classes="row-index")
+        yield Static(self.catalog.name, classes="row-title")
+        yield Static(self.catalog.url, classes="catalog-url")
+        yield Static(self.auth_text, classes="catalog-auth")
+
+    @property
+    def auth_text(self) -> str:
+        return "Basic auth" if self.catalog.auth else "No auth"
+
+    def set_selected(self, selected: bool) -> None:
+        self.selected = selected
+        if selected:
+            self.add_class("selected")
+        else:
+            self.remove_class("selected")
+        if self.is_mounted:
+            self.query_one(".row-marker", Static).update(">" if selected else " ")
+
+    def update_catalog(self, catalog: CatalogConfig, *, index: int, selected: bool) -> None:
+        self.catalog = catalog
+        self.index = index
+        self.display = True
+        self.remove_class("auth-basic")
+        self.remove_class("auth-none")
+        self.add_class("auth-basic" if catalog.auth else "auth-none")
+        self.set_selected(selected)
+        if not self.is_mounted:
+            return
+        self.query_one(".row-index", Static).update(f"{index + 1}.")
+        self.query_one(".row-title", Static).update(catalog.name)
+        self.query_one(".catalog-url", Static).update(catalog.url)
+        self.query_one(".catalog-auth", Static).update(self.auth_text)
+
+    def _row_text(self) -> str:
+        return (
+            f"{'>' if self.selected else ' '} {self.index + 1}. "
+            f"{self.catalog.name} - {self.catalog.url} [{self.auth_text}]"
+        )
+
+
+class CatalogList(VerticalScroll):
+    def __init__(
+        self,
+        catalogs: list[CatalogConfig],
+        *,
+        selected_index: int = 0,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(id="catalog-list", classes="catalog-list", **kwargs)
+        self.catalogs = catalogs
+        self.selected_index = selected_index
+
+    @property
+    def renderable(self) -> str:
+        return self.render_text(self.catalogs, self.selected_index)
+
+    def compose(self) -> ComposeResult:
+        empty_state = Static("No catalogs configured", id="catalog-empty", classes="empty-state")
+        empty_state.display = not self.catalogs
+        yield empty_state
+        yield from self._catalog_widgets()
+
+    def set_catalogs(self, catalogs: list[CatalogConfig], selected_index: int) -> None:
+        self.catalogs = catalogs
+        self.selected_index = selected_index
+        self.query_one("#catalog-empty", Static).display = not catalogs
+        rows = list(self.query(CatalogRow))
+        for index, catalog in enumerate(catalogs):
+            selected = index == selected_index
+            if index < len(rows):
+                rows[index].update_catalog(catalog, index=index, selected=selected)
+            else:
+                self.mount(CatalogRow(catalog, index=index, selected=selected))
+        for row in rows[len(catalogs) :]:
+            row.display = False
+            row.set_selected(False)
+
+    def set_selected_index(self, selected_index: int) -> None:
+        self.selected_index = selected_index
+        selected_row: CatalogRow | None = None
+        for row in self.query(CatalogRow):
+            selected = row.index == selected_index
+            row.set_selected(selected)
+            if selected:
+                selected_row = row
+        if selected_row is not None:
+            self.scroll_to_widget(selected_row, animate=False, immediate=True)
+
+    def _catalog_widgets(self) -> list[CatalogRow]:
+        return [
+            CatalogRow(catalog, index=index, selected=index == self.selected_index)
+            for index, catalog in enumerate(self.catalogs)
+        ]
+
+    @staticmethod
+    def render_text(catalogs: list[CatalogConfig], selected_index: int) -> str:
+        if not catalogs:
+            return "No catalogs configured"
+        return "\n".join(
+            CatalogRow(catalog, index=index, selected=index == selected_index).renderable
+            for index, catalog in enumerate(catalogs)
+        )
 
 
 class CatalogEntryRow(Container):
