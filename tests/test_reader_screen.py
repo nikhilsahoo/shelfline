@@ -27,6 +27,26 @@ def _preview() -> EpubPreview:
     )
 
 
+def _long_preview() -> EpubPreview:
+    return EpubPreview(
+        title="Reader Title",
+        outline=(
+            EpubOutlineItem(title="Chapter One", section_index=0),
+            EpubOutlineItem(title="Chapter Two", section_index=1),
+        ),
+        sections=(
+            EpubSection(
+                heading="Chapter One",
+                text="\n".join(f"First section line {index}" for index in range(80)),
+            ),
+            EpubSection(
+                heading="Chapter Two",
+                text="\n".join(f"Second section line {index}" for index in range(80)),
+            ),
+        ),
+    )
+
+
 def _write_reader_epub(epub_path: Path, title: str = "Reader Book") -> None:
     book = epub.EpubBook()
     book.set_identifier(title)
@@ -114,6 +134,24 @@ async def test_reader_screen_next_and_previous_update_section_and_progress() -> 
             app.screen.query_one("#reader-body-text").render()
         )
         assert "1 / 2" in str(app.screen.query_one("#reader-progress").renderable)
+
+
+@pytest.mark.asyncio
+async def test_reader_screen_next_resets_body_scroll_to_top() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test(size=(80, 20)) as pilot:
+        await app.push_screen(EpubReaderScreen(_long_preview()))
+        reader_body = app.screen.query_one("#reader-body", VerticalScroll)
+        reader_body.scroll_to(y=20, animate=False)
+        await pilot.pause()
+
+        assert reader_body.scroll_y > 0
+
+        await pilot.press("n")
+        await pilot.pause()
+
+        assert reader_body.scroll_y == 0
 
 
 @pytest.mark.asyncio

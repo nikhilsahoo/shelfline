@@ -57,6 +57,7 @@ class EpubReaderScreen(Screen[None]):
         section = self.preview.section_at(self.section_index)
         self.query_one("#reader-heading", StatusLine).set_message(section.heading)
         self.query_one("#reader-body-text", Static).update(section.text)
+        self.query_one("#reader-body", VerticalScroll).scroll_to(y=0, animate=False)
         self.query_one("#reader-progress", StatusLine).set_message(
             self.preview.progress_label(self.section_index)
         )
