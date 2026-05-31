@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from ebooklib import epub
 from textual.containers import VerticalScroll
+from textual.pilot import Pilot
 
 from epub_tui.app import EpubTuiApp
 from epub_tui.library import BookRecord, LibraryRepository, ReadingProgress
@@ -45,6 +46,16 @@ def _long_preview() -> EpubPreview:
             ),
         ),
     )
+
+
+async def _scroll_reader_body(reader_body: VerticalScroll, *, y: int, pilot: Pilot) -> None:
+    for _ in range(10):
+        reader_body.scroll_to(y=y, animate=False)
+        await pilot.pause()
+        if reader_body.scroll_y > 0:
+            return
+
+    pytest.fail(f"reader body did not scroll after requesting y={y}")
 
 
 def _write_reader_epub(epub_path: Path, title: str = "Reader Book") -> None:
@@ -163,8 +174,7 @@ async def test_reader_screen_next_resets_body_scroll_to_top() -> None:
     async with app.run_test(size=(80, 20)) as pilot:
         await app.push_screen(EpubReaderScreen(_long_preview()))
         reader_body = app.screen.query_one("#reader-body", VerticalScroll)
-        reader_body.scroll_to(y=20, animate=False)
-        await pilot.pause()
+        await _scroll_reader_body(reader_body, y=20, pilot=pilot)
 
         assert reader_body.scroll_y > 0
 
@@ -181,8 +191,7 @@ async def test_reader_screen_next_at_last_section_preserves_body_scroll() -> Non
     async with app.run_test(size=(80, 20)) as pilot:
         await app.push_screen(EpubReaderScreen(_long_preview(), section_index=1))
         reader_body = app.screen.query_one("#reader-body", VerticalScroll)
-        reader_body.scroll_to(y=20, animate=False)
-        await pilot.pause()
+        await _scroll_reader_body(reader_body, y=20, pilot=pilot)
 
         assert reader_body.scroll_y > 0
 
@@ -200,8 +209,7 @@ async def test_reader_screen_previous_at_first_section_preserves_body_scroll() -
     async with app.run_test(size=(80, 20)) as pilot:
         await app.push_screen(EpubReaderScreen(_long_preview()))
         reader_body = app.screen.query_one("#reader-body", VerticalScroll)
-        reader_body.scroll_to(y=20, animate=False)
-        await pilot.pause()
+        await _scroll_reader_body(reader_body, y=20, pilot=pilot)
 
         assert reader_body.scroll_y > 0
 
