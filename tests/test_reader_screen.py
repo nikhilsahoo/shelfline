@@ -7,7 +7,7 @@ from ebooklib import epub
 from textual.containers import VerticalScroll
 
 from epub_tui.app import EpubTuiApp
-from epub_tui.library import BookRecord, LibraryRepository
+from epub_tui.library import BookRecord, LibraryRepository, ReadingProgress
 from epub_tui.reader import EpubOutlineItem, EpubPreview, EpubSection
 from epub_tui.tui.reader import EpubReaderScreen
 from epub_tui.tui.screens import LibraryScreen
@@ -193,10 +193,76 @@ async def test_reader_screen_previous_at_first_section_preserves_body_scroll() -
 
 
 @pytest.mark.asyncio
+async def test_reader_screen_resumes_saved_progress_and_clamps_section(
+    tmp_path: Path,
+) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    book_path = tmp_path / "books" / "reader-book.epub"
+    repo.save_reading_progress(ReadingProgress(book_path, section_index=99, position=12))
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(
+            EpubReaderScreen(_preview(), library=repo, book_path=book_path)
+        )
+
+        assert app.screen.section_index == 1
+        assert "Chapter Two" in str(app.screen.query_one("#reader-heading").renderable)
+        assert "Second section body." in str(
+            app.screen.query_one("#reader-body-text").render()
+        )
+        assert "2 / 2" in str(app.screen.query_one("#reader-progress").renderable)
+
+
+@pytest.mark.asyncio
+async def test_reader_screen_saves_progress_on_section_changes(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    book_path = tmp_path / "books" / "reader-book.epub"
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(
+            EpubReaderScreen(_preview(), library=repo, book_path=book_path)
+        )
+
+        await pilot.press("n")
+
+        progress = repo.get_reading_progress(book_path)
+        assert progress is not None
+        assert progress.section_index == 1
+        assert progress.position == 0
+
+        await pilot.press("p")
+
+        progress = repo.get_reading_progress(book_path)
+        assert progress is not None
+        assert progress.section_index == 0
+        assert progress.position == 0
+
+
+@pytest.mark.asyncio
+async def test_reader_screen_works_without_persistence_inputs() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EpubReaderScreen(_preview()))
+
+        await pilot.press("n")
+
+        assert app.screen.section_index == 1
+        assert "Chapter Two" in str(app.screen.query_one("#reader-heading").renderable)
+        assert "2 / 2" in str(app.screen.query_one("#reader-progress").renderable)
+
+
+@pytest.mark.asyncio
 async def test_library_screen_enter_on_epub_opens_reader_screen(tmp_path: Path) -> None:
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
-    repo.add_book(_book(tmp_path))
+    book = _book(tmp_path)
+    repo.add_book(book)
+    repo.save_reading_progress(ReadingProgress(book.local_file_path, section_index=1, position=0))
     app = EpubTuiApp(config=None)
 
     async with app.run_test() as pilot:
@@ -204,4 +270,7 @@ async def test_library_screen_enter_on_epub_opens_reader_screen(tmp_path: Path) 
         await pilot.press("enter")
 
         assert isinstance(app.screen, EpubReaderScreen)
+        assert app.screen.library is repo
+        assert app.screen.book_path == book.local_file_path
         assert "Reader Book" in str(app.screen.query_one("#reader-title").renderable)
+        assert "Chapter Two" in str(app.screen.query_one("#reader-heading").renderable)

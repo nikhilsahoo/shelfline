@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Static
 
+from epub_tui.library import LibraryRepository, ReadingProgress
 from epub_tui.reader import EpubPreview
 from epub_tui.tui.widgets import StatusLine
 
@@ -22,11 +25,15 @@ class EpubReaderScreen(Screen[None]):
         preview: EpubPreview,
         *,
         section_index: int = 0,
+        library: LibraryRepository | None = None,
+        book_path: Path | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self.preview = preview
-        self.section_index = section_index
+        self.library = library
+        self.book_path = book_path
+        self.section_index = self._initial_section_index(section_index)
 
     def compose(self) -> ComposeResult:
         section = self.preview.section_at(self.section_index)
@@ -45,6 +52,7 @@ class EpubReaderScreen(Screen[None]):
             return
         self.section_index = next_index
         self._refresh_section()
+        self._save_progress()
 
     def action_previous_section(self) -> None:
         previous_index = self.preview.previous_section_index(self.section_index)
@@ -52,6 +60,7 @@ class EpubReaderScreen(Screen[None]):
             return
         self.section_index = previous_index
         self._refresh_section()
+        self._save_progress()
 
     def action_go_back(self) -> None:
         if len(self.app.screen_stack) > 1:
@@ -66,4 +75,29 @@ class EpubReaderScreen(Screen[None]):
         self.query_one("#reader-body", VerticalScroll).scroll_to(y=0, animate=False)
         self.query_one("#reader-progress", StatusLine).set_message(
             self.preview.progress_label(self.section_index)
+        )
+
+    def _initial_section_index(self, section_index: int) -> int:
+        if self.library is None or self.book_path is None:
+            return self._clamp_section_index(section_index)
+
+        progress = self.library.get_reading_progress(self.book_path)
+        if progress is None:
+            return self._clamp_section_index(section_index)
+        return self._clamp_section_index(progress.section_index)
+
+    def _clamp_section_index(self, section_index: int) -> int:
+        if self.preview.section_count == 0:
+            return 0
+        return max(0, min(section_index, self.preview.section_count - 1))
+
+    def _save_progress(self) -> None:
+        if self.library is None or self.book_path is None:
+            return
+        self.library.save_reading_progress(
+            ReadingProgress(
+                local_file_path=self.book_path,
+                section_index=self.section_index,
+                position=0,
+            )
         )

@@ -602,7 +602,13 @@ class LibraryScreen(Screen[None]):
         if book.media_type != "application/epub+zip":
             self._set_status("Preview is not implemented for this format")
             return
-        self.app.push_screen(EpubReaderScreen(extract_epub_preview(book.local_file_path)))
+        self.app.push_screen(
+            EpubReaderScreen(
+                extract_epub_preview(book.local_file_path),
+                library=self.library,
+                book_path=book.local_file_path,
+            )
+        )
 
     def action_open_selected(self) -> None:
         if self.search_active:
