@@ -82,13 +82,12 @@ class EpubReaderScreen(Screen[None]):
         section = self.preview.section_at(self.section_index)
         position = 0
         try:
-            existing_bookmark = self.library.find_bookmark(
+            deleted_count = self.library.delete_bookmarks_at_position(
                 self.book_path,
                 section_index=self.section_index,
                 position=position,
             )
-            if existing_bookmark is not None and existing_bookmark.id is not None:
-                self.library.delete_bookmark(existing_bookmark.id)
+            if deleted_count > 0:
                 self._set_status("Bookmark removed")
                 return
 

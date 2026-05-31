@@ -152,6 +152,42 @@ def test_find_bookmark_returns_matching_section_and_position_only(tmp_path: Path
     assert repo.find_bookmark(book_path, section_index=9, position=99) is None
 
 
+def test_delete_bookmarks_at_position_removes_all_matching_rows(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    book_path = tmp_path / "books" / "sample.epub"
+    other_path = tmp_path / "books" / "other.epub"
+
+    repo.add_bookmark(
+        library.Bookmark(book_path, section_index=1, position=10, label="Duplicate A")
+    )
+    repo.add_bookmark(
+        library.Bookmark(book_path, section_index=1, position=10, label="Duplicate B")
+    )
+    wrong_position = repo.add_bookmark(
+        library.Bookmark(book_path, section_index=1, position=20, label="Wrong position")
+    )
+    wrong_section = repo.add_bookmark(
+        library.Bookmark(book_path, section_index=2, position=10, label="Wrong section")
+    )
+    wrong_book = repo.add_bookmark(
+        library.Bookmark(other_path, section_index=1, position=10, label="Wrong book")
+    )
+
+    deleted_count = repo.delete_bookmarks_at_position(
+        book_path, section_index=1, position=10
+    )
+
+    assert deleted_count == 2
+    assert [bookmark.id for bookmark in repo.list_bookmarks(book_path)] == [
+        wrong_position.id,
+        wrong_section.id,
+    ]
+    assert [bookmark.id for bookmark in repo.list_bookmarks(other_path)] == [
+        wrong_book.id
+    ]
+
+
 def test_delete_book_clears_bookmarks_for_deleted_path_only(tmp_path: Path) -> None:
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()

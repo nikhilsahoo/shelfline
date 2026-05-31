@@ -8,7 +8,7 @@ from textual.containers import VerticalScroll
 from textual.pilot import Pilot
 
 from epub_tui.app import EpubTuiApp
-from epub_tui.library import BookRecord, LibraryRepository, ReadingProgress
+from epub_tui.library import Bookmark, BookRecord, LibraryRepository, ReadingProgress
 from epub_tui.reader import EpubOutlineItem, EpubPreview, EpubSection
 from epub_tui.tui.reader import EpubReaderScreen
 from epub_tui.tui.screens import LibraryScreen
@@ -387,6 +387,44 @@ async def test_reader_screen_toggles_bookmark_at_current_position(
         await pilot.press("m")
 
         assert repo.list_bookmarks(book_path) == []
+        assert "Bookmark removed" in str(
+            app.screen.query_one("#status-line").renderable
+        )
+
+
+@pytest.mark.asyncio
+async def test_reader_screen_removes_duplicate_bookmarks_at_current_position(
+    tmp_path: Path,
+) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    book_path = tmp_path / "books" / "reader-book.epub"
+    repo.add_bookmark(
+        Bookmark(book_path, section_index=1, position=0, label="Duplicate A")
+    )
+    repo.add_bookmark(
+        Bookmark(book_path, section_index=1, position=0, label="Duplicate B")
+    )
+    other = repo.add_bookmark(
+        Bookmark(book_path, section_index=0, position=0, label="Other section")
+    )
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(
+            EpubReaderScreen(
+                _preview(),
+                section_index=1,
+                library=repo,
+                book_path=book_path,
+            )
+        )
+
+        await pilot.press("m")
+
+        assert [bookmark.id for bookmark in repo.list_bookmarks(book_path)] == [
+            other.id
+        ]
         assert "Bookmark removed" in str(
             app.screen.query_one("#status-line").renderable
         )

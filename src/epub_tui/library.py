@@ -345,6 +345,25 @@ class LibraryRepository:
                 (bookmark_id,),
             )
 
+    def delete_bookmarks_at_position(
+        self, local_file_path: Path, *, section_index: int, position: int = 0
+    ) -> int:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                DELETE FROM bookmarks
+                WHERE local_file_path = ?
+                    AND section_index = ?
+                    AND position = ?
+                """,
+                (
+                    self._path_to_text(local_file_path),
+                    section_index,
+                    position,
+                ),
+            )
+        return cursor.rowcount
+
     def delete_book(self, local_file_path: Path, remove_file: bool = True) -> None:
         path_text = self._path_to_text(Path(local_file_path))
         with self._connect() as connection:
