@@ -156,8 +156,14 @@ class FeedEntryList(VerticalScroll):
 
     def set_selected_index(self, selected_index: int) -> None:
         self.selected_index = selected_index
+        selected_row: CatalogEntryRow | None = None
         for row in self.query(CatalogEntryRow):
-            row.set_selected(row.index == selected_index)
+            selected = row.index == selected_index
+            row.set_selected(selected)
+            if selected:
+                selected_row = row
+        if selected_row is not None:
+            self.scroll_to_widget(selected_row, animate=False, immediate=True)
 
     @staticmethod
     def render_text(
@@ -296,8 +302,14 @@ class LibraryBookList(VerticalScroll):
 
     def set_selected_index(self, selected_index: int) -> None:
         self.selected_index = selected_index
+        selected_row: LibraryBookRow | None = None
         for row in self.query(LibraryBookRow):
-            row.set_selected(row.index == selected_index)
+            selected = row.index == selected_index
+            row.set_selected(selected)
+            if selected:
+                selected_row = row
+        if selected_row is not None:
+            self.scroll_to_widget(selected_row, animate=False, immediate=True)
 
     def _book_widgets(self) -> list[Static | LibraryBookRow]:
         return [

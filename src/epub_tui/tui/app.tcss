@@ -60,6 +60,7 @@
 .feed-entry-row,
 .library-book-row {
     layout: horizontal;
+    height: 1;
     padding: 0 1;
     border-left: solid $primary;
     background: $surface;

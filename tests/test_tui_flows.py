@@ -276,7 +276,7 @@ async def test_feed_screen_many_entries_use_contiguous_scrollable_rows() -> None
     )
     app = EpubTuiApp(config=None)
 
-    async with app.run_test() as pilot:
+    async with app.run_test(size=(80, 24)) as pilot:
         await app.push_screen(FeedScreen(feed))
         await pilot.pause()
 
@@ -302,12 +302,20 @@ async def test_feed_screen_many_entries_use_contiguous_scrollable_rows() -> None
             "6.",
         ]
         assert all(row.styles.margin.top == 0 for row in rows)
+        assert all(row.region.height > 0 for row in rows[:3])
+        assert feed_body.max_scroll_y > 0
 
-        await pilot.press("j", "j")
+        await pilot.press(*(["j"] * 20))
+        await pilot.pause()
 
         rows = list(app.screen.query("#feed-body .feed-entry-row"))
-        assert rows[2].has_class("selected")
-        assert str(rows[2].query_one(".row-marker").render()) == ">"
+        selected_row = rows[20]
+        assert selected_row.has_class("selected")
+        assert str(selected_row.query_one(".row-marker").render()) == ">"
+        assert selected_row.region.height > 0
+        assert feed_body.scroll_y > 0
+        assert feed_body.region.y <= selected_row.region.y
+        assert selected_row.region.y + selected_row.region.height <= feed_body.region.y + feed_body.region.height
 
 
 @pytest.mark.asyncio
@@ -737,7 +745,7 @@ async def test_library_screen_many_books_use_contiguous_scrollable_rows(tmp_path
         repo.add_book(_book(tmp_path, title=f"Library Book {index + 1:02d}", is_read=False))
     app = EpubTuiApp(config=None)
 
-    async with app.run_test() as pilot:
+    async with app.run_test(size=(80, 24)) as pilot:
         await app.push_screen(LibraryScreen(library=repo))
         await pilot.pause()
 
@@ -763,6 +771,20 @@ async def test_library_screen_many_books_use_contiguous_scrollable_rows(tmp_path
             "6.",
         ]
         assert all(row.styles.margin.top == 0 for row in rows)
+        assert all(row.region.height > 0 for row in rows[:3])
+        assert library_body.max_scroll_y > 0
+
+        await pilot.press(*(["j"] * 18))
+        await pilot.pause()
+
+        rows = list(app.screen.query("#library-body .library-book-row"))
+        selected_row = rows[18]
+        assert selected_row.has_class("selected")
+        assert str(selected_row.query_one(".row-marker").render()) == ">"
+        assert selected_row.region.height > 0
+        assert library_body.scroll_y > 0
+        assert library_body.region.y <= selected_row.region.y
+        assert selected_row.region.y + selected_row.region.height <= library_body.region.y + library_body.region.height
 
 
 @pytest.mark.asyncio
