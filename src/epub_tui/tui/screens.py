@@ -117,7 +117,7 @@ class CatalogsScreen(Screen[None]):
         )
         replace_region(
             self.query_one("#detail-region"),
-            StatusLine(self.KEY_HINT, id="status-line"),
+            StatusLine("Ready", id="status-line"),
         )
         self.query_one("#catalog-form", Container).display = self.show_add_form
         self.app.set_focus(None)
@@ -271,7 +271,7 @@ class FeedScreen(Screen[None]):
             selected_index=self.selected_index,
         )
         yield BusyIndicator(id="busy-indicator")
-        yield StatusLine(self.KEY_HINT, id="status-line")
+        yield StatusLine("Ready", id="status-line")
         yield KeyHintFooter(self.KEY_HINT)
 
     def begin_fetch(self, message: str = "Fetching feed") -> None:
@@ -408,7 +408,7 @@ class EntryScreen(Screen[None]):
         )
         yield EntryDetailView(self.entry, selected_index=self.selected_index)
         yield BusyIndicator(id="busy-indicator")
-        yield StatusLine(self.KEY_HINT, id="status-line")
+        yield StatusLine("Ready", id="status-line")
         yield KeyHintFooter(self.KEY_HINT)
 
     def begin_download(self, message: str = "Starting download") -> None:
@@ -486,7 +486,7 @@ class DownloadStatusScreen(Screen[None]):
         yield Header()
         yield DownloadProgressDisplay(self.progress, id="download-progress")
         yield StatusLine(self.status, id="download-status")
-        yield StatusLine(self.KEY_HINT, id="status-line")
+        yield StatusLine("Ready", id="status-line")
         yield KeyHintFooter(self.KEY_HINT)
 
     def update_progress(self, progress: DownloadProgress, status: str | None = None) -> None:
@@ -545,7 +545,7 @@ class LibraryScreen(Screen[None]):
         )
         replace_region(
             self.query_one("#detail-region"),
-            StatusLine(self.KEY_HINT, id="status-line"),
+            StatusLine("Ready", id="status-line"),
         )
         self.app.set_focus(None)
         self.call_after_refresh(lambda: self.app.set_focus(None))

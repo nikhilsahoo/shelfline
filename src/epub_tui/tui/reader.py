@@ -67,7 +67,7 @@ class EpubReaderScreen(Screen[None]):
                 yield StatusLine(section.heading, id="reader-heading", classes="reader-heading")
                 with VerticalScroll(id="reader-body", classes="reader-body"):
                     yield Static(section.text, id="reader-body-text", classes="reader-text")
-        yield StatusLine(self.KEY_HINT, id="status-line")
+        yield StatusLine("Ready", id="status-line")
         yield KeyHintFooter(self.KEY_HINT)
 
     def on_mount(self) -> None:

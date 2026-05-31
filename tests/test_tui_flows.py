@@ -639,7 +639,10 @@ async def test_entry_screen_downloads_acquisition_through_workflow(tmp_path: Pat
         assert isinstance(app.screen, DownloadStatusScreen)
         assert workflow.downloads[0][2] == _entry().acquisition_links[1]
         assert "Download complete" in str(app.screen.query_one("#download-status").renderable)
-        assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+        assert "Keys:" not in str(app.screen.query_one("#status-line").renderable)
+        assert DownloadStatusScreen.KEY_HINT in str(
+            app.screen.query_one("#key-hints", KeyHintFooter).render()
+        )
 
 
 @pytest.mark.asyncio
@@ -1040,35 +1043,30 @@ async def test_primary_screens_show_key_hints(tmp_path: Path) -> None:
     repo.initialize()
     app = EpubTuiApp(config=None)
 
+    def assert_menu_only_in_footer() -> None:
+        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
+        assert list(app.screen.query(Footer)) == []
+        if app.screen.query("#status-line"):
+            assert "Keys:" not in str(app.screen.query_one("#status-line").renderable)
+
     async with app.run_test():
         assert isinstance(app.screen, SetupScreen)
-        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
-        assert list(app.screen.query(Footer)) == []
+        assert_menu_only_in_footer()
 
         await app.push_screen(CatalogsScreen(AppConfig(library_path=tmp_path)))
-        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
-        assert list(app.screen.query(Footer)) == []
-        assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+        assert_menu_only_in_footer()
 
         await app.push_screen(FeedScreen(_feed()))
-        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
-        assert list(app.screen.query(Footer)) == []
-        assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+        assert_menu_only_in_footer()
 
         await app.push_screen(EntryScreen(_entry()))
-        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
-        assert list(app.screen.query(Footer)) == []
-        assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+        assert_menu_only_in_footer()
 
         await app.push_screen(DownloadStatusScreen())
-        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
-        assert list(app.screen.query(Footer)) == []
-        assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+        assert_menu_only_in_footer()
 
         await app.push_screen(LibraryScreen(library=repo))
-        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
-        assert list(app.screen.query(Footer)) == []
-        assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+        assert_menu_only_in_footer()
 
         preview = EpubPreview(
             title="Preview Title",
@@ -1076,14 +1074,12 @@ async def test_primary_screens_show_key_hints(tmp_path: Path) -> None:
             sections=(EpubSection(heading="Chapter One", text="Plain text body."),),
         )
         await app.push_screen(EpubPreviewScreen(preview))
-        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
-        assert list(app.screen.query(Footer)) == []
+        assert_menu_only_in_footer()
 
         await app.push_screen(
             CatalogAuthScreen(CatalogConfig(name="Private", url="https://example.test/opds"))
         )
-        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
-        assert list(app.screen.query(Footer)) == []
+        assert_menu_only_in_footer()
 
 
 @pytest.mark.asyncio

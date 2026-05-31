@@ -132,7 +132,10 @@ async def test_reader_screen_renders_current_section_and_progress() -> None:
             app.screen.query_one("#reader-body-text").render()
         )
         assert "1 / 2" in str(app.screen.query_one("#reader-progress").renderable)
-        assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+        assert "Keys:" not in str(app.screen.query_one("#status-line").renderable)
+        assert EpubReaderScreen.KEY_HINT in str(
+            app.screen.query_one("#key-hints", KeyHintFooter).render()
+        )
 
 
 @pytest.mark.asyncio
