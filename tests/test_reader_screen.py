@@ -184,6 +184,19 @@ async def test_reader_screen_uses_constrained_reading_surface() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reader_screen_body_reserves_gutter_before_scrollbar() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(EpubReaderScreen(_preview()))
+
+        reader_body = app.screen.query_one("#reader-body", VerticalScroll)
+
+        assert reader_body.styles.padding.left == 1
+        assert reader_body.styles.padding.right >= 3
+
+
+@pytest.mark.asyncio
 async def test_reader_screen_next_and_previous_update_section_and_progress() -> None:
     app = EpubTuiApp(config=None)
 
