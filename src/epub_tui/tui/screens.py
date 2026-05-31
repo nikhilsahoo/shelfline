@@ -399,9 +399,10 @@ class FeedScreen(Screen[None]):
 
 
 class EntryScreen(Screen[None]):
-    KEY_HINT = "Keys: d download | j/k select | c catalogs | l library"
+    KEY_HINT = "Keys: d download | j/k select | b back | c catalogs | l library"
     BINDINGS = [
         ("d", "download_selected", "Download"),
+        ("b", "go_back", "Back"),
         ("j", "cursor_down", "Down"),
         ("down", "cursor_down", "Down"),
         ("k", "cursor_up", "Up"),
@@ -469,6 +470,9 @@ class EntryScreen(Screen[None]):
 
     async def action_download_selected(self) -> None:
         await self.download_acquisition(self.selected_index)
+
+    def action_go_back(self) -> None:
+        self.app.pop_screen()
 
     def action_cursor_down(self) -> None:
         self._move_selection(1)

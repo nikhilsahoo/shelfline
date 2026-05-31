@@ -564,6 +564,33 @@ async def test_feed_screen_back_binding_returns_to_parent_feed() -> None:
 
 
 @pytest.mark.asyncio
+async def test_entry_screen_footer_shows_back_hint() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(EntryScreen(_entry()))
+        footer = app.screen.query_one("#key-hints", KeyHintFooter)
+
+        assert "b back" in EntryScreen.KEY_HINT
+        assert "b back" in str(footer.render())
+
+
+@pytest.mark.asyncio
+async def test_entry_screen_back_binding_returns_to_feed_screen() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(_feed()))
+        feed_screen = app.screen
+        await pilot.press("enter")
+        assert isinstance(app.screen, EntryScreen)
+
+        await pilot.press("b")
+
+        assert app.screen is feed_screen
+
+
+@pytest.mark.asyncio
 async def test_entry_screen_renders_cover_fallback_and_all_acquisitions() -> None:
     app = EpubTuiApp(config=None)
 
