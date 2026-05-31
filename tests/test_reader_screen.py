@@ -6,10 +6,12 @@ import pytest
 from ebooklib import epub
 from textual.containers import VerticalScroll
 from textual.pilot import Pilot
+from textual.widgets import Footer
 
 from epub_tui.app import EpubTuiApp
 from epub_tui.library import Bookmark, BookRecord, LibraryRepository, ReadingProgress
 from epub_tui.reader import EpubOutlineItem, EpubPreview, EpubSection
+from epub_tui.tui.layout import KeyHintFooter
 from epub_tui.tui.reader import EpubReaderScreen
 from epub_tui.tui.screens import LibraryScreen
 
@@ -131,6 +133,18 @@ async def test_reader_screen_renders_current_section_and_progress() -> None:
         )
         assert "1 / 2" in str(app.screen.query_one("#reader-progress").renderable)
         assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+
+
+@pytest.mark.asyncio
+async def test_reader_screen_uses_custom_key_hint_footer() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(EpubReaderScreen(_preview()))
+
+        footer = app.screen.query_one("#key-hints", KeyHintFooter)
+        assert EpubReaderScreen.KEY_HINT in str(footer.render())
+        assert list(app.screen.query(Footer)) == []
 
 
 @pytest.mark.asyncio

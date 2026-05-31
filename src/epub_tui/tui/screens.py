@@ -7,7 +7,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Input, Static
+from textual.widgets import Button, Header, Input, Static
 
 from epub_tui.catalog.models import CatalogEntry, CatalogFeed
 from epub_tui.config import AppConfig, CatalogConfig
@@ -15,7 +15,7 @@ from epub_tui.downloads import DownloadProgress
 from epub_tui.library import BookRecord, LibraryRepository, LibrarySearch
 from epub_tui.reader import EpubPreview, ReaderError, extract_epub_preview
 from epub_tui.services import CatalogWorkflow
-from epub_tui.tui.layout import AppShell, replace_region
+from epub_tui.tui.layout import AppShell, KeyHintFooter, replace_region
 from epub_tui.tui.reader import EpubReaderScreen
 from epub_tui.tui.widgets import (
     BusyIndicator,
@@ -44,13 +44,15 @@ def _catalog_form() -> CatalogForm:
 
 
 class SetupScreen(Screen[None]):
+    KEY_HINT = "Keys: tab focus | enter save | q quit"
+
     def compose(self) -> ComposeResult:
         yield Header()
         yield StatusLine("Library path", id="setup-title")
         yield Input(placeholder="Library path", id="library-path")
         yield Button("Save", id="save-library")
         yield StatusLine("Ready", id="status-line")
-        yield Footer()
+        yield KeyHintFooter(self.KEY_HINT)
 
     def validate_library_path(self, path: str | Path) -> str | None:
         if isinstance(path, str) and not path.strip():
@@ -269,7 +271,7 @@ class FeedScreen(Screen[None]):
         )
         yield BusyIndicator(id="busy-indicator")
         yield StatusLine(self.KEY_HINT, id="status-line")
-        yield Footer()
+        yield KeyHintFooter(self.KEY_HINT)
 
     def begin_fetch(self, message: str = "Fetching feed") -> None:
         self._begin_outgoing_call(message)
@@ -406,7 +408,7 @@ class EntryScreen(Screen[None]):
         yield StatusLine(self._entry_text(), id="entry-body")
         yield BusyIndicator(id="busy-indicator")
         yield StatusLine(self.KEY_HINT, id="status-line")
-        yield Footer()
+        yield KeyHintFooter(self.KEY_HINT)
 
     def begin_download(self, message: str = "Starting download") -> None:
         self.query_one("#busy-indicator", BusyIndicator).start(message)
@@ -499,7 +501,7 @@ class DownloadStatusScreen(Screen[None]):
         yield DownloadProgressDisplay(self.progress, id="download-progress")
         yield StatusLine(self.status, id="download-status")
         yield StatusLine(self.KEY_HINT, id="status-line")
-        yield Footer()
+        yield KeyHintFooter(self.KEY_HINT)
 
     def update_progress(self, progress: DownloadProgress, status: str | None = None) -> None:
         self.progress = progress
@@ -687,6 +689,8 @@ def _error_message(error: Exception) -> str:
 
 
 class EpubPreviewScreen(Screen[None]):
+    KEY_HINT = "Keys: c catalogs | l library | q quit"
+
     def __init__(self, preview: EpubPreview, **kwargs: object) -> None:
         super().__init__(**kwargs)
         self.preview = preview
@@ -694,7 +698,7 @@ class EpubPreviewScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         yield Header()
         yield StatusLine(self._preview_text(), id="preview-body")
-        yield Footer()
+        yield KeyHintFooter(self.KEY_HINT)
 
     def _preview_text(self) -> str:
         lines = [self.preview.title, "Outline:"]
@@ -711,6 +715,8 @@ class EpubPreviewScreen(Screen[None]):
 
 
 class CatalogAuthScreen(Screen[None]):
+    KEY_HINT = "Keys: c catalogs | l library | q quit"
+
     def __init__(self, catalog: object, **kwargs: object) -> None:
         super().__init__(**kwargs)
         self.catalog = catalog
@@ -723,7 +729,7 @@ class CatalogAuthScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         yield Header()
         yield StatusLine(self._auth_text(), id="auth-body")
-        yield Footer()
+        yield KeyHintFooter(self.KEY_HINT)
 
     def _auth_text(self) -> str:
         name = getattr(self.catalog, "name", "Catalog")

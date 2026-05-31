@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 from ebooklib import epub
 from textual.containers import VerticalScroll
+from textual.widgets import Footer
 
 from epub_tui.app import EpubTuiApp
 from epub_tui.catalog.client import CatalogFetchError
@@ -14,6 +15,7 @@ from epub_tui.config import AppConfig, CatalogConfig
 from epub_tui.downloads import DownloadError, DownloadProgress
 from epub_tui.library import BookRecord, LibraryRepository
 from epub_tui.reader import EpubOutlineItem, EpubPreview, EpubSection
+from epub_tui.tui.layout import KeyHintFooter
 from epub_tui.tui.reader import EpubReaderScreen
 from epub_tui.tui.screens import (
     CatalogAuthScreen,
@@ -23,6 +25,7 @@ from epub_tui.tui.screens import (
     EpubPreviewScreen,
     FeedScreen,
     LibraryScreen,
+    SetupScreen,
 )
 from epub_tui.tui.widgets import FeedEntryList, LibraryBookList
 
@@ -220,6 +223,18 @@ async def test_feed_screen_renders_feed_entries_and_busy_states() -> None:
         assert "Refreshing feed" in str(screen.query_one("#busy-indicator").renderable)
         screen.begin_navigation("Opening next page")
         assert "Opening next page" in str(screen.query_one("#busy-indicator").renderable)
+
+
+@pytest.mark.asyncio
+async def test_feed_screen_uses_custom_key_hint_footer() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(FeedScreen(_feed()))
+
+        footer = app.screen.query_one("#key-hints", KeyHintFooter)
+        assert FeedScreen.KEY_HINT in str(footer.render())
+        assert list(app.screen.query(Footer)) == []
 
 
 @pytest.mark.asyncio
@@ -963,17 +978,49 @@ async def test_primary_screens_show_key_hints(tmp_path: Path) -> None:
     app = EpubTuiApp(config=None)
 
     async with app.run_test():
+        assert isinstance(app.screen, SetupScreen)
+        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
+        assert list(app.screen.query(Footer)) == []
+
         await app.push_screen(CatalogsScreen(AppConfig(library_path=tmp_path)))
+        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
+        assert list(app.screen.query(Footer)) == []
         assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
 
         await app.push_screen(FeedScreen(_feed()))
+        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
+        assert list(app.screen.query(Footer)) == []
         assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
 
         await app.push_screen(EntryScreen(_entry()))
+        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
+        assert list(app.screen.query(Footer)) == []
+        assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+
+        await app.push_screen(DownloadStatusScreen())
+        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
+        assert list(app.screen.query(Footer)) == []
         assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
 
         await app.push_screen(LibraryScreen(library=repo))
+        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
+        assert list(app.screen.query(Footer)) == []
         assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+
+        preview = EpubPreview(
+            title="Preview Title",
+            outline=(EpubOutlineItem(title="Chapter One", section_index=0),),
+            sections=(EpubSection(heading="Chapter One", text="Plain text body."),),
+        )
+        await app.push_screen(EpubPreviewScreen(preview))
+        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
+        assert list(app.screen.query(Footer)) == []
+
+        await app.push_screen(
+            CatalogAuthScreen(CatalogConfig(name="Private", url="https://example.test/opds"))
+        )
+        assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
+        assert list(app.screen.query(Footer)) == []
 
 
 @pytest.mark.asyncio

@@ -5,10 +5,11 @@ from pathlib import Path
 from textual.app import ComposeResult
 from textual.containers import Container, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Static
+from textual.widgets import Header, Static
 
 from epub_tui.library import Bookmark, LibraryRepository, ReadingProgress
 from epub_tui.reader import EpubPreview
+from epub_tui.tui.layout import KeyHintFooter
 from epub_tui.tui.widgets import StatusLine
 
 
@@ -67,7 +68,7 @@ class EpubReaderScreen(Screen[None]):
                 with VerticalScroll(id="reader-body", classes="reader-body"):
                     yield Static(section.text, id="reader-body-text", classes="reader-text")
         yield StatusLine(self.KEY_HINT, id="status-line")
-        yield Footer()
+        yield KeyHintFooter(self.KEY_HINT)
 
     def on_mount(self) -> None:
         if self._progress_load_error is not None:
