@@ -24,6 +24,15 @@ class BookRecord:
     deleted_at: str | None = None
 
 
+@dataclass(frozen=True)
+class LibrarySearch:
+    query: str | None = None
+    source_catalog: str | None = None
+    media_type: str | None = None
+    is_read: bool | None = None
+    include_deleted: bool = False
+
+
 class LibraryRepository:
     def __init__(self, db_path: Path) -> None:
         self.db_path = Path(db_path)
@@ -133,6 +142,50 @@ class LibraryRepository:
                 {where_clause}
                 ORDER BY downloaded_at, id
                 """
+            ).fetchall()
+        return [self._book_from_row(row) for row in rows]
+
+    def search_books(self, search: LibrarySearch) -> list[BookRecord]:
+        clauses: list[str] = []
+        params: list[object] = []
+        if not search.include_deleted:
+            clauses.append("deleted_at IS NULL")
+        if search.query:
+            query = f"%{search.query.lower()}%"
+            clauses.append("(lower(title) LIKE ? OR lower(authors_json) LIKE ?)")
+            params.extend([query, query])
+        if search.source_catalog:
+            clauses.append("source_catalog = ?")
+            params.append(search.source_catalog)
+        if search.media_type:
+            clauses.append("media_type = ?")
+            params.append(search.media_type)
+        if search.is_read is not None:
+            clauses.append("is_read = ?")
+            params.append(int(search.is_read))
+
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT
+                    title,
+                    authors_json,
+                    identifiers_json,
+                    source_catalog,
+                    source_entry_url,
+                    acquisition_url,
+                    media_type,
+                    cover_image_url,
+                    cover_image_path,
+                    local_file_path,
+                    is_read,
+                    deleted_at
+                FROM books
+                {where_clause}
+                ORDER BY downloaded_at, id
+                """,
+                tuple(params),
             ).fetchall()
         return [self._book_from_row(row) for row in rows]
 
