@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
+from textual.containers import VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Footer, Header
+from textual.widgets import Footer, Header, Static
 
 from epub_tui.reader import EpubPreview
 from epub_tui.tui.widgets import StatusLine
@@ -32,7 +33,8 @@ class EpubReaderScreen(Screen[None]):
         yield Header()
         yield StatusLine(self.preview.title, id="reader-title")
         yield StatusLine(section.heading, id="reader-heading")
-        yield StatusLine(section.text, id="reader-body")
+        with VerticalScroll(id="reader-body"):
+            yield Static(section.text, id="reader-body-text")
         yield StatusLine(self.preview.progress_label(self.section_index), id="reader-progress")
         yield StatusLine(self.KEY_HINT, id="status-line")
         yield Footer()
@@ -54,7 +56,7 @@ class EpubReaderScreen(Screen[None]):
     def _refresh_section(self) -> None:
         section = self.preview.section_at(self.section_index)
         self.query_one("#reader-heading", StatusLine).set_message(section.heading)
-        self.query_one("#reader-body", StatusLine).set_message(section.text)
+        self.query_one("#reader-body-text", Static).update(section.text)
         self.query_one("#reader-progress", StatusLine).set_message(
             self.preview.progress_label(self.section_index)
         )

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from ebooklib import epub
+from textual.containers import VerticalScroll
 
 from epub_tui.app import EpubTuiApp
 from epub_tui.library import BookRecord, LibraryRepository
@@ -71,9 +72,24 @@ async def test_reader_screen_renders_current_section_and_progress() -> None:
 
         assert "Reader Title" in str(app.screen.query_one("#reader-title").renderable)
         assert "Chapter One" in str(app.screen.query_one("#reader-heading").renderable)
-        assert "First section body." in str(app.screen.query_one("#reader-body").renderable)
+        assert "First section body." in str(
+            app.screen.query_one("#reader-body-text").render()
+        )
         assert "1 / 2" in str(app.screen.query_one("#reader-progress").renderable)
         assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+
+
+@pytest.mark.asyncio
+async def test_reader_screen_body_is_scrollable() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(EpubReaderScreen(_preview()))
+
+        assert isinstance(app.screen.query_one("#reader-body"), VerticalScroll)
+        assert "First section body." in str(
+            app.screen.query_one("#reader-body-text").render()
+        )
 
 
 @pytest.mark.asyncio
@@ -86,13 +102,17 @@ async def test_reader_screen_next_and_previous_update_section_and_progress() -> 
         await pilot.press("n")
 
         assert "Chapter Two" in str(app.screen.query_one("#reader-heading").renderable)
-        assert "Second section body." in str(app.screen.query_one("#reader-body").renderable)
+        assert "Second section body." in str(
+            app.screen.query_one("#reader-body-text").render()
+        )
         assert "2 / 2" in str(app.screen.query_one("#reader-progress").renderable)
 
         await pilot.press("p")
 
         assert "Chapter One" in str(app.screen.query_one("#reader-heading").renderable)
-        assert "First section body." in str(app.screen.query_one("#reader-body").renderable)
+        assert "First section body." in str(
+            app.screen.query_one("#reader-body-text").render()
+        )
         assert "1 / 2" in str(app.screen.query_one("#reader-progress").renderable)
 
 

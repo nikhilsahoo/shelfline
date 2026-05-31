@@ -37,6 +37,10 @@
     color: $text-muted;
 }
 
+#reader-body {
+    height: 1fr;
+}
+
 .state-error {
     color: $error;
 }
