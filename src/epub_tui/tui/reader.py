@@ -7,16 +7,17 @@ from textual.containers import VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Static
 
-from epub_tui.library import LibraryRepository, ReadingProgress
+from epub_tui.library import Bookmark, LibraryRepository, ReadingProgress
 from epub_tui.reader import EpubPreview
 from epub_tui.tui.widgets import StatusLine
 
 
 class EpubReaderScreen(Screen[None]):
-    KEY_HINT = "Keys: n next | p previous | b back | l library | c catalogs"
+    KEY_HINT = "Keys: n next | p previous | m bookmark | b back | l library | c catalogs"
     BINDINGS = [
         ("n", "next_section", "Next"),
         ("p", "previous_section", "Previous"),
+        ("m", "add_bookmark", "Bookmark"),
         ("b", "go_back", "Back"),
     ]
 
@@ -72,6 +73,27 @@ class EpubReaderScreen(Screen[None]):
             self.app.pop_screen()
             return
         self.query_one("#status-line", StatusLine).set_message("No previous screen")
+
+    def action_add_bookmark(self) -> None:
+        if self.library is None or self.book_path is None:
+            self._set_status("Bookmark requires library-backed book")
+            return
+
+        section = self.preview.section_at(self.section_index)
+        try:
+            self.library.add_bookmark(
+                Bookmark(
+                    local_file_path=self.book_path,
+                    section_index=self.section_index,
+                    position=0,
+                    label=section.heading,
+                )
+            )
+        except Exception as error:
+            self._set_status(f"Bookmark not saved: {error}")
+            return
+
+        self._set_status("Bookmark added")
 
     def _refresh_section(self) -> None:
         section = self.preview.section_at(self.section_index)

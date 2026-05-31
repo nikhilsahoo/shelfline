@@ -33,6 +33,16 @@ class ReadingProgress:
 
 
 @dataclass(frozen=True)
+class Bookmark:
+    local_file_path: Path
+    section_index: int
+    position: int = 0
+    label: str = ""
+    id: int | None = None
+    created_at: str | None = None
+
+
+@dataclass(frozen=True)
 class LibrarySearch:
     query: str | None = None
     source_catalog: str | None = None
@@ -86,6 +96,18 @@ class LibraryRepository:
                     section_index INTEGER NOT NULL,
                     position INTEGER NOT NULL DEFAULT 0,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS bookmarks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    local_file_path TEXT NOT NULL,
+                    section_index INTEGER NOT NULL,
+                    position INTEGER NOT NULL DEFAULT 0,
+                    label TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
@@ -251,6 +273,56 @@ class LibraryRepository:
             ).fetchone()
         return self._reading_progress_from_row(row) if row is not None else None
 
+    def add_bookmark(self, bookmark: Bookmark) -> Bookmark:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO bookmarks (
+                    local_file_path,
+                    section_index,
+                    position,
+                    label
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    self._path_to_text(bookmark.local_file_path),
+                    bookmark.section_index,
+                    bookmark.position,
+                    bookmark.label,
+                ),
+            )
+            row = connection.execute(
+                """
+                SELECT id, local_file_path, section_index, position, label, created_at
+                FROM bookmarks
+                WHERE id = ?
+                """,
+                (cursor.lastrowid,),
+            ).fetchone()
+
+        return self._bookmark_from_row(row)
+
+    def list_bookmarks(self, local_file_path: Path) -> list[Bookmark]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, local_file_path, section_index, position, label, created_at
+                FROM bookmarks
+                WHERE local_file_path = ?
+                ORDER BY section_index, position, id
+                """,
+                (self._path_to_text(local_file_path),),
+            ).fetchall()
+        return [self._bookmark_from_row(row) for row in rows]
+
+    def delete_bookmark(self, bookmark_id: int) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM bookmarks WHERE id = ?",
+                (bookmark_id,),
+            )
+
     def delete_book(self, local_file_path: Path, remove_file: bool = True) -> None:
         path_text = self._path_to_text(Path(local_file_path))
         with self._connect() as connection:
@@ -278,6 +350,10 @@ class LibraryRepository:
 
             connection.execute(
                 "DELETE FROM reading_progress WHERE local_file_path = ?",
+                (path_text,),
+            )
+            connection.execute(
+                "DELETE FROM bookmarks WHERE local_file_path = ?",
                 (path_text,),
             )
 
@@ -360,4 +436,15 @@ class LibraryRepository:
             section_index=row["section_index"],
             position=row["position"],
             updated_at=row["updated_at"],
+        )
+
+    @staticmethod
+    def _bookmark_from_row(row: sqlite3.Row) -> Bookmark:
+        return Bookmark(
+            id=row["id"],
+            local_file_path=Path(row["local_file_path"]),
+            section_index=row["section_index"],
+            position=row["position"],
+            label=row["label"],
+            created_at=row["created_at"],
         )

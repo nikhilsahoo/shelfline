@@ -113,6 +113,9 @@ class _FailingProgressLibrary:
         if self.save_error is not None:
             raise self.save_error
 
+    def add_bookmark(self, bookmark: object) -> object:
+        raise RuntimeError("bookmark database unavailable")
+
 
 @pytest.mark.asyncio
 async def test_reader_screen_renders_current_section_and_progress() -> None:
@@ -327,6 +330,49 @@ async def test_reader_screen_works_without_persistence_inputs() -> None:
         assert app.screen.section_index == 1
         assert "Chapter Two" in str(app.screen.query_one("#reader-heading").renderable)
         assert "2 / 2" in str(app.screen.query_one("#reader-progress").renderable)
+
+
+@pytest.mark.asyncio
+async def test_reader_screen_adds_bookmark_with_current_section_heading(
+    tmp_path: Path,
+) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    book_path = tmp_path / "books" / "reader-book.epub"
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(
+            EpubReaderScreen(
+                _preview(),
+                section_index=1,
+                library=repo,
+                book_path=book_path,
+            )
+        )
+
+        await pilot.press("m")
+
+        bookmarks = repo.list_bookmarks(book_path)
+        assert len(bookmarks) == 1
+        assert bookmarks[0].section_index == 1
+        assert bookmarks[0].position == 0
+        assert bookmarks[0].label == "Chapter Two"
+        assert "Bookmark added" in str(app.screen.query_one("#status-line").renderable)
+
+
+@pytest.mark.asyncio
+async def test_reader_screen_reports_bookmark_requires_library_backed_book() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EpubReaderScreen(_preview()))
+
+        await pilot.press("m")
+
+        assert "Bookmark requires library-backed book" in str(
+            app.screen.query_one("#status-line").renderable
+        )
 
 
 @pytest.mark.asyncio
