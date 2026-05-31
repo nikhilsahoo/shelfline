@@ -58,6 +58,18 @@ class ReaderError(RuntimeError):
     """Raised when an EPUB cannot be converted into a text preview."""
 
 
+_STRUCTURAL_LABEL_TOKENS = {
+    "contents",
+    "guide",
+    "landmark",
+    "landmarks",
+    "nav",
+    "navigation",
+    "toc",
+}
+_STRUCTURAL_LABEL_PHRASES = ("table of contents",)
+
+
 class _HtmlTextExtractor(HTMLParser):
     _BLOCK_TAGS = {
         "address",
@@ -195,7 +207,7 @@ def _iter_text_sections(book: epub.EpubBook) -> list[EpubSection]:
             continue
         seen_ids.add(marker)
         section = _section_from_item(item)
-        if section is not None:
+        if section is not None and not _is_structural_document_item(item, section):
             sections.append(section)
 
     return sections
@@ -243,6 +255,61 @@ def _section_from_item(item: Any) -> EpubSection | None:
 
     heading = parser.heading or _item_title(item)
     return EpubSection(heading=heading, text=text)
+
+
+def _is_structural_document_item(item: Any, section: EpubSection) -> bool:
+    return _has_structural_label(item, section) and _looks_like_navigation_text(section.text)
+
+
+def _has_structural_label(item: Any, section: EpubSection) -> bool:
+    for value in _item_label_values(item, section):
+        label = _normalize_label(value)
+        if not label:
+            continue
+        if any(phrase in label for phrase in _STRUCTURAL_LABEL_PHRASES):
+            return True
+        if set(re.findall(r"[a-z0-9]+", label)) & _STRUCTURAL_LABEL_TOKENS:
+            return True
+    return False
+
+
+def _item_label_values(item: Any, section: EpubSection) -> list[str]:
+    values = [section.heading]
+    for attribute in ("id", "file_name", "title"):
+        value = getattr(item, attribute, None)
+        if value:
+            values.append(str(value))
+    name = getattr(item, "get_name", lambda: "")()
+    if name:
+        values.append(str(name))
+    item_id = getattr(item, "get_id", lambda: "")()
+    if item_id:
+        values.append(str(item_id))
+    return values
+
+
+def _looks_like_navigation_text(text: str) -> bool:
+    lines = [line for line in (_normalize_inline_text(line) for line in text.splitlines()) if line]
+    if len(lines) < 3:
+        return False
+
+    short_lines = sum(len(line) <= 48 for line in lines)
+    compact_lines = sum(len(re.findall(r"\w+", line)) <= 8 for line in lines)
+    prose_lines = sum(bool(re.search(r"[.!?;:]$", line)) for line in lines)
+    line_count = len(lines)
+
+    return (
+        short_lines / line_count >= 0.75
+        and compact_lines / line_count >= 0.75
+        and prose_lines / line_count <= 0.4
+    )
+
+
+def _normalize_label(value: str) -> str:
+    label = value.casefold()
+    label = re.sub(r"\.[a-z0-9]+$", "", label)
+    label = re.sub(r"[/\\._-]+", " ", label)
+    return _normalize_inline_text(label)
 
 
 def _item_title(item: Any) -> str:

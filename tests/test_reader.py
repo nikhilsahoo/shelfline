@@ -12,8 +12,14 @@ from epub_tui.reader import (
 )
 
 
-def _chapter(title: str, file_name: str, content: bytes) -> epub.EpubHtml:
-    chapter = epub.EpubHtml(title=title, file_name=file_name, lang="en")
+def _chapter(
+    title: str,
+    file_name: str,
+    content: bytes,
+    *,
+    uid: str | None = None,
+) -> epub.EpubHtml:
+    chapter = epub.EpubHtml(uid=uid, title=title, file_name=file_name, lang="en")
     chapter.content = content
     return chapter
 
@@ -195,6 +201,72 @@ def test_empty_sections_are_skipped(tmp_path: Path) -> None:
 
     assert [section.heading for section in preview.sections] == ["Readable"]
     assert preview.outline == (EpubOutlineItem(title="Readable", section_index=0),)
+
+
+def test_structural_guide_spine_document_is_skipped(tmp_path: Path) -> None:
+    epub_path = tmp_path / "guide-in-spine.epub"
+    intro = _chapter(
+        "Intro",
+        "intro.xhtml",
+        b"<html><body><h1>Intro</h1><p>This opening paragraph belongs in the preview.</p></body></html>",
+        uid="intro",
+    )
+    guide = _chapter(
+        "Guide",
+        "text/guide.xhtml",
+        b"""
+        <html><body>
+          <h1>Guide</h1>
+          <ul>
+            <li>Chapter 1</li>
+            <li>Chapter 2</li>
+            <li>Contents</li>
+            <li>I</li>
+            <li>II</li>
+            <li>III</li>
+          </ul>
+        </body></html>
+        """,
+        uid="publisher-guide",
+    )
+    chapter = _chapter(
+        "Chapter 1",
+        "chapter.xhtml",
+        b"<html><body><h1>Chapter 1</h1><p>The actual story starts here.</p></body></html>",
+        uid="chapter",
+    )
+    _write_epub(epub_path, [intro, guide, chapter], spine=["intro", "publisher-guide", "chapter"])
+
+    preview = extract_epub_preview(epub_path)
+
+    assert [section.heading for section in preview.sections] == ["Intro", "Chapter 1"]
+    assert "Contents" not in "\n".join(section.text for section in preview.sections)
+    assert preview.outline == (
+        EpubOutlineItem(title="Intro", section_index=0),
+        EpubOutlineItem(title="Chapter 1", section_index=1),
+    )
+
+
+def test_prose_chapter_with_guide_or_contents_words_is_kept(tmp_path: Path) -> None:
+    epub_path = tmp_path / "prose-guide.epub"
+    chapter = _chapter(
+        "A Guide to the Contents",
+        "chapter.xhtml",
+        b"""
+        <html><body>
+          <h1>A Guide to the Contents</h1>
+          <p>This chapter is a guide in the ordinary prose sense, not a navigation page.</p>
+          <p>Its contents unfold in full paragraphs with punctuation, sentences, and context.</p>
+        </body></html>
+        """,
+        uid="chapter",
+    )
+    _write_epub(epub_path, [chapter], spine=["chapter"])
+
+    preview = extract_epub_preview(epub_path)
+
+    assert [section.heading for section in preview.sections] == ["A Guide to the Contents"]
+    assert "ordinary prose sense" in preview.sections[0].text
 
 
 def test_reader_error_when_no_readable_text_sections_are_found(tmp_path: Path) -> None:
