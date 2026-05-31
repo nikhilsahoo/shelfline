@@ -13,7 +13,7 @@ from epub_tui.catalog.models import CatalogEntry, CatalogFeed
 from epub_tui.config import AppConfig, CatalogConfig
 from epub_tui.downloads import DownloadError, DownloadProgress
 from epub_tui.library import BookRecord, LibraryRepository, LibrarySearch
-from epub_tui.reader import EpubPreview, extract_epub_preview
+from epub_tui.reader import EpubPreview, ReaderError, extract_epub_preview
 from epub_tui.services import CatalogWorkflow
 from epub_tui.tui.layout import AppShell, replace_region
 from epub_tui.tui.reader import EpubReaderScreen
@@ -136,10 +136,14 @@ class CatalogsScreen(Screen[None]):
 
         self.selected_index = index
         catalog = self.config.catalogs[index]
-        feed = await self.workflow.fetch_catalog(
-            catalog,
-            on_status=lambda message: self.begin_outgoing_call(message),
-        )
+        try:
+            feed = await self.workflow.fetch_catalog(
+                catalog,
+                on_status=lambda message: self.begin_outgoing_call(message),
+            )
+        except Exception as exc:
+            self.finish_outgoing_call(f"Catalog failed: {_error_message(exc)}")
+            return
         self.finish_outgoing_call("Catalog loaded")
         await self.app.push_screen(FeedScreen(feed, catalog=catalog, workflow=self.workflow))
 
@@ -282,11 +286,15 @@ class FeedScreen(Screen[None]):
             if self.workflow is None or self.catalog is None:
                 self.finish_outgoing_call("Catalog workflow is not available")
                 return
-            feed = await self.workflow.fetch_catalog(
-                self.catalog,
-                url=entry.navigation_url,
-                on_status=lambda message: self._begin_outgoing_call(message),
-            )
+            try:
+                feed = await self.workflow.fetch_catalog(
+                    self.catalog,
+                    url=entry.navigation_url,
+                    on_status=lambda message: self._begin_outgoing_call(message),
+                )
+            except Exception as exc:
+                self.finish_outgoing_call(f"Catalog navigation failed: {_error_message(exc)}")
+                return
             self.finish_outgoing_call("Catalog loaded")
             await self.app.push_screen(
                 FeedScreen(
@@ -602,9 +610,14 @@ class LibraryScreen(Screen[None]):
         if book.media_type != "application/epub+zip":
             self._set_status("Preview is not implemented for this format")
             return
+        try:
+            preview = extract_epub_preview(book.local_file_path)
+        except (ReaderError, OSError) as exc:
+            self._set_status(f"Preview failed: {_error_message(exc)}")
+            return
         self.app.push_screen(
             EpubReaderScreen(
-                extract_epub_preview(book.local_file_path),
+                preview,
                 library=self.library,
                 book_path=book.local_file_path,
             )
@@ -672,6 +685,10 @@ class LibraryScreen(Screen[None]):
             )
             lines.append(f"  {book.local_file_path}")
         return "\n".join(lines)
+
+
+def _error_message(error: Exception) -> str:
+    return str(error) or error.__class__.__name__
 
 
 class EpubPreviewScreen(Screen[None]):

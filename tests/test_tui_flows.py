@@ -7,6 +7,7 @@ import pytest
 from ebooklib import epub
 
 from epub_tui.app import EpubTuiApp
+from epub_tui.catalog.client import CatalogFetchError
 from epub_tui.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
 from epub_tui.config import AppConfig, CatalogConfig
 from epub_tui.downloads import DownloadError, DownloadProgress
@@ -94,6 +95,24 @@ class MappingWorkflow(FakeWorkflow):
             on_status("Fetching catalog...")
             self.fetch_statuses.append("Fetching catalog...")
         return self.feeds[url]
+
+
+class FailingFetchWorkflow(FakeWorkflow):
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self.error = error
+
+    async def fetch_catalog(
+        self,
+        catalog: CatalogConfig,
+        url: str | None = None,
+        on_status: Any | None = None,
+    ) -> CatalogFeed:
+        self.fetch_urls.append(url)
+        if on_status is not None:
+            on_status("Fetching catalog...")
+            self.fetch_statuses.append("Fetching catalog...")
+        raise self.error
 
 
 def _entry() -> CatalogEntry:
@@ -220,6 +239,26 @@ async def test_catalog_screen_opens_feed_through_workflow() -> None:
 
 
 @pytest.mark.asyncio
+async def test_catalog_screen_reports_fetch_failure_without_opening_feed() -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FailingFetchWorkflow(CatalogFetchError("network unavailable"))
+    app = EpubTuiApp(
+        config=AppConfig(library_path=Path("books"), catalogs=[catalog]),
+        workflow=workflow,
+    )
+
+    async with app.run_test() as pilot:
+        await app.screen.open_catalog(0)
+        await pilot.pause()
+
+        assert isinstance(app.screen, CatalogsScreen)
+        assert "Catalog failed: network unavailable" in str(
+            app.screen.query_one("#status-line").renderable
+        )
+        assert "Fetching catalog" not in str(app.screen.query_one("#busy-indicator").renderable)
+
+
+@pytest.mark.asyncio
 async def test_catalog_screen_enter_binding_opens_feed_through_workflow() -> None:
     catalog = CatalogConfig(name="Example", url="https://example.test/opds")
     workflow = FakeWorkflow(feed=_feed())
@@ -328,6 +367,34 @@ async def test_feed_screen_navigation_entry_fetches_next_feed() -> None:
         assert isinstance(app.screen, FeedScreen)
         assert app.screen.feed.title == "Fiction Feed"
         assert "Root Feed > Fiction Feed" in str(app.screen.query_one("#feed-body").renderable)
+        assert workflow.fetch_urls == ["https://example.test/opds/fiction"]
+
+
+@pytest.mark.asyncio
+async def test_feed_screen_reports_navigation_fetch_failure_without_opening_feed() -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FailingFetchWorkflow(CatalogFetchError("parse failed"))
+    feed = CatalogFeed(
+        title="Root Feed",
+        source_url="https://example.test/opds",
+        updated=None,
+        entries=[_navigation_entry()],
+    )
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(feed, catalog=catalog, workflow=workflow))
+        original_screen = app.screen
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert app.screen is original_screen
+        assert isinstance(app.screen, FeedScreen)
+        assert app.screen.feed.title == "Root Feed"
+        assert "Catalog navigation failed: parse failed" in str(
+            app.screen.query_one("#status-line").renderable
+        )
+        assert "Fetching catalog" not in str(app.screen.query_one("#busy-indicator").renderable)
         assert workflow.fetch_urls == ["https://example.test/opds/fiction"]
 
 
@@ -543,6 +610,26 @@ async def test_library_screen_selects_and_opens_epub_reader(tmp_path: Path) -> N
         await pilot.press("enter")
 
         assert isinstance(app.screen, EpubReaderScreen)
+
+
+@pytest.mark.asyncio
+async def test_library_screen_reports_epub_preview_failure_without_opening_reader(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    stale_book = _book(tmp_path, is_read=False)
+    stale_book.local_file_path.unlink()
+    repo.add_book(stale_book)
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(LibraryScreen(library=repo))
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert isinstance(app.screen, LibraryScreen)
+        status = str(app.screen.query_one("#status-line").renderable)
+        assert "Preview failed:" in status
+        assert "Could not read EPUB preview" in status
 
 
 @pytest.mark.asyncio
