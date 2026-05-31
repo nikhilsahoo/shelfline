@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from ebooklib import epub
+from textual.containers import VerticalScroll
 
 from epub_tui.app import EpubTuiApp
 from epub_tui.catalog.client import CatalogFetchError
@@ -23,6 +24,7 @@ from epub_tui.tui.screens import (
     FeedScreen,
     LibraryScreen,
 )
+from epub_tui.tui.widgets import FeedEntryList, LibraryBookList
 
 
 class FakeWorkflow:
@@ -245,6 +247,67 @@ async def test_feed_screen_uses_entry_row_widgets_for_selection() -> None:
         rows = list(app.screen.query("#feed-body .feed-entry-row"))
         assert not rows[0].has_class("selected")
         assert rows[1].has_class("selected")
+
+
+@pytest.mark.asyncio
+async def test_feed_screen_many_entries_use_contiguous_scrollable_rows() -> None:
+    entries = [
+        CatalogEntry(
+            title=f"Visible Book {index + 1:02d}",
+            identifier=f"urn:book:{index + 1}",
+            updated=None,
+            authors=[f"Author {index + 1:02d}"],
+            acquisition_links=[
+                AcquisitionLink(
+                    href=f"https://example.test/books/{index + 1}.epub",
+                    relation="http://opds-spec.org/acquisition",
+                    media_type="application/epub+zip",
+                    title="EPUB",
+                )
+            ],
+        )
+        for index in range(28)
+    ]
+    feed = CatalogFeed(
+        title="Long Feed",
+        source_url="https://example.test/opds/long",
+        updated=None,
+        entries=entries,
+    )
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(feed))
+        await pilot.pause()
+
+        feed_body = app.screen.query_one("#feed-body")
+        rows = list(app.screen.query("#feed-body .feed-entry-row"))
+
+        assert isinstance(feed_body, FeedEntryList)
+        assert isinstance(feed_body, VerticalScroll)
+        assert [row.id for row in rows[:6]] == [
+            "feed-entry-0",
+            "feed-entry-1",
+            "feed-entry-2",
+            "feed-entry-3",
+            "feed-entry-4",
+            "feed-entry-5",
+        ]
+        assert [str(row.query_one(".row-index").render()) for row in rows[:6]] == [
+            "1.",
+            "2.",
+            "3.",
+            "4.",
+            "5.",
+            "6.",
+        ]
+        assert all(row.styles.margin.top == 0 for row in rows)
+
+        await pilot.press("j", "j")
+
+        rows = list(app.screen.query("#feed-body .feed-entry-row"))
+        assert rows[2].has_class("selected")
+        assert str(rows[2].query_one(".row-marker").render()) == ">"
 
 
 @pytest.mark.asyncio
@@ -664,6 +727,42 @@ async def test_library_screen_uses_book_row_widgets_for_selection(tmp_path: Path
         rows = list(app.screen.query("#library-body .library-book-row"))
         assert not rows[0].has_class("selected")
         assert rows[1].has_class("selected")
+
+
+@pytest.mark.asyncio
+async def test_library_screen_many_books_use_contiguous_scrollable_rows(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    for index in range(24):
+        repo.add_book(_book(tmp_path, title=f"Library Book {index + 1:02d}", is_read=False))
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(LibraryScreen(library=repo))
+        await pilot.pause()
+
+        library_body = app.screen.query_one("#library-body")
+        rows = list(app.screen.query("#library-body .library-book-row"))
+
+        assert isinstance(library_body, LibraryBookList)
+        assert isinstance(library_body, VerticalScroll)
+        assert [row.id for row in rows[:6]] == [
+            "library-book-0",
+            "library-book-1",
+            "library-book-2",
+            "library-book-3",
+            "library-book-4",
+            "library-book-5",
+        ]
+        assert [str(row.query_one(".row-index").render()) for row in rows[:6]] == [
+            "1.",
+            "2.",
+            "3.",
+            "4.",
+            "5.",
+            "6.",
+        ]
+        assert all(row.styles.margin.top == 0 for row in rows)
 
 
 @pytest.mark.asyncio

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from textual.app import ComposeResult
-from textual.containers import Container
+from textual.containers import Container, VerticalScroll
 from textual.widgets import Static
 
 from epub_tui.catalog.models import CatalogEntry
@@ -111,7 +111,7 @@ class CatalogEntryRow(Container):
         return f"{'>' if self.selected else ' '} {self.index + 1}. {label}"
 
 
-class FeedEntryList(Container):
+class FeedEntryList(VerticalScroll):
     def __init__(
         self,
         *,
@@ -257,7 +257,7 @@ class LibraryBookRow(Container):
         )
 
 
-class LibraryBookList(Container):
+class LibraryBookList(VerticalScroll):
     def __init__(
         self,
         books: list[BookRecord],

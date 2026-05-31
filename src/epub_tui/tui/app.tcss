@@ -61,7 +61,6 @@
 .library-book-row {
     layout: horizontal;
     padding: 0 1;
-    margin: 1 0 0 0;
     border-left: solid $primary;
     background: $surface;
 }
