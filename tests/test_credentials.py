@@ -1,4 +1,5 @@
 import builtins
+import traceback
 
 import pytest
 
@@ -51,6 +52,13 @@ def test_service_name_can_include_namespace() -> None:
     assert store.service_name("Private") == "epub-tui:config-a:Private"
 
 
+def test_service_name_disambiguates_delimiter_characters() -> None:
+    store_a = CredentialStore(MemoryCredentialBackend(), namespace="a")
+    store_b = CredentialStore(MemoryCredentialBackend(), namespace="a:b")
+
+    assert store_a.service_name("b:c") != store_b.service_name("c")
+
+
 class FailingCredentialBackend:
     def get_password(self, service: str, username: str) -> str | None:
         raise RuntimeError("keyring is unavailable")
@@ -82,6 +90,26 @@ def test_save_password_wraps_backend_failure_without_exposing_secret() -> None:
 
     assert "super-secret" not in str(excinfo.value)
     assert "standard-ebooks" not in str(excinfo.value)
+
+
+def test_save_password_traceback_does_not_expose_backend_secret() -> None:
+    store = CredentialStore(FailingCredentialBackend())
+    secret = "traceback" + "-secret"
+
+    with pytest.raises(CredentialError) as excinfo:
+        store.save_password("standard-ebooks", "reader", secret)
+
+    formatted = "".join(
+        traceback.format_exception(
+            type(excinfo.value),
+            excinfo.value,
+            excinfo.value.__traceback__,
+        )
+    )
+
+    assert excinfo.value.__cause__ is None
+    assert excinfo.value.__context__ is None
+    assert secret not in formatted
 
 
 def test_keyring_backend_imports_keyring_lazily(monkeypatch: pytest.MonkeyPatch) -> None:

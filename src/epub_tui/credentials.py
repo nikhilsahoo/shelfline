@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Protocol
+from urllib.parse import quote
 
 
 class CredentialError(RuntimeError):
@@ -63,15 +64,25 @@ class CredentialStore:
         self.namespace = namespace if namespace is not None else config_scope
 
     def service_name(self, catalog_name: str) -> str:
+        catalog_component = self._service_component(catalog_name)
         if self.namespace:
-            return f"{self.SERVICE_PREFIX}:{self.namespace}:{catalog_name}"
-        return f"{self.SERVICE_PREFIX}:{catalog_name}"
+            namespace_component = self._service_component(self.namespace)
+            return f"{self.SERVICE_PREFIX}:{namespace_component}:{catalog_component}"
+        return f"{self.SERVICE_PREFIX}:{catalog_component}"
+
+    def _service_component(self, value: str) -> str:
+        return quote(value, safe="")
 
     def save_password(self, catalog_name: str, username: str, password: str) -> None:
         try:
             self.backend.set_password(self.service_name(catalog_name), username, password)
-        except Exception as exc:
-            raise CredentialError("Failed to save credential") from exc
+        except Exception:
+            failed = True
+        else:
+            failed = False
+
+        if failed:
+            raise CredentialError("Failed to save credential") from None
 
     def get_password(self, catalog_name: str, username: str) -> str | None:
         try:
