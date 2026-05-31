@@ -39,6 +39,7 @@ class CatalogForm(Container):
         yield Input(placeholder="Basic Auth username", id="catalog-username")
         yield Input(placeholder="Basic Auth password", password=True, id="catalog-password")
         yield Button("Add catalog", id="add-catalog")
+        yield Button("Cancel", id="cancel-add-catalog")
 
 
 def _catalog_form() -> CatalogForm:
@@ -221,6 +222,15 @@ class CatalogsScreen(Screen[None]):
             return
         if event.button.id == "add-catalog":
             self.add_catalog_from_inputs()
+            return
+        if event.button.id == "cancel-add-catalog":
+            self.dismiss_add_catalog_form()
+
+    def dismiss_add_catalog_form(self) -> None:
+        self.query_one("#catalog-form", Container).display = False
+        self.query_one("#status-line", StatusLine).set_message(
+            self._selected_catalog_detail("Add catalog form hidden")
+        )
 
     def action_toggle_add_catalog(self) -> None:
         form = self.query_one("#catalog-form", Container)

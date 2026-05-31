@@ -1232,6 +1232,45 @@ async def test_catalog_screen_add_binding_toggles_form_without_pushing_screen(
 
 
 @pytest.mark.asyncio
+async def test_catalog_screen_add_form_has_visible_cancel_button(tmp_path: Path) -> None:
+    config = AppConfig(library_path=tmp_path, catalogs=[])
+    app = EpubTuiApp(config=config)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, CatalogsScreen)
+
+        screen.action_toggle_add_catalog()
+
+        button = screen.query_one("#cancel-add-catalog")
+        assert button.parent is screen.query_one("#catalog-form")
+
+
+@pytest.mark.asyncio
+async def test_catalog_screen_cancel_add_form_hides_form_without_pushing_screen(
+    tmp_path: Path,
+) -> None:
+    config = AppConfig(library_path=tmp_path, catalogs=[])
+    app = EpubTuiApp(config=config)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, CatalogsScreen)
+        screen.action_toggle_add_catalog()
+        await pilot.pause()
+        assert screen.query_one("#catalog-form").display is True
+
+        await pilot.click("#cancel-add-catalog")
+        await pilot.pause()
+
+        assert app.screen is screen
+        assert screen.query_one("#catalog-form").display is False
+        assert "Add catalog form hidden" in str(screen.query_one("#status-line").renderable)
+
+
+@pytest.mark.asyncio
 async def test_feed_screen_can_drill_down_multiple_navigation_levels() -> None:
     catalog = CatalogConfig(name="Example", url="https://example.test/opds")
     root_feed = CatalogFeed(
