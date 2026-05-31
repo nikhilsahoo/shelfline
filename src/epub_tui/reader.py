@@ -36,6 +36,12 @@ class EpubPreview:
             raise ReaderError("EPUB preview has no readable text sections")
         return self.sections[self._clamp_section_index(index)]
 
+    def progress_label(self, index: int) -> str:
+        if not self.sections:
+            raise ReaderError("EPUB preview has no readable text sections")
+        section_number = self._clamp_section_index(index) + 1
+        return f"{section_number} / {self.section_count}"
+
     def next_section_index(self, index: int) -> int:
         return self._clamp_section_index(self._clamp_section_index(index) + 1)
 

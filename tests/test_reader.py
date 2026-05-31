@@ -79,6 +79,15 @@ def test_epub_preview_section_at_clamps_to_valid_range() -> None:
     assert preview.section_at(99).heading == "Three"
 
 
+def test_epub_preview_progress_label_clamps_to_valid_range() -> None:
+    preview = _preview_with_sections("One", "Two", "Three")
+
+    assert preview.progress_label(-5) == "1 / 3"
+    assert preview.progress_label(0) == "1 / 3"
+    assert preview.progress_label(1) == "2 / 3"
+    assert preview.progress_label(99) == "3 / 3"
+
+
 def test_epub_preview_next_section_index_clamps_at_last_section() -> None:
     preview = _preview_with_sections("One", "Two", "Three")
 
@@ -104,6 +113,8 @@ def test_epub_preview_empty_sections_have_explicit_navigation_behavior() -> None
 
     with pytest.raises(ReaderError, match="has no readable text sections"):
         preview.section_at(0)
+    with pytest.raises(ReaderError, match="has no readable text sections"):
+        preview.progress_label(0)
     assert preview.next_section_index(0) == 0
     assert preview.previous_section_index(0) == 0
 
