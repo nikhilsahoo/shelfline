@@ -9,7 +9,7 @@ from ebooklib import epub
 from epub_tui.app import EpubTuiApp
 from epub_tui.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
 from epub_tui.config import AppConfig, CatalogConfig
-from epub_tui.downloads import DownloadProgress
+from epub_tui.downloads import DownloadError, DownloadProgress
 from epub_tui.library import BookRecord, LibraryRepository
 from epub_tui.reader import EpubOutlineItem, EpubPreview, EpubSection
 from epub_tui.tui.screens import (
@@ -24,9 +24,15 @@ from epub_tui.tui.screens import (
 
 
 class FakeWorkflow:
-    def __init__(self, feed: CatalogFeed | None = None, download_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        feed: CatalogFeed | None = None,
+        download_path: Path | None = None,
+        download_error: Exception | None = None,
+    ) -> None:
         self.feed = feed
         self.download_path = download_path or Path("downloaded.epub")
+        self.download_error = download_error
         self.fetch_statuses: list[str] = []
         self.download_statuses: list[str] = []
         self.downloads: list[tuple[CatalogConfig, CatalogEntry, AcquisitionLink | None]] = []
@@ -63,6 +69,8 @@ class FakeWorkflow:
             self.download_statuses.append("Starting download...")
         if on_progress is not None:
             on_progress(DownloadProgress(bytes_received=10, total_bytes=10))
+        if self.download_error is not None:
+            raise self.download_error
         if on_status is not None:
             on_status("Download complete")
             self.download_statuses.append("Download complete")
@@ -386,6 +394,7 @@ async def test_entry_screen_downloads_acquisition_through_workflow(tmp_path: Pat
         assert isinstance(app.screen, DownloadStatusScreen)
         assert workflow.downloads[0][2] == _entry().acquisition_links[1]
         assert "Download complete" in str(app.screen.query_one("#download-status").renderable)
+        assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
 
 
 @pytest.mark.asyncio
@@ -400,6 +409,60 @@ async def test_entry_screen_download_binding_uses_workflow(tmp_path: Path) -> No
 
         assert isinstance(app.screen, DownloadStatusScreen)
         assert workflow.downloads[0][2] == _entry().acquisition_links[0]
+
+
+@pytest.mark.asyncio
+async def test_download_status_back_returns_to_entry_screen(tmp_path: Path) -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FakeWorkflow(download_path=tmp_path / "Interesting Book.epub")
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
+        await pilot.press("d")
+        assert isinstance(app.screen, DownloadStatusScreen)
+
+        await pilot.press("b")
+
+        assert isinstance(app.screen, EntryScreen)
+
+
+@pytest.mark.asyncio
+async def test_download_status_library_binding_opens_library(tmp_path: Path) -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FakeWorkflow(download_path=tmp_path / "Interesting Book.epub")
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    app = EpubTuiApp(config=AppConfig(library_path=tmp_path), workflow=workflow, library=repo)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
+        await pilot.press("d")
+        assert isinstance(app.screen, DownloadStatusScreen)
+
+        await pilot.press("l")
+
+        assert isinstance(app.screen, LibraryScreen)
+
+
+@pytest.mark.asyncio
+async def test_entry_screen_download_error_stays_on_status_screen(tmp_path: Path) -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FakeWorkflow(
+        download_path=tmp_path / "Interesting Book.epub",
+        download_error=DownloadError("Download destination already exists"),
+    )
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
+        await pilot.press("d")
+        await pilot.pause()
+
+        assert isinstance(app.screen, DownloadStatusScreen)
+        assert "Download failed: Download destination already exists" in str(
+            app.screen.query_one("#download-status").renderable
+        )
 
 
 @pytest.mark.asyncio

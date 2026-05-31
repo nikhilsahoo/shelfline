@@ -11,7 +11,7 @@ from textual.widgets import Button, Footer, Header, Input, Static
 
 from epub_tui.catalog.models import CatalogEntry, CatalogFeed
 from epub_tui.config import AppConfig, CatalogConfig
-from epub_tui.downloads import DownloadProgress
+from epub_tui.downloads import DownloadError, DownloadProgress
 from epub_tui.library import BookRecord, LibraryRepository
 from epub_tui.reader import EpubPreview, extract_epub_preview
 from epub_tui.services import CatalogWorkflow
@@ -388,13 +388,17 @@ class EntryScreen(Screen[None]):
         status_screen = DownloadStatusScreen(status="Starting download...")
         await self.app.push_screen(status_screen)
         self.selected_index = index
-        await self.workflow.download_acquisition(
-            self.catalog,
-            self.entry,
-            link=self.entry.acquisition_links[index],
-            on_status=status_screen.set_status,
-            on_progress=lambda progress: status_screen.update_progress(progress),
-        )
+        try:
+            await self.workflow.download_acquisition(
+                self.catalog,
+                self.entry,
+                link=self.entry.acquisition_links[index],
+                on_status=status_screen.set_status,
+                on_progress=lambda progress: status_screen.update_progress(progress),
+            )
+        except DownloadError as exc:
+            status_screen.set_status(f"Download failed: {exc}")
+            return
         status_screen.set_status("Download complete")
 
     async def action_download_selected(self) -> None:
@@ -435,6 +439,11 @@ class EntryScreen(Screen[None]):
 
 
 class DownloadStatusScreen(Screen[None]):
+    KEY_HINT = "Keys: b back | l library | c catalogs"
+    BINDINGS = [
+        ("b", "go_back", "Back"),
+    ]
+
     def __init__(
         self,
         progress: DownloadProgress | None = None,
@@ -450,6 +459,7 @@ class DownloadStatusScreen(Screen[None]):
         yield Header()
         yield DownloadProgressDisplay(self.progress, id="download-progress")
         yield StatusLine(self.status, id="download-status")
+        yield StatusLine(self.KEY_HINT, id="status-line")
         yield Footer()
 
     def update_progress(self, progress: DownloadProgress, status: str | None = None) -> None:
@@ -463,6 +473,10 @@ class DownloadStatusScreen(Screen[None]):
         self.status = status
         if self.is_mounted:
             self.query_one("#download-status", StatusLine).set_message(status)
+
+    def action_go_back(self) -> None:
+        if len(self.app.screen_stack) > 1:
+            self.app.pop_screen()
 
 
 class LibraryScreen(Screen[None]):
