@@ -231,6 +231,8 @@ async def test_catalog_screen_selection_moves_before_opening() -> None:
 
     async with app.run_test() as pilot:
         await pilot.press("j")
+
+        assert "> Second" in str(app.screen.query_one("#catalog-list").renderable)
         await pilot.press("enter")
 
         assert isinstance(app.screen, FeedScreen)
@@ -275,6 +277,8 @@ async def test_feed_screen_selection_moves_before_opening_entry() -> None:
     async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(feed))
         await pilot.press("j")
+
+        assert "> 2. Interesting Book" in str(app.screen.query_one("#feed-body").renderable)
         await pilot.press("enter")
 
         assert isinstance(app.screen, EntryScreen)
@@ -368,6 +372,8 @@ async def test_entry_screen_selection_moves_before_downloading(tmp_path: Path) -
     async with app.run_test() as pilot:
         await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
         await pilot.press("j")
+
+        assert "> PDF" in str(app.screen.query_one("#entry-body").renderable)
         await pilot.press("d")
 
         assert isinstance(app.screen, DownloadStatusScreen)
@@ -426,12 +432,50 @@ async def test_library_screen_selects_and_opens_epub_preview(tmp_path: Path) -> 
         await app.push_screen(LibraryScreen(library=repo))
         await pilot.press("j")
 
+        assert "> 2. Second Book" in str(app.screen.query_one("#library-body").renderable)
         assert app.screen.selected_book is not None
         assert app.screen.selected_book.title == "Second Book"
 
         await pilot.press("enter")
 
         assert isinstance(app.screen, EpubPreviewScreen)
+
+
+@pytest.mark.asyncio
+async def test_library_screen_refresh_binding_loads_new_books(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(LibraryScreen(library=repo))
+        assert "No downloaded books" in str(app.screen.query_one("#library-body").renderable)
+
+        repo.add_book(_book(tmp_path, is_read=False))
+        await pilot.press("r")
+
+        assert "Interesting Book" in str(app.screen.query_one("#library-body").renderable)
+        assert "Library refreshed" in str(app.screen.query_one("#status-line").renderable)
+
+
+@pytest.mark.asyncio
+async def test_primary_screens_show_key_hints(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(CatalogsScreen(AppConfig(library_path=tmp_path)))
+        assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+
+        await app.push_screen(FeedScreen(_feed()))
+        assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+
+        await app.push_screen(EntryScreen(_entry()))
+        assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
+
+        await app.push_screen(LibraryScreen(library=repo))
+        assert "Keys:" in str(app.screen.query_one("#status-line").renderable)
 
 
 @pytest.mark.asyncio

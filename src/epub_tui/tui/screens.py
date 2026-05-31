@@ -58,6 +58,7 @@ class SetupScreen(Screen[None]):
 
 
 class CatalogsScreen(Screen[None]):
+    KEY_HINT = "Keys: enter open | j/k select | a add catalog | l library"
     BINDINGS = [
         Binding("enter", "open_selected", "Open", priority=True),
         Binding("j", "cursor_down", "Down", priority=True),
@@ -91,7 +92,7 @@ class CatalogsScreen(Screen[None]):
             yield Input(placeholder="Basic Auth password", password=True, id="catalog-password")
             yield Button("Add catalog", id="add-catalog")
         yield BusyIndicator(id="busy-indicator")
-        yield StatusLine("Ready", id="status-line")
+        yield StatusLine(self.KEY_HINT, id="status-line")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -137,6 +138,7 @@ class CatalogsScreen(Screen[None]):
         if not self.config.catalogs:
             return
         self.selected_index = max(0, min(len(self.config.catalogs) - 1, self.selected_index + delta))
+        self.query_one("#catalog-list", StatusLine).set_message(self._catalog_text())
         self.query_one("#status-line", StatusLine).set_message(
             f"Selected {self.config.catalogs[self.selected_index].name}"
         )
@@ -199,10 +201,14 @@ class CatalogsScreen(Screen[None]):
     def _catalog_text(self) -> str:
         if not self.config.catalogs:
             return "No catalogs configured"
-        return "\n".join(catalog.name for catalog in self.config.catalogs)
+        return "\n".join(
+            f"{'>' if index == self.selected_index else ' '} {catalog.name}"
+            for index, catalog in enumerate(self.config.catalogs)
+        )
 
 
 class FeedScreen(Screen[None]):
+    KEY_HINT = "Keys: enter open | j/k select | c catalogs | l library"
     BINDINGS = [
         ("enter", "open_selected", "Open"),
         ("j", "cursor_down", "Down"),
@@ -229,7 +235,7 @@ class FeedScreen(Screen[None]):
         yield Header()
         yield StatusLine(self._feed_text(), id="feed-body")
         yield BusyIndicator(id="busy-indicator")
-        yield StatusLine("Ready", id="status-line")
+        yield StatusLine(self.KEY_HINT, id="status-line")
         yield Footer()
 
     def begin_fetch(self, message: str = "Fetching feed") -> None:
@@ -279,6 +285,7 @@ class FeedScreen(Screen[None]):
         if not self.feed.entries:
             return
         self.selected_index = max(0, min(len(self.feed.entries) - 1, self.selected_index + delta))
+        self.query_one("#feed-body", StatusLine).set_message(self._feed_text())
         self.query_one("#status-line", StatusLine).set_message(
             f"Selected {self.feed.entries[self.selected_index].title}"
         )
@@ -297,11 +304,13 @@ class FeedScreen(Screen[None]):
 
         for index, entry in enumerate(self.feed.entries, start=1):
             authors = ", ".join(entry.authors) if entry.authors else "Unknown author"
-            lines.append(f"{index}. {entry.title} - {authors}")
+            marker = ">" if index - 1 == self.selected_index else " "
+            lines.append(f"{marker} {index}. {entry.title} - {authors}")
         return "\n".join(lines)
 
 
 class EntryScreen(Screen[None]):
+    KEY_HINT = "Keys: d download | j/k select | c catalogs | l library"
     BINDINGS = [
         ("d", "download_selected", "Download"),
         ("j", "cursor_down", "Down"),
@@ -334,7 +343,7 @@ class EntryScreen(Screen[None]):
         )
         yield StatusLine(self._entry_text(), id="entry-body")
         yield BusyIndicator(id="busy-indicator")
-        yield StatusLine("Ready", id="status-line")
+        yield StatusLine(self.KEY_HINT, id="status-line")
         yield Footer()
 
     def begin_download(self, message: str = "Starting download") -> None:
@@ -378,6 +387,7 @@ class EntryScreen(Screen[None]):
         if not self.entry.acquisition_links:
             return
         self.selected_index = max(0, min(len(self.entry.acquisition_links) - 1, self.selected_index + delta))
+        self.query_one("#entry-body", StatusLine).set_message(self._entry_text())
         link = self.entry.acquisition_links[self.selected_index]
         label = link.title or link.media_type
         self.query_one("#status-line", StatusLine).set_message(f"Selected {label}")
@@ -393,10 +403,11 @@ class EntryScreen(Screen[None]):
             return "\n".join(lines)
 
         lines.append("Acquisitions:")
-        for link in self.entry.acquisition_links:
+        for index, link in enumerate(self.entry.acquisition_links):
             label = link.title or link.media_type
             size = f" ({link.size} bytes)" if link.size is not None else ""
-            lines.append(f"- {label}: {link.media_type} {link.href}{size}")
+            marker = ">" if index == self.selected_index else " "
+            lines.append(f"{marker} {label}: {link.media_type} {link.href}{size}")
         return "\n".join(lines)
 
 
@@ -432,12 +443,14 @@ class DownloadStatusScreen(Screen[None]):
 
 
 class LibraryScreen(Screen[None]):
+    KEY_HINT = "Keys: enter preview | j/k select | r refresh | m read | x delete | c catalogs"
     BINDINGS = [
         ("enter", "open_selected", "Open"),
         ("j", "cursor_down", "Down"),
         ("down", "cursor_down", "Down"),
         ("k", "cursor_up", "Up"),
         ("up", "cursor_up", "Up"),
+        ("r", "refresh_library", "Refresh"),
     ]
 
     def __init__(
@@ -457,7 +470,7 @@ class LibraryScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         yield Header()
         yield StatusLine(self._library_text(), id="library-body")
-        yield StatusLine("Ready", id="status-line")
+        yield StatusLine(self.KEY_HINT, id="status-line")
         yield Footer()
 
     def action_toggle_read(self) -> None:
@@ -499,6 +512,10 @@ class LibraryScreen(Screen[None]):
     def action_cursor_up(self) -> None:
         self._move_selection(-1)
 
+    def action_refresh_library(self) -> None:
+        self.refresh_books()
+        self._set_status("Library refreshed")
+
     @property
     def selected_book(self) -> BookRecord | None:
         if not self.books:
@@ -520,6 +537,7 @@ class LibraryScreen(Screen[None]):
         if not self.books:
             return
         self.selected_index = max(0, min(len(self.books) - 1, self.selected_index + delta))
+        self.query_one("#library-body", StatusLine).set_message(self._library_text())
         self._set_status(f"Selected {self.books[self.selected_index].title}")
 
     def _library_text(self) -> str:
@@ -530,8 +548,9 @@ class LibraryScreen(Screen[None]):
         for index, book in enumerate(self.books, start=1):
             authors = ", ".join(book.authors) if book.authors else "Unknown author"
             read_state = "Read" if book.is_read else "Unread"
-            lines.append(f"{index}. {book.title} - {authors} [{read_state}]")
-            lines.append(str(book.local_file_path))
+            marker = ">" if index - 1 == self.selected_index else " "
+            lines.append(f"{marker} {index}. {book.title} - {authors} [{read_state}]")
+            lines.append(f"  {book.local_file_path}")
         return "\n".join(lines)
 
 
