@@ -562,6 +562,42 @@ async def test_library_screen_refresh_binding_loads_new_books(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
+async def test_library_screen_filters_books_by_search_text(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, title="Dune", is_read=False))
+    repo.add_book(_book(tmp_path, title="Foundation", is_read=True))
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(LibraryScreen(library=repo))
+        await pilot.press("/")
+        app.screen.query_one("#library-search").value = "dune"
+        await pilot.press("enter")
+
+        rendered = str(app.screen.query_one("#library-body").renderable)
+        assert "Dune" in rendered
+        assert "Foundation" not in rendered
+        assert "Search: dune" in str(app.screen.query_one("#status-line").renderable)
+
+
+@pytest.mark.asyncio
+async def test_library_screen_rows_show_format_catalog_and_progress(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, title="Dune", is_read=True))
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(LibraryScreen(library=repo))
+        rendered = str(app.screen.query_one("#library-body").renderable)
+
+        assert "application/epub+zip" in rendered
+        assert "Example" in rendered
+        assert "Read" in rendered
+
+
+@pytest.mark.asyncio
 async def test_primary_screens_show_key_hints(tmp_path: Path) -> None:
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()

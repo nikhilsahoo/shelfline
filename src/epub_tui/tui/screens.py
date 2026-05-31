@@ -12,7 +12,7 @@ from textual.widgets import Button, Footer, Header, Input, Static
 from epub_tui.catalog.models import CatalogEntry, CatalogFeed
 from epub_tui.config import AppConfig, CatalogConfig
 from epub_tui.downloads import DownloadError, DownloadProgress
-from epub_tui.library import BookRecord, LibraryRepository
+from epub_tui.library import BookRecord, LibraryRepository, LibrarySearch
 from epub_tui.reader import EpubPreview, extract_epub_preview
 from epub_tui.services import CatalogWorkflow
 from epub_tui.tui.layout import AppShell, replace_region
@@ -506,9 +506,10 @@ class DownloadStatusScreen(Screen[None]):
 
 
 class LibraryScreen(Screen[None]):
-    KEY_HINT = "Keys: enter preview | j/k select | r refresh | m read | x delete | c catalogs"
+    KEY_HINT = "Keys: enter preview | j/k select | / search | r refresh | m read | x delete | c catalogs"
     BINDINGS = [
         ("enter", "open_selected", "Open"),
+        ("/", "focus_search", "Search"),
         ("j", "cursor_down", "Down"),
         ("down", "cursor_down", "Down"),
         ("k", "cursor_up", "Up"),
@@ -527,6 +528,7 @@ class LibraryScreen(Screen[None]):
         self.library = library
         self.books = list(books) if books is not None else []
         self.selected_index = 0
+        self.search_active = False
         if self.library is not None:
             self.books = self.library.list_books()
 
@@ -536,12 +538,38 @@ class LibraryScreen(Screen[None]):
     def on_mount(self) -> None:
         replace_region(
             self.query_one("#main-region"),
+            Input(placeholder="Search library", disabled=True, id="library-search"),
             StatusLine(self._library_text(), id="library-body"),
         )
         replace_region(
             self.query_one("#detail-region"),
             StatusLine(self.KEY_HINT, id="status-line"),
         )
+        self.app.set_focus(None)
+        self.call_after_refresh(lambda: self.app.set_focus(None))
+
+    def action_focus_search(self) -> None:
+        search = self.query_one("#library-search", Input)
+        search.disabled = False
+        self.search_active = True
+        self.app.set_focus(search)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "library-search":
+            self.apply_search(event.value)
+            event.input.disabled = True
+            self.search_active = False
+            self.app.set_focus(None)
+
+    def apply_search(self, query: str) -> None:
+        if self.library is None:
+            self._set_status("Library is not available")
+            return
+        cleaned = query.strip()
+        self.books = self.library.search_books(LibrarySearch(query=cleaned or None))
+        self.selected_index = 0
+        self.query_one("#library-body", StatusLine).set_message(self._library_text())
+        self._set_status(f"Search: {cleaned}" if cleaned else "Search cleared")
 
     def action_toggle_read(self) -> None:
         book = self.selected_book
@@ -574,6 +602,13 @@ class LibraryScreen(Screen[None]):
         self.app.push_screen(EpubPreviewScreen(extract_epub_preview(book.local_file_path)))
 
     def action_open_selected(self) -> None:
+        if self.search_active:
+            search = self.query_one("#library-search", Input)
+            self.apply_search(search.value)
+            search.disabled = True
+            self.search_active = False
+            self.app.set_focus(None)
+            return
         self.open_preview()
 
     def action_cursor_down(self) -> None:
@@ -619,7 +654,10 @@ class LibraryScreen(Screen[None]):
             authors = ", ".join(book.authors) if book.authors else "Unknown author"
             read_state = "Read" if book.is_read else "Unread"
             marker = ">" if index - 1 == self.selected_index else " "
-            lines.append(f"{marker} {index}. {book.title} - {authors} [{read_state}]")
+            lines.append(
+                f"{marker} {index}. {book.title} - {authors} [{read_state}] "
+                f"{book.media_type} | {book.source_catalog}"
+            )
             lines.append(f"  {book.local_file_path}")
         return "\n".join(lines)
 
