@@ -582,6 +582,57 @@ async def test_library_screen_filters_books_by_search_text(tmp_path: Path) -> No
 
 
 @pytest.mark.asyncio
+async def test_library_screen_preserves_search_during_library_actions(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, title="Dune", is_read=False))
+    repo.add_book(_book(tmp_path, title="Dune Messiah", is_read=False))
+    repo.add_book(_book(tmp_path, title="Foundation", is_read=False))
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(LibraryScreen(library=repo))
+        await pilot.press("/")
+        app.screen.query_one("#library-search").value = "dune"
+        await pilot.press("enter")
+
+        await pilot.press("r")
+
+        rendered = str(app.screen.query_one("#library-body").renderable)
+        assert "Dune" in rendered
+        assert "Dune Messiah" in rendered
+        assert "Foundation" not in rendered
+        assert "Library refreshed" in str(app.screen.query_one("#status-line").renderable)
+
+        app.screen.action_toggle_read()
+
+        rendered = str(app.screen.query_one("#library-body").renderable)
+        assert "Dune" in rendered
+        assert "Dune Messiah" in rendered
+        assert "Foundation" not in rendered
+        assert "Read status updated" in str(app.screen.query_one("#status-line").renderable)
+
+        app.screen.selected_index = 1
+        app.screen.action_delete_book()
+
+        rendered = str(app.screen.query_one("#library-body").renderable)
+        assert "Dune" in rendered
+        assert "Dune Messiah" not in rendered
+        assert "Foundation" not in rendered
+        assert app.screen.selected_index == 0
+        assert "Book deleted" in str(app.screen.query_one("#status-line").renderable)
+
+        await pilot.press("/")
+        app.screen.query_one("#library-search").value = ""
+        await pilot.press("enter")
+
+        rendered = str(app.screen.query_one("#library-body").renderable)
+        assert "Dune" in rendered
+        assert "Foundation" in rendered
+        assert "Search cleared" in str(app.screen.query_one("#status-line").renderable)
+
+
+@pytest.mark.asyncio
 async def test_library_screen_rows_show_format_catalog_and_progress(tmp_path: Path) -> None:
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()

@@ -529,6 +529,7 @@ class LibraryScreen(Screen[None]):
         self.books = list(books) if books is not None else []
         self.selected_index = 0
         self.search_active = False
+        self.current_search_query = ""
         if self.library is not None:
             self.books = self.library.list_books()
 
@@ -566,6 +567,7 @@ class LibraryScreen(Screen[None]):
             self._set_status("Library is not available")
             return
         cleaned = query.strip()
+        self.current_search_query = cleaned
         self.books = self.library.search_books(LibrarySearch(query=cleaned or None))
         self.selected_index = 0
         self.query_one("#library-body", StatusLine).set_message(self._library_text())
@@ -630,7 +632,10 @@ class LibraryScreen(Screen[None]):
 
     def refresh_books(self) -> None:
         if self.library is not None:
-            self.books = self.library.list_books()
+            if self.current_search_query:
+                self.books = self.library.search_books(LibrarySearch(query=self.current_search_query))
+            else:
+                self.books = self.library.list_books()
         if self.selected_index >= len(self.books):
             self.selected_index = max(0, len(self.books) - 1)
         self.query_one("#library-body", StatusLine).set_message(self._library_text())
