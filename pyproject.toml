@@ -12,6 +12,7 @@ dependencies = [
   "ebooklib>=0.18",
   "feedparser>=6.0.11",
   "httpx>=0.27",
+  "keyring>=25.0",
   "rich>=13.7",
   "textual>=0.80",
   "textual-image>=0.8",
