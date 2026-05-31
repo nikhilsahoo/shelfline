@@ -276,6 +276,11 @@ class LibraryRepository:
             if cursor.rowcount == 0:
                 return
 
+            connection.execute(
+                "DELETE FROM reading_progress WHERE local_file_path = ?",
+                (path_text,),
+            )
+
             deleted_path = Path(row["local_file_path"])
             if remove_file and deleted_path.exists():
                 deleted_path.unlink()
