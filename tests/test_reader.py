@@ -6,6 +6,7 @@ from ebooklib import epub
 from epub_tui.reader import (
     EpubOutlineItem,
     EpubPreview,
+    EpubSection,
     ReaderError,
     extract_epub_preview,
 )
@@ -37,6 +38,15 @@ def _write_epub(
     epub.write_epub(str(epub_path), book)
 
 
+def _preview_with_sections(*headings: str) -> EpubPreview:
+    sections = tuple(EpubSection(heading=heading, text=f"{heading} text") for heading in headings)
+    outline = tuple(
+        EpubOutlineItem(title=section.heading, section_index=index)
+        for index, section in enumerate(sections)
+    )
+    return EpubPreview(title="Navigation Sample", outline=outline, sections=sections)
+
+
 def test_extract_epub_preview_reads_spine_text_with_outline(tmp_path: Path) -> None:
     epub_path = tmp_path / "sample.epub"
     chapter = _chapter(
@@ -53,6 +63,40 @@ def test_extract_epub_preview_reads_spine_text_with_outline(tmp_path: Path) -> N
     assert preview.sections[0].heading == "Chapter One"
     assert "Hello terminal reader." in preview.sections[0].text
     assert preview.outline == (EpubOutlineItem(title="Chapter One", section_index=0),)
+
+
+def test_epub_preview_section_count_returns_number_of_sections() -> None:
+    preview = _preview_with_sections("One", "Two", "Three")
+
+    assert preview.section_count == 3
+
+
+def test_epub_preview_section_at_clamps_to_valid_range() -> None:
+    preview = _preview_with_sections("One", "Two", "Three")
+
+    assert preview.section_at(-5).heading == "One"
+    assert preview.section_at(1).heading == "Two"
+    assert preview.section_at(99).heading == "Three"
+
+
+def test_epub_preview_next_section_index_clamps_at_last_section() -> None:
+    preview = _preview_with_sections("One", "Two", "Three")
+
+    assert preview.next_section_index(-5) == 0
+    assert preview.next_section_index(0) == 1
+    assert preview.next_section_index(1) == 2
+    assert preview.next_section_index(2) == 2
+    assert preview.next_section_index(99) == 2
+
+
+def test_epub_preview_previous_section_index_clamps_at_zero() -> None:
+    preview = _preview_with_sections("One", "Two", "Three")
+
+    assert preview.previous_section_index(-5) == 0
+    assert preview.previous_section_index(0) == 0
+    assert preview.previous_section_index(1) == 0
+    assert preview.previous_section_index(2) == 1
+    assert preview.previous_section_index(99) == 2
 
 
 def test_title_falls_back_to_path_stem_when_metadata_is_missing(tmp_path: Path) -> None:

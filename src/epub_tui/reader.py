@@ -27,6 +27,22 @@ class EpubPreview:
     outline: tuple[EpubOutlineItem, ...]
     sections: tuple[EpubSection, ...]
 
+    @property
+    def section_count(self) -> int:
+        return len(self.sections)
+
+    def section_at(self, index: int) -> EpubSection:
+        return self.sections[self._clamp_section_index(index)]
+
+    def next_section_index(self, index: int) -> int:
+        return self._clamp_section_index(index + 1)
+
+    def previous_section_index(self, index: int) -> int:
+        return self._clamp_section_index(index - 1)
+
+    def _clamp_section_index(self, index: int) -> int:
+        return max(0, min(index, self.section_count - 1))
+
 
 class ReaderError(RuntimeError):
     """Raised when an EPUB cannot be converted into a text preview."""
