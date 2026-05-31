@@ -155,6 +155,44 @@ async def test_reader_screen_next_resets_body_scroll_to_top() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reader_screen_next_at_last_section_preserves_body_scroll() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test(size=(80, 20)) as pilot:
+        await app.push_screen(EpubReaderScreen(_long_preview(), section_index=1))
+        reader_body = app.screen.query_one("#reader-body", VerticalScroll)
+        reader_body.scroll_to(y=20, animate=False)
+        await pilot.pause()
+
+        assert reader_body.scroll_y > 0
+
+        await pilot.press("n")
+        await pilot.pause()
+
+        assert reader_body.scroll_y > 0
+        assert "2 / 2" in str(app.screen.query_one("#reader-progress").renderable)
+
+
+@pytest.mark.asyncio
+async def test_reader_screen_previous_at_first_section_preserves_body_scroll() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test(size=(80, 20)) as pilot:
+        await app.push_screen(EpubReaderScreen(_long_preview()))
+        reader_body = app.screen.query_one("#reader-body", VerticalScroll)
+        reader_body.scroll_to(y=20, animate=False)
+        await pilot.pause()
+
+        assert reader_body.scroll_y > 0
+
+        await pilot.press("p")
+        await pilot.pause()
+
+        assert reader_body.scroll_y > 0
+        assert "1 / 2" in str(app.screen.query_one("#reader-progress").renderable)
+
+
+@pytest.mark.asyncio
 async def test_library_screen_enter_on_epub_opens_reader_screen(tmp_path: Path) -> None:
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()

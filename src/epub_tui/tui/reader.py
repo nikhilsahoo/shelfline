@@ -40,11 +40,17 @@ class EpubReaderScreen(Screen[None]):
         yield Footer()
 
     def action_next_section(self) -> None:
-        self.section_index = self.preview.next_section_index(self.section_index)
+        next_index = self.preview.next_section_index(self.section_index)
+        if next_index == self.section_index:
+            return
+        self.section_index = next_index
         self._refresh_section()
 
     def action_previous_section(self) -> None:
-        self.section_index = self.preview.previous_section_index(self.section_index)
+        previous_index = self.preview.previous_section_index(self.section_index)
+        if previous_index == self.section_index:
+            return
+        self.section_index = previous_index
         self._refresh_section()
 
     def action_go_back(self) -> None:
