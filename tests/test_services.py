@@ -6,6 +6,7 @@ import pytest
 from pytest_httpx import HTTPXMock
 
 from epub_tui.config import AppConfig, CatalogConfig, load_config
+from epub_tui.credentials import CredentialStore, MemoryCredentialBackend
 from epub_tui.downloads import DownloadError, DownloadProgress
 from epub_tui.services import CatalogWorkflow
 
@@ -112,6 +113,74 @@ async def test_workflow_uses_auth_without_exposing_credentials_in_callbacks(
     assert progress[-1] == DownloadProgress(bytes_received=10, total_bytes=10)
     assert "alice" not in " ".join(statuses)
     assert "secret" not in " ".join(statuses)
+
+
+@pytest.mark.asyncio
+async def test_workflow_resolves_password_ref_for_same_origin_fetch_and_download(
+    tmp_path: Path,
+    fixture_dir: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = (fixture_dir / "opds" / "acquisition.xml").read_text(encoding="utf-8")
+    expected_auth = "Basic " + base64.b64encode(b"alice:secret").decode("ascii")
+    store = CredentialStore(MemoryCredentialBackend())
+    store.save_password("Private", "alice", "secret")
+
+    def assert_authorized(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == expected_auth
+        if request.url.path.endswith(".epub"):
+            return httpx.Response(200, content=b"epub bytes")
+        return httpx.Response(200, text=feed_xml)
+
+    catalog = CatalogConfig(
+        name="Private",
+        url="https://example.test/private",
+        auth={"username": "alice", "password_ref": "epub-tui:Private"},
+    )
+    workflow = CatalogWorkflow(
+        config=AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        state_db=tmp_path / "state.db",
+        http_client=httpx.AsyncClient(),
+        credentials=store,
+    )
+    httpx_mock.add_callback(assert_authorized, url="https://example.test/private")
+    httpx_mock.add_callback(assert_authorized, url="https://example.test/private/books/sample.epub")
+
+    feed = await workflow.fetch_catalog(catalog)
+    downloaded = await workflow.download_best_epub(catalog, feed.entries[0])
+
+    assert downloaded.read_bytes() == b"epub bytes"
+
+
+@pytest.mark.asyncio
+async def test_workflow_omits_auth_when_password_ref_lookup_misses(
+    tmp_path: Path,
+    fixture_dir: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = (fixture_dir / "opds" / "acquisition.xml").read_text(encoding="utf-8")
+    store = CredentialStore(MemoryCredentialBackend())
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "authorization" not in request.headers
+        return httpx.Response(200, text=feed_xml)
+
+    catalog = CatalogConfig(
+        name="Private",
+        url="https://example.test/private",
+        auth={"username": "alice", "password_ref": "epub-tui:Private"},
+    )
+    workflow = CatalogWorkflow(
+        config=AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        state_db=tmp_path / "state.db",
+        http_client=httpx.AsyncClient(),
+        credentials=store,
+    )
+    httpx_mock.add_callback(handler, url="https://example.test/private")
+
+    feed = await workflow.fetch_catalog(catalog)
+
+    assert feed.title == "Fiction"
 
 
 @pytest.mark.asyncio

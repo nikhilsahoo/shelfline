@@ -12,6 +12,7 @@ from epub_tui.catalog.client import CatalogClient
 from epub_tui.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
 from epub_tui.catalog.parser import parse_opds_feed, sanitize_text_url_credentials, sanitize_url_credentials
 from epub_tui.config import AppConfig, CatalogConfig
+from epub_tui.credentials import CredentialStore
 from epub_tui.downloads import DownloadError, DownloadProgress, DownloadService
 from epub_tui.library import BookRecord, LibraryRepository
 
@@ -46,8 +47,10 @@ class CatalogWorkflow:
         config: AppConfig,
         state_db: Path,
         http_client: httpx.AsyncClient | None = None,
+        credentials: CredentialStore | None = None,
     ) -> None:
         self.config = config
+        self._credentials = credentials or CredentialStore()
         self._http_client = http_client or httpx.AsyncClient(
             timeout=60.0,
             follow_redirects=True,
@@ -66,7 +69,7 @@ class CatalogWorkflow:
         target_url = sanitize_url_credentials(url or catalog.url)
         _emit(on_status, "Fetching catalog...")
         body = await self._catalog_client.fetch_feed(
-            _catalog_for_url(catalog, target_url),
+            _catalog_for_url(catalog, target_url, self._credentials),
             target_url,
         )
         feed = parse_opds_feed(body, source_url=_opds_parse_base_url(target_url))
@@ -117,7 +120,7 @@ class CatalogWorkflow:
             url=href,
             destination_dir=self.config.library_path,
             filename=_safe_acquisition_filename(entry.title, selected_link),
-            auth=_auth_tuple(catalog) if _same_origin(catalog.url, href) else None,
+            auth=_auth_tuple(catalog, self._credentials) if _same_origin(catalog.url, href) else None,
             on_progress=on_progress,
         )
         self.library.add_book(
@@ -147,15 +150,44 @@ def _emit(callback: StatusCallback | None, message: str) -> None:
         callback(message)
 
 
-def _auth_tuple(catalog: CatalogConfig) -> tuple[str, str] | None:
+def _auth_tuple(
+    catalog: CatalogConfig,
+    credentials: CredentialStore | None = None,
+) -> tuple[str, str] | None:
     if catalog.auth is None:
         return None
-    return catalog.auth["username"], catalog.auth["password"]
+    username = catalog.auth.get("username")
+    if not username:
+        return None
+    password = catalog.auth.get("password")
+    if password is None:
+        password_ref = catalog.auth.get("password_ref")
+        if password_ref is not None and credentials is not None:
+            try:
+                password = credentials.backend.get_password(password_ref, username)
+            except Exception:
+                password = None
+    if password is None:
+        return None
+    return username, password
 
 
-def _catalog_for_url(catalog: CatalogConfig, url: str) -> CatalogConfig:
-    if catalog.auth is None or _same_origin(catalog.url, url):
+def _catalog_for_url(
+    catalog: CatalogConfig,
+    url: str,
+    credentials: CredentialStore | None = None,
+) -> CatalogConfig:
+    if catalog.auth is None:
         return replace(catalog, url=sanitize_url_credentials(catalog.url))
+    if _same_origin(catalog.url, url):
+        auth = _auth_tuple(catalog, credentials)
+        if auth is None:
+            return replace(catalog, url=sanitize_url_credentials(catalog.url), auth=None)
+        return replace(
+            catalog,
+            url=sanitize_url_credentials(catalog.url),
+            auth={"username": auth[0], "password": auth[1]},
+        )
     return replace(catalog, auth=None)
 
 

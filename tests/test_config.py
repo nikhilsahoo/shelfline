@@ -43,6 +43,33 @@ def test_load_config_with_catalog_and_basic_auth(tmp_path: Path) -> None:
     assert config.preferences == {"theme": "textual-dark"}
 
 
+def test_load_config_with_catalog_auth_password_ref(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    library_path = tmp_path / "library"
+    config_path.write_text(
+        json.dumps(
+            {
+                "library_path": str(library_path),
+                "catalogs": [
+                    {
+                        "name": "Private",
+                        "url": "https://example.test/opds",
+                        "auth": {"username": "alice", "password_ref": "epub-tui:Private"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.catalogs[0].auth == {
+        "username": "alice",
+        "password_ref": "epub-tui:Private",
+    }
+
+
 def test_load_config_extracts_embedded_url_credentials(tmp_path: Path) -> None:
     config_path = tmp_path / "config.json"
     library_path = tmp_path / "library"
@@ -130,6 +157,34 @@ def test_save_and_redact_config_do_not_persist_embedded_url_credentials(tmp_path
     assert "alice:secret@" not in saved
     assert "alice:secret@" not in redacted
     assert "secret" not in redacted
+
+
+def test_save_and_redact_config_preserve_password_ref_without_secret(tmp_path: Path) -> None:
+    config = AppConfig(
+        library_path=tmp_path / "books",
+        catalogs=[
+            CatalogConfig(
+                name="Private",
+                url="https://example.test/opds",
+                auth={"username": "alice", "password_ref": "epub-tui:Private"},
+            )
+        ],
+    )
+    saved_path = tmp_path / "saved.json"
+
+    save_config(saved_path, config)
+    saved_payload = json.loads(saved_path.read_text(encoding="utf-8"))
+    redacted_payload = json.loads(redact_config(config))
+
+    expected_catalog = {
+        "name": "Private",
+        "url": "https://example.test/opds",
+        "auth": {"username": "alice", "password_ref": "epub-tui:Private"},
+    }
+    assert saved_payload["catalogs"][0] == expected_catalog
+    assert redacted_payload["catalogs"][0] == expected_catalog
+    assert "password" not in saved_payload["catalogs"][0]["auth"]
+    assert "password" not in redacted_payload["catalogs"][0]["auth"]
 
 
 def test_save_config_is_human_editable_json(tmp_path: Path) -> None:
@@ -296,7 +351,7 @@ def test_rejects_incomplete_basic_auth(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ConfigError, match="requires both username and password"):
+    with pytest.raises(ConfigError, match="requires password or password_ref"):
         load_config(config_path)
 
 

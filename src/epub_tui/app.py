@@ -3,6 +3,7 @@ from textual.app import App
 from pathlib import Path
 
 from epub_tui.config import AppConfig, CatalogConfig, save_config
+from epub_tui.credentials import CredentialStore
 from epub_tui.library import LibraryRepository
 from epub_tui.services import CatalogWorkflow
 from epub_tui.tui.screens import CatalogsScreen, LibraryScreen, SetupScreen
@@ -44,7 +45,11 @@ class EpubTuiApp(App[None]):
 
     def apply_config(self, config: AppConfig) -> None:
         self.config = config
-        self.workflow = CatalogWorkflow(config=config, state_db=self._state_db_path(config.library_path))
+        self.workflow = CatalogWorkflow(
+            config=config,
+            state_db=self._state_db_path(config.library_path),
+            credentials=CredentialStore(),
+        )
         self.library = self.workflow.library
         if self.config_path is not None:
             save_config(self.config_path, config)

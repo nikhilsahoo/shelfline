@@ -32,6 +32,7 @@ def test_build_app_uses_default_config_when_present(tmp_path: Path) -> None:
     assert app.workflow is not None
     assert app.library is app.workflow.library
     assert app.workflow.library.db_path == library_path / ".epub-tui" / "state.db"
+    assert app.workflow._credentials is not None
 
 
 def test_build_app_uses_explicit_config_over_default(tmp_path: Path) -> None:

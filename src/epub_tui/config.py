@@ -127,9 +127,16 @@ def _parse_catalog(raw: Any) -> CatalogConfig:
             raise ConfigError(f"Catalog {name} auth must be an object")
         username = auth_raw.get("username")
         password = auth_raw.get("password")
-        if not isinstance(username, str) or not isinstance(password, str):
-            raise ConfigError(f"Catalog {name} auth requires both username and password")
-        auth = {"username": username, "password": password}
+        password_ref = auth_raw.get("password_ref")
+        if not isinstance(username, str):
+            raise ConfigError(f"Catalog {name} auth requires username")
+        if not isinstance(password, str) and not isinstance(password_ref, str):
+            raise ConfigError(f"Catalog {name} auth requires password or password_ref")
+        auth = {"username": username}
+        if isinstance(password, str):
+            auth["password"] = password
+        if isinstance(password_ref, str):
+            auth["password_ref"] = password_ref
     elif embedded_auth is not None:
         auth = embedded_auth
         auth_from_url = True
@@ -140,10 +147,12 @@ def _parse_catalog(raw: Any) -> CatalogConfig:
 def _catalog_to_json(catalog: CatalogConfig, redact: bool = False) -> dict[str, Any]:
     item: dict[str, Any] = {"name": catalog.name, "url": _strip_url_credentials(catalog.url)}
     if catalog.auth is not None:
-        item["auth"] = {
-            "username": catalog.auth["username"],
-            "password": "***" if redact else catalog.auth["password"],
-        }
+        auth: dict[str, str] = {"username": catalog.auth["username"]}
+        if "password" in catalog.auth:
+            auth["password"] = "***" if redact else catalog.auth["password"]
+        if "password_ref" in catalog.auth:
+            auth["password_ref"] = catalog.auth["password_ref"]
+        item["auth"] = auth
     return item
 
 
