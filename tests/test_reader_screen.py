@@ -83,6 +83,26 @@ def _book(tmp_path: Path) -> BookRecord:
     )
 
 
+class _FailingProgressLibrary:
+    def __init__(
+        self,
+        *,
+        load_error: RuntimeError | None = None,
+        save_error: RuntimeError | None = None,
+    ) -> None:
+        self.load_error = load_error
+        self.save_error = save_error
+
+    def get_reading_progress(self, book_path: Path) -> ReadingProgress | None:
+        if self.load_error is not None:
+            raise self.load_error
+        return None
+
+    def save_reading_progress(self, progress: ReadingProgress) -> None:
+        if self.save_error is not None:
+            raise self.save_error
+
+
 @pytest.mark.asyncio
 async def test_reader_screen_renders_current_section_and_progress() -> None:
     app = EpubTuiApp(config=None)
@@ -216,6 +236,27 @@ async def test_reader_screen_resumes_saved_progress_and_clamps_section(
 
 
 @pytest.mark.asyncio
+async def test_reader_screen_opens_when_progress_load_fails() -> None:
+    library = _FailingProgressLibrary(load_error=RuntimeError("database locked"))
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(
+            EpubReaderScreen(
+                _preview(),
+                library=library,  # type: ignore[arg-type]
+                book_path=Path("reader-book.epub"),
+            )
+        )
+
+        assert app.screen.section_index == 0
+        assert "Chapter One" in str(app.screen.query_one("#reader-heading").renderable)
+        assert "Progress unavailable: database locked" in str(
+            app.screen.query_one("#status-line").renderable
+        )
+
+
+@pytest.mark.asyncio
 async def test_reader_screen_saves_progress_on_section_changes(tmp_path: Path) -> None:
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
@@ -240,6 +281,30 @@ async def test_reader_screen_saves_progress_on_section_changes(tmp_path: Path) -
         assert progress is not None
         assert progress.section_index == 0
         assert progress.position == 0
+
+
+@pytest.mark.asyncio
+async def test_reader_screen_navigation_continues_when_progress_save_fails() -> None:
+    library = _FailingProgressLibrary(save_error=RuntimeError("read-only database"))
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(
+            EpubReaderScreen(
+                _preview(),
+                library=library,  # type: ignore[arg-type]
+                book_path=Path("reader-book.epub"),
+            )
+        )
+
+        await pilot.press("n")
+
+        assert app.screen.section_index == 1
+        assert "Chapter Two" in str(app.screen.query_one("#reader-heading").renderable)
+        assert "2 / 2" in str(app.screen.query_one("#reader-progress").renderable)
+        assert "Progress not saved: read-only database" in str(
+            app.screen.query_one("#status-line").renderable
+        )
 
 
 @pytest.mark.asyncio

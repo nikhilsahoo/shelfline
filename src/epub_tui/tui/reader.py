@@ -33,6 +33,7 @@ class EpubReaderScreen(Screen[None]):
         self.preview = preview
         self.library = library
         self.book_path = book_path
+        self._progress_load_error: str | None = None
         self.section_index = self._initial_section_index(section_index)
 
     def compose(self) -> ComposeResult:
@@ -45,6 +46,10 @@ class EpubReaderScreen(Screen[None]):
         yield StatusLine(self.preview.progress_label(self.section_index), id="reader-progress")
         yield StatusLine(self.KEY_HINT, id="status-line")
         yield Footer()
+
+    def on_mount(self) -> None:
+        if self._progress_load_error is not None:
+            self._set_status(f"Progress unavailable: {self._progress_load_error}")
 
     def action_next_section(self) -> None:
         next_index = self.preview.next_section_index(self.section_index)
@@ -81,7 +86,12 @@ class EpubReaderScreen(Screen[None]):
         if self.library is None or self.book_path is None:
             return self._clamp_section_index(section_index)
 
-        progress = self.library.get_reading_progress(self.book_path)
+        try:
+            progress = self.library.get_reading_progress(self.book_path)
+        except Exception as error:
+            self._progress_load_error = str(error)
+            return self._clamp_section_index(section_index)
+
         if progress is None:
             return self._clamp_section_index(section_index)
         return self._clamp_section_index(progress.section_index)
@@ -94,10 +104,16 @@ class EpubReaderScreen(Screen[None]):
     def _save_progress(self) -> None:
         if self.library is None or self.book_path is None:
             return
-        self.library.save_reading_progress(
-            ReadingProgress(
-                local_file_path=self.book_path,
-                section_index=self.section_index,
-                position=0,
+        try:
+            self.library.save_reading_progress(
+                ReadingProgress(
+                    local_file_path=self.book_path,
+                    section_index=self.section_index,
+                    position=0,
+                )
             )
-        )
+        except Exception as error:
+            self._set_status(f"Progress not saved: {error}")
+
+    def _set_status(self, message: str) -> None:
+        self.query_one("#status-line", StatusLine).set_message(message)
