@@ -42,7 +42,8 @@
 }
 
 .feed-entry-list,
-.library-book-list {
+.library-book-list,
+.entry-detail {
     height: 1fr;
     padding: 0 1;
 }
@@ -58,7 +59,8 @@
 }
 
 .feed-entry-row,
-.library-book-row {
+.library-book-row,
+.acquisition-row {
     layout: horizontal;
     height: 1;
     padding: 0 1;
@@ -67,7 +69,8 @@
 }
 
 .feed-entry-row.selected,
-.library-book-row.selected {
+.library-book-row.selected,
+.acquisition-row.selected {
     background: $primary 20%;
     border-left: thick $accent;
 }
@@ -104,6 +107,37 @@
 }
 
 .row-path {
+    width: 2fr;
+    color: $text-muted;
+}
+
+.entry-title {
+    text-style: bold;
+    color: $primary;
+}
+
+.entry-authors,
+.entry-updated {
+    color: $text-muted;
+}
+
+.entry-section-title {
+    margin: 1 0 0 0;
+    text-style: bold;
+    color: $accent;
+}
+
+.entry-summary {
+    margin: 0 0 1 0;
+    color: $text;
+}
+
+.acquisition-label {
+    width: 1fr;
+    text-style: bold;
+}
+
+.acquisition-meta {
     width: 2fr;
     color: $text-muted;
 }

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import html
+import re
+from html.parser import HTMLParser
 from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.containers import Container, VerticalScroll
 from textual.widgets import Static
 
-from epub_tui.catalog.models import CatalogEntry
+from epub_tui.catalog.models import AcquisitionLink, CatalogEntry
 from epub_tui.downloads import DownloadProgress
 from epub_tui.library import BookRecord
 
@@ -182,6 +185,214 @@ class FeedEntryList(VerticalScroll):
         for index, entry in enumerate(entries):
             lines.append(CatalogEntryRow(entry, index=index, selected=index == selected_index).renderable)
         return "\n".join(lines)
+
+
+class _OpdsHtmlTextParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag == "br":
+            self._line_break()
+        elif tag in {"p", "div", "section", "article"}:
+            self._paragraph_break()
+        elif tag == "li":
+            self._line_break()
+            self._parts.append("- ")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in {"p", "div", "section", "article", "li"}:
+            self._paragraph_break()
+
+    def handle_data(self, data: str) -> None:
+        self._parts.append(data)
+
+    def text(self) -> str:
+        return "".join(self._parts)
+
+    def _line_break(self) -> None:
+        if self._parts and not self._parts[-1].endswith("\n"):
+            self._parts.append("\n")
+
+    def _paragraph_break(self) -> None:
+        text = "".join(self._parts)
+        if text.strip() and not text.endswith("\n\n"):
+            self._parts.append("\n\n")
+
+
+def clean_opds_html_text(text: str) -> str:
+    """Return readable plain text for OPDS summaries that may contain escaped HTML."""
+
+    unescaped = text
+    for _ in range(3):
+        next_value = html.unescape(unescaped)
+        if next_value == unescaped:
+            break
+        unescaped = next_value
+
+    parser = _OpdsHtmlTextParser()
+    parser.feed(unescaped)
+    parser.close()
+    parsed = parser.text()
+
+    lines: list[str] = []
+    previous_blank = True
+    for line in parsed.splitlines():
+        cleaned = re.sub(r"[ \t]+", " ", line).strip()
+        if cleaned:
+            lines.append(cleaned)
+            previous_blank = False
+        elif not previous_blank:
+            lines.append("")
+            previous_blank = True
+
+    while lines and lines[-1] == "":
+        lines.pop()
+    return "\n".join(lines)
+
+
+class AcquisitionRow(Container):
+    def __init__(
+        self,
+        link: AcquisitionLink,
+        *,
+        index: int,
+        selected: bool = False,
+        **kwargs: object,
+    ) -> None:
+        self.link = link
+        self.index = index
+        self.selected = selected
+        classes = "acquisition-row"
+        if selected:
+            classes = f"{classes} selected"
+        super().__init__(id=f"acquisition-{index}", classes=classes, **kwargs)
+
+    @property
+    def renderable(self) -> str:
+        marker = ">" if self.selected else " "
+        return f"{marker} {self.label} - {self.metadata}"
+
+    @property
+    def label(self) -> str:
+        return self.link.title or _format_from_media_type(self.link.media_type)
+
+    @property
+    def metadata(self) -> str:
+        parts = [self.link.media_type]
+        if self.link.size is not None:
+            parts.append(_format_size(self.link.size))
+        return " | ".join(parts)
+
+    def compose(self) -> ComposeResult:
+        yield Static(">" if self.selected else " ", classes="row-marker")
+        yield Static(f"{self.index + 1}.", classes="row-index")
+        yield Static(self.label, classes="acquisition-label")
+        yield Static(self.metadata, classes="acquisition-meta")
+
+    def set_selected(self, selected: bool) -> None:
+        self.selected = selected
+        if selected:
+            self.add_class("selected")
+        else:
+            self.remove_class("selected")
+        if self.is_mounted:
+            self.query_one(".row-marker", Static).update(">" if selected else " ")
+
+
+class EntryDetailView(VerticalScroll):
+    def __init__(
+        self,
+        entry: CatalogEntry,
+        *,
+        selected_index: int = 0,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(id="entry-body", classes="entry-detail", **kwargs)
+        self.entry = entry
+        self.selected_index = selected_index
+
+    @property
+    def renderable(self) -> str:
+        return self.render_text(self.entry, self.selected_index)
+
+    def compose(self) -> ComposeResult:
+        yield Static(self.entry.title, classes="entry-title")
+        yield Static(self._authors_text(), classes="entry-authors")
+        if self.entry.updated:
+            yield Static(f"Updated: {self.entry.updated}", classes="entry-updated")
+
+        summary = self.cleaned_summary
+        if summary:
+            yield Static("Description", classes="entry-section-title")
+            yield Static(summary, classes="entry-summary")
+
+        yield Static("Downloads", classes="entry-section-title")
+        if not self.entry.acquisition_links:
+            yield Static("No acquisition links", classes="empty-state")
+            return
+        for index, link in enumerate(self.entry.acquisition_links):
+            yield AcquisitionRow(link, index=index, selected=index == self.selected_index)
+
+    @property
+    def cleaned_summary(self) -> str:
+        return clean_opds_html_text(self.entry.summary or "")
+
+    def set_selected_index(self, selected_index: int) -> None:
+        self.selected_index = selected_index
+        selected_row: AcquisitionRow | None = None
+        for row in self.query(AcquisitionRow):
+            selected = row.index == selected_index
+            row.set_selected(selected)
+            if selected:
+                selected_row = row
+        if selected_row is not None:
+            self.scroll_to_widget(selected_row, animate=False, immediate=True)
+
+    def _authors_text(self) -> str:
+        return ", ".join(self.entry.authors) if self.entry.authors else "Unknown author"
+
+    @staticmethod
+    def render_text(entry: CatalogEntry, selected_index: int) -> str:
+        lines = [entry.title]
+        lines.append(", ".join(entry.authors) if entry.authors else "Unknown author")
+        if entry.updated:
+            lines.append(f"Updated: {entry.updated}")
+        summary = clean_opds_html_text(entry.summary or "")
+        if summary:
+            lines.extend(["Description:", summary])
+        if not entry.acquisition_links:
+            lines.append("No acquisition links")
+            return "\n".join(lines)
+
+        lines.append("Downloads:")
+        for index, link in enumerate(entry.acquisition_links):
+            lines.append(AcquisitionRow(link, index=index, selected=index == selected_index).renderable)
+        return "\n".join(lines)
+
+
+def _format_from_media_type(media_type: str) -> str:
+    if "epub" in media_type:
+        return "EPUB"
+    if "pdf" in media_type:
+        return "PDF"
+    suffix = media_type.rsplit("/", 1)[-1]
+    return suffix.upper() if suffix else media_type
+
+
+def _format_size(size: int) -> str:
+    units = ["bytes", "KB", "MB", "GB"]
+    value = float(size)
+    unit_index = 0
+    while value >= 1024 and unit_index < len(units) - 1:
+        value /= 1024
+        unit_index += 1
+    if unit_index == 0:
+        return f"{size} bytes"
+    return f"{value:.1f} {units[unit_index]}"
 
 
 class LibraryBookRow(Container):

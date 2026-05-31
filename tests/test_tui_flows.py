@@ -563,6 +563,69 @@ async def test_entry_screen_renders_cover_fallback_and_all_acquisitions() -> Non
 
 
 @pytest.mark.asyncio
+async def test_entry_screen_cleans_html_summary_for_detail_display() -> None:
+    entry = CatalogEntry(
+        title="Escaped Story",
+        identifier="urn:book:escaped",
+        updated="2026-05-31",
+        authors=["Mary Shelley"],
+        summary=(
+            "&lt;p&gt;A &amp; B &lt;em&gt;story&lt;/em&gt;.&lt;/p&gt;"
+            "&lt;p&gt;Line&lt;br /&gt;break&lt;/p&gt;"
+        ),
+        acquisition_links=[
+            AcquisitionLink(
+                href="https://example.test/books/escaped.epub",
+                relation="http://opds-spec.org/acquisition",
+                media_type="application/epub+zip",
+                title="EPUB",
+            )
+        ],
+    )
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(EntryScreen(entry))
+        detail = app.screen.query_one("#entry-body")
+        rendered = str(detail.renderable)
+
+    assert detail.has_class("entry-detail")
+    assert "Escaped Story" in rendered
+    assert "Mary Shelley" in rendered
+    assert "A & B story." in rendered
+    assert "Line\nbreak" in rendered
+    assert "&lt;" not in rendered
+    assert "&gt;" not in rendered
+    assert "&amp;" not in rendered
+    assert "<p>" not in rendered
+    assert "</p>" not in rendered
+    assert "<br" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_entry_screen_uses_acquisition_rows_for_selection() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EntryScreen(_entry()))
+
+        rows = list(app.screen.query("#entry-body .acquisition-row"))
+        assert [row.id for row in rows] == ["acquisition-0", "acquisition-1"]
+        assert rows[0].has_class("selected")
+        assert not rows[1].has_class("selected")
+        assert str(rows[0].query_one(".row-marker").render()) == ">"
+        assert "application/epub+zip" in str(rows[0].renderable)
+        assert "https://example.test/books/interesting.epub" not in str(rows[0].renderable)
+
+        await pilot.press("j")
+
+        rows = list(app.screen.query("#entry-body .acquisition-row"))
+        assert not rows[0].has_class("selected")
+        assert rows[1].has_class("selected")
+        assert str(rows[1].query_one(".row-marker").render()) == ">"
+
+
+@pytest.mark.asyncio
 async def test_entry_screen_downloads_acquisition_through_workflow(tmp_path: Path) -> None:
     catalog = CatalogConfig(name="Example", url="https://example.test/opds")
     workflow = FakeWorkflow(download_path=tmp_path / "Interesting Book.pdf")

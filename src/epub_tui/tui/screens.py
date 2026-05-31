@@ -20,6 +20,7 @@ from epub_tui.tui.reader import EpubReaderScreen
 from epub_tui.tui.widgets import (
     BusyIndicator,
     CoverDisplay,
+    EntryDetailView,
     FeedEntryList,
     LibraryBookList,
     DownloadProgressDisplay,
@@ -405,7 +406,7 @@ class EntryScreen(Screen[None]):
             image_path=self.entry.cover_image_url or self.entry.thumbnail_url,
             id="cover-display",
         )
-        yield StatusLine(self._entry_text(), id="entry-body")
+        yield EntryDetailView(self.entry, selected_index=self.selected_index)
         yield BusyIndicator(id="busy-indicator")
         yield StatusLine(self.KEY_HINT, id="status-line")
         yield KeyHintFooter(self.KEY_HINT)
@@ -455,28 +456,13 @@ class EntryScreen(Screen[None]):
         if not self.entry.acquisition_links:
             return
         self.selected_index = max(0, min(len(self.entry.acquisition_links) - 1, self.selected_index + delta))
-        self.query_one("#entry-body", StatusLine).set_message(self._entry_text())
+        self.query_one("#entry-body", EntryDetailView).set_selected_index(self.selected_index)
         link = self.entry.acquisition_links[self.selected_index]
         label = link.title or link.media_type
         self.query_one("#status-line", StatusLine).set_message(f"Selected {label}")
 
     def _entry_text(self) -> str:
-        lines = [self.entry.title]
-        if self.entry.summary:
-            lines.append(self.entry.summary)
-        if self.entry.updated:
-            lines.append(f"Updated: {self.entry.updated}")
-        if not self.entry.acquisition_links:
-            lines.append("No acquisition links")
-            return "\n".join(lines)
-
-        lines.append("Acquisitions:")
-        for index, link in enumerate(self.entry.acquisition_links):
-            label = link.title or link.media_type
-            size = f" ({link.size} bytes)" if link.size is not None else ""
-            marker = ">" if index == self.selected_index else " "
-            lines.append(f"{marker} {label}: {link.media_type} {link.href}{size}")
-        return "\n".join(lines)
+        return EntryDetailView.render_text(self.entry, self.selected_index)
 
 
 class DownloadStatusScreen(Screen[None]):
