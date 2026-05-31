@@ -316,6 +316,28 @@ class LibraryRepository:
             ).fetchall()
         return [self._bookmark_from_row(row) for row in rows]
 
+    def find_bookmark(
+        self, local_file_path: Path, *, section_index: int, position: int = 0
+    ) -> Bookmark | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, local_file_path, section_index, position, label, created_at
+                FROM bookmarks
+                WHERE local_file_path = ?
+                    AND section_index = ?
+                    AND position = ?
+                ORDER BY id
+                LIMIT 1
+                """,
+                (
+                    self._path_to_text(local_file_path),
+                    section_index,
+                    position,
+                ),
+            ).fetchone()
+        return self._bookmark_from_row(row) if row is not None else None
+
     def delete_bookmark(self, bookmark_id: int) -> None:
         with self._connect() as connection:
             connection.execute(

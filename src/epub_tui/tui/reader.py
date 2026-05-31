@@ -80,12 +80,23 @@ class EpubReaderScreen(Screen[None]):
             return
 
         section = self.preview.section_at(self.section_index)
+        position = 0
         try:
+            existing_bookmark = self.library.find_bookmark(
+                self.book_path,
+                section_index=self.section_index,
+                position=position,
+            )
+            if existing_bookmark is not None and existing_bookmark.id is not None:
+                self.library.delete_bookmark(existing_bookmark.id)
+                self._set_status("Bookmark removed")
+                return
+
             self.library.add_bookmark(
                 Bookmark(
                     local_file_path=self.book_path,
                     section_index=self.section_index,
-                    position=0,
+                    position=position,
                     label=section.heading,
                 )
             )

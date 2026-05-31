@@ -362,6 +362,37 @@ async def test_reader_screen_adds_bookmark_with_current_section_heading(
 
 
 @pytest.mark.asyncio
+async def test_reader_screen_toggles_bookmark_at_current_position(
+    tmp_path: Path,
+) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    book_path = tmp_path / "books" / "reader-book.epub"
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(
+            EpubReaderScreen(
+                _preview(),
+                section_index=1,
+                library=repo,
+                book_path=book_path,
+            )
+        )
+
+        await pilot.press("m")
+        assert len(repo.list_bookmarks(book_path)) == 1
+        assert "Bookmark added" in str(app.screen.query_one("#status-line").renderable)
+
+        await pilot.press("m")
+
+        assert repo.list_bookmarks(book_path) == []
+        assert "Bookmark removed" in str(
+            app.screen.query_one("#status-line").renderable
+        )
+
+
+@pytest.mark.asyncio
 async def test_reader_screen_reports_bookmark_requires_library_backed_book() -> None:
     app = EpubTuiApp(config=None)
 
