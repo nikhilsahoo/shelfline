@@ -3,6 +3,10 @@ from __future__ import annotations
 from typing import Protocol
 
 
+class CredentialError(RuntimeError):
+    """Raised when a credential operation cannot be completed safely."""
+
+
 class CredentialBackend(Protocol):
     def get_password(self, service: str, username: str) -> str | None:
         ...
@@ -48,17 +52,35 @@ class KeyringCredentialBackend:
 class CredentialStore:
     SERVICE_PREFIX = "epub-tui"
 
-    def __init__(self, backend: CredentialBackend | None = None) -> None:
+    def __init__(
+        self,
+        backend: CredentialBackend | None = None,
+        *,
+        namespace: str | None = None,
+        config_scope: str | None = None,
+    ) -> None:
         self.backend = backend or KeyringCredentialBackend()
+        self.namespace = namespace if namespace is not None else config_scope
 
     def service_name(self, catalog_name: str) -> str:
+        if self.namespace:
+            return f"{self.SERVICE_PREFIX}:{self.namespace}:{catalog_name}"
         return f"{self.SERVICE_PREFIX}:{catalog_name}"
 
     def save_password(self, catalog_name: str, username: str, password: str) -> None:
-        self.backend.set_password(self.service_name(catalog_name), username, password)
+        try:
+            self.backend.set_password(self.service_name(catalog_name), username, password)
+        except Exception as exc:
+            raise CredentialError("Failed to save credential") from exc
 
     def get_password(self, catalog_name: str, username: str) -> str | None:
-        return self.backend.get_password(self.service_name(catalog_name), username)
+        try:
+            return self.backend.get_password(self.service_name(catalog_name), username)
+        except Exception:
+            return None
 
     def delete_password(self, catalog_name: str, username: str) -> None:
-        self.backend.delete_password(self.service_name(catalog_name), username)
+        try:
+            self.backend.delete_password(self.service_name(catalog_name), username)
+        except Exception:
+            return None
