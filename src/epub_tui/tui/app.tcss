@@ -44,6 +44,7 @@
 .feed-entry-list,
 .catalog-list,
 .library-book-list,
+.library-detail,
 .entry-detail {
     height: 1fr;
     padding: 0 1;
@@ -143,6 +144,14 @@
 .entry-summary {
     margin: 0 0 1 0;
     color: $text;
+}
+
+.library-detail-field {
+    color: $text;
+}
+
+.library-detail-meta {
+    color: $text-muted;
 }
 
 .acquisition-label {

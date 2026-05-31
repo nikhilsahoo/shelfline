@@ -667,6 +667,98 @@ class LibraryBookList(VerticalScroll):
         )
 
 
+class LibraryDetailView(VerticalScroll):
+    def __init__(
+        self,
+        book: BookRecord | None,
+        *,
+        status: str = "Ready",
+        **kwargs: object,
+    ) -> None:
+        super().__init__(id="library-detail", classes="library-detail", **kwargs)
+        self.book = book
+        self.status = status
+
+    @property
+    def renderable(self) -> str:
+        return self.render_text(self.book, self.status)
+
+    def compose(self) -> ComposeResult:
+        for index, line in enumerate(self._lines()):
+            yield Static(
+                line,
+                id=f"library-detail-line-{index}",
+                classes=self._line_class(index),
+            )
+
+    def set_book(self, book: BookRecord | None) -> None:
+        self.book = book
+        self._refresh_lines()
+
+    def set_status(self, status: str) -> None:
+        self.status = status
+        self._refresh_lines()
+
+    def _refresh_lines(self) -> None:
+        if not self.is_mounted:
+            return
+        lines = self._lines()
+        existing = list(self.query(Static))
+        for index, line in enumerate(lines):
+            if index < len(existing):
+                existing[index].display = True
+                existing[index].update(line)
+                existing[index].set_classes(self._line_class(index))
+            else:
+                self.mount(
+                    Static(
+                        line,
+                        id=f"library-detail-line-{index}",
+                        classes=self._line_class(index),
+                    )
+                )
+        for line in existing[len(lines) :]:
+            line.display = False
+
+    def _lines(self) -> list[str]:
+        return self.render_text(self.book, self.status).splitlines()
+
+    def _line_class(self, index: int) -> str:
+        if self.book is None:
+            return "empty-state" if index == 0 else "library-detail-meta"
+        if index == 0:
+            return "entry-title"
+        if index in {1, 6}:
+            return "library-detail-meta"
+        return "library-detail-field"
+
+    @staticmethod
+    def render_text(book: BookRecord | None, status: str = "Ready") -> str:
+        if book is None:
+            return "\n".join(
+                [
+                    "No downloaded books",
+                    "Use c to open Catalogs and download books into your library.",
+                    f"Status: {status}",
+                ]
+            )
+
+        authors = ", ".join(book.authors) if book.authors else "Unknown author"
+        read_status = "Read" if book.is_read else "Unread"
+        return "\n".join(
+            [
+                book.title,
+                authors,
+                f"Read status: {read_status}",
+                f"Media type: {book.media_type}",
+                f"Source catalog: {book.source_catalog}",
+                f"Local path: {book.local_file_path}",
+                "Actions: Enter preview | m read/unread | x delete",
+                f"Status: {status}",
+            ]
+        )
+
+
 class DownloadProgressDisplay(Static):
     def __init__(self, progress: DownloadProgress | None = None, **kwargs: object) -> None:
         super().__init__("", **kwargs)

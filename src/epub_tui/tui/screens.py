@@ -24,6 +24,7 @@ from epub_tui.tui.widgets import (
     EntryDetailView,
     FeedEntryList,
     LibraryBookList,
+    LibraryDetailView,
     DownloadProgressDisplay,
     StatusLine,
 )
@@ -583,6 +584,7 @@ class LibraryScreen(Screen[None]):
         )
         replace_region(
             self.query_one("#detail-region"),
+            LibraryDetailView(self.selected_book),
             StatusLine("Ready", id="status-line"),
         )
         self.app.set_focus(None)
@@ -609,7 +611,7 @@ class LibraryScreen(Screen[None]):
         self.current_search_query = cleaned
         self.books = self.library.search_books(LibrarySearch(query=cleaned or None))
         self.selected_index = 0
-        self.query_one("#library-body", LibraryBookList).set_books(self.books, self.selected_index)
+        self._refresh_library_body()
         self._set_status(f"Search: {cleaned}" if cleaned else "Search cleared")
 
     def action_toggle_read(self) -> None:
@@ -692,17 +694,23 @@ class LibraryScreen(Screen[None]):
                 self.books = self.library.list_books()
         if self.selected_index >= len(self.books):
             self.selected_index = max(0, len(self.books) - 1)
-        self.query_one("#library-body", LibraryBookList).set_books(self.books, self.selected_index)
+        self._refresh_library_body()
 
     def _set_status(self, message: str) -> None:
         self.query_one("#status-line", StatusLine).set_message(message)
+        self.query_one("#library-detail", LibraryDetailView).set_status(message)
 
     def _move_selection(self, delta: int) -> None:
         if not self.books:
             return
         self.selected_index = max(0, min(len(self.books) - 1, self.selected_index + delta))
         self.query_one("#library-body", LibraryBookList).set_selected_index(self.selected_index)
+        self.query_one("#library-detail", LibraryDetailView).set_book(self.selected_book)
         self._set_status(f"Selected {self.books[self.selected_index].title}")
+
+    def _refresh_library_body(self) -> None:
+        self.query_one("#library-body", LibraryBookList).set_books(self.books, self.selected_index)
+        self.query_one("#library-detail", LibraryDetailView).set_book(self.selected_book)
 
     def _library_text(self) -> str:
         return LibraryBookList.render_text(self.books, self.selected_index)

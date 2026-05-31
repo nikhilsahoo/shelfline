@@ -840,6 +840,58 @@ async def test_library_screen_renders_books_and_updates_repository(tmp_path: Pat
 
 
 @pytest.mark.asyncio
+async def test_library_screen_detail_pane_shows_selected_book_metadata_on_mount(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, title="Dune", is_read=False))
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(LibraryScreen(library=repo))
+
+        rendered = str(app.screen.query_one("#library-detail").renderable)
+        assert "Dune" in rendered
+        assert "Ada Lovelace" in rendered
+        assert "Unread" in rendered
+        assert "application/epub+zip" in rendered
+        assert "Example" in rendered
+        assert str(tmp_path / "books" / "Dune.epub") in rendered
+        assert "Enter preview" in rendered
+
+
+@pytest.mark.asyncio
+async def test_library_screen_detail_pane_updates_when_selection_moves(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, title="Dune", is_read=False))
+    repo.add_book(_book(tmp_path, title="Foundation", is_read=True))
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(LibraryScreen(library=repo))
+        await pilot.press("j")
+
+        rendered = str(app.screen.query_one("#library-detail").renderable)
+        assert "Foundation" in rendered
+        assert "Read" in rendered
+        assert "Dune" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_library_screen_detail_pane_shows_empty_message_for_empty_library(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(LibraryScreen(library=repo))
+
+        rendered = str(app.screen.query_one("#library-detail").renderable)
+        assert "No downloaded books" in rendered
+        assert "Catalogs" in rendered
+
+
+@pytest.mark.asyncio
 async def test_library_screen_uses_book_row_widgets_for_selection(tmp_path: Path) -> None:
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
