@@ -43,6 +43,21 @@ def test_search_books_filters_by_title_and_author(tmp_path: Path) -> None:
     ]
 
 
+def test_search_books_treats_like_metacharacters_as_literal_text(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, "100% True", authors=["Literal Percent"]))
+    repo.add_book(_book(tmp_path, "Under_score", authors=["Literal Underscore"]))
+    repo.add_book(_book(tmp_path, "Plain Book", authors=["Ordinary Author"]))
+
+    assert [book.title for book in repo.search_books(LibrarySearch(query="%"))] == [
+        "100% True"
+    ]
+    assert [book.title for book in repo.search_books(LibrarySearch(query="_"))] == [
+        "Under_score"
+    ]
+
+
 def test_search_books_filters_by_catalog_format_and_read_state(tmp_path: Path) -> None:
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()

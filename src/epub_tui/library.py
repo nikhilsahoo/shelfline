@@ -151,8 +151,10 @@ class LibraryRepository:
         if not search.include_deleted:
             clauses.append("deleted_at IS NULL")
         if search.query:
-            query = f"%{search.query.lower()}%"
-            clauses.append("(lower(title) LIKE ? OR lower(authors_json) LIKE ?)")
+            query = f"%{self._escape_like_pattern(search.query.lower())}%"
+            clauses.append(
+                "(lower(title) LIKE ? ESCAPE '\\' OR lower(authors_json) LIKE ? ESCAPE '\\')"
+            )
             params.extend([query, query])
         if search.source_catalog:
             clauses.append("source_catalog = ?")
@@ -267,6 +269,10 @@ class LibraryRepository:
     @staticmethod
     def _path_to_text(path: Path | None) -> str | None:
         return str(path) if path is not None else None
+
+    @staticmethod
+    def _escape_like_pattern(value: str) -> str:
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     @staticmethod
     def _book_from_row(row: sqlite3.Row) -> BookRecord:
