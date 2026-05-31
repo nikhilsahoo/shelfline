@@ -150,12 +150,6 @@ class LibraryRepository:
         params: list[object] = []
         if not search.include_deleted:
             clauses.append("deleted_at IS NULL")
-        if search.query:
-            query = f"%{self._escape_like_pattern(search.query.lower())}%"
-            clauses.append(
-                "(lower(title) LIKE ? ESCAPE '\\' OR lower(authors_json) LIKE ? ESCAPE '\\')"
-            )
-            params.extend([query, query])
         if search.source_catalog:
             clauses.append("source_catalog = ?")
             params.append(search.source_catalog)
@@ -189,7 +183,14 @@ class LibraryRepository:
                 """,
                 tuple(params),
             ).fetchall()
-        return [self._book_from_row(row) for row in rows]
+        books = [self._book_from_row(row) for row in rows]
+        if search.query:
+            return [
+                book
+                for book in books
+                if self._book_matches_literal_query(book, search.query)
+            ]
+        return books
 
     def mark_read(self, local_file_path: Path, is_read: bool) -> None:
         with self._connect() as connection:
@@ -271,8 +272,11 @@ class LibraryRepository:
         return str(path) if path is not None else None
 
     @staticmethod
-    def _escape_like_pattern(value: str) -> str:
-        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    def _book_matches_literal_query(book: BookRecord, query: str) -> bool:
+        folded_query = query.casefold()
+        return folded_query in book.title.casefold() or any(
+            folded_query in author.casefold() for author in book.authors
+        )
 
     @staticmethod
     def _book_from_row(row: sqlite3.Row) -> BookRecord:

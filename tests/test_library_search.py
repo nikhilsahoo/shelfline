@@ -48,6 +48,7 @@ def test_search_books_treats_like_metacharacters_as_literal_text(tmp_path: Path)
     repo.initialize()
     repo.add_book(_book(tmp_path, "100% True", authors=["Literal Percent"]))
     repo.add_book(_book(tmp_path, "Under_score", authors=["Literal Underscore"]))
+    repo.add_book(_book(tmp_path, "Escaped Author", authors=["Back\\Slash"]))
     repo.add_book(_book(tmp_path, "Plain Book", authors=["Ordinary Author"]))
 
     assert [book.title for book in repo.search_books(LibrarySearch(query="%"))] == [
@@ -55,6 +56,31 @@ def test_search_books_treats_like_metacharacters_as_literal_text(tmp_path: Path)
     ]
     assert [book.title for book in repo.search_books(LibrarySearch(query="_"))] == [
         "Under_score"
+    ]
+    assert [book.title for book in repo.search_books(LibrarySearch(query="\\"))] == [
+        "Escaped Author"
+    ]
+
+
+def test_search_books_matches_unicode_title_case_insensitively(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, "Éclair", authors=["Patisserie Guide"]))
+    repo.add_book(_book(tmp_path, "Plain Book", authors=["Ordinary Author"]))
+
+    assert [book.title for book in repo.search_books(LibrarySearch(query="éclair"))] == [
+        "Éclair"
+    ]
+
+
+def test_search_books_matches_unicode_author_case_insensitively(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, "Memoir", authors=["René"]))
+    repo.add_book(_book(tmp_path, "Plain Book", authors=["Ordinary Author"]))
+
+    assert [book.title for book in repo.search_books(LibrarySearch(query="rené"))] == [
+        "Memoir"
     ]
 
 
