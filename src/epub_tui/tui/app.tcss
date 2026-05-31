@@ -91,7 +91,7 @@
 }
 
 .row-kind {
-    width: 8;
+    width: 11;
     text-style: bold;
 }
 

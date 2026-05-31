@@ -13,6 +13,20 @@ from epub_tui.catalog.models import AcquisitionLink, CatalogEntry
 from epub_tui.config import CatalogConfig
 from epub_tui.downloads import DownloadProgress
 from epub_tui.library import BookRecord
+from epub_tui.tui.theme import (
+    BASIC_AUTH_LABEL,
+    BOOK_LABEL,
+    DOWNLOADS_LABEL,
+    ENTRY_LABEL,
+    FOLDER_LABEL,
+    LOCAL_PATH_LABEL,
+    NO_AUTH_LABEL,
+    OPEN_PREVIEW_LABEL,
+    glyph,
+    SemanticLabel,
+    labeled,
+    read_status_label,
+)
 
 
 class BusyIndicator(Static):
@@ -80,7 +94,7 @@ class CatalogRow(Container):
 
     @property
     def auth_text(self) -> str:
-        return "Basic auth" if self.catalog.auth else "No auth"
+        return BASIC_AUTH_LABEL.text if self.catalog.auth else NO_AUTH_LABEL.text
 
     def set_selected(self, selected: bool) -> None:
         self.selected = selected
@@ -130,7 +144,11 @@ class CatalogList(VerticalScroll):
         return self.render_text(self.catalogs, self.selected_index)
 
     def compose(self) -> ComposeResult:
-        empty_state = Static("No catalogs configured", id="catalog-empty", classes="empty-state")
+        empty_state = Static(
+            f"{glyph(FOLDER_LABEL)} No catalogs configured",
+            id="catalog-empty",
+            classes="empty-state",
+        )
         empty_state.display = not self.catalogs
         yield empty_state
         yield from self._catalog_widgets()
@@ -170,7 +188,7 @@ class CatalogList(VerticalScroll):
     @staticmethod
     def render_text(catalogs: list[CatalogConfig], selected_index: int) -> str:
         if not catalogs:
-            return "No catalogs configured"
+            return f"{glyph(FOLDER_LABEL)} No catalogs configured"
         return "\n".join(
             CatalogRow(catalog, index=index, selected=index == selected_index).renderable
             for index, catalog in enumerate(catalogs)
@@ -196,15 +214,22 @@ class CatalogEntryRow(Container):
 
     @property
     def kind(self) -> str:
+        return self._kind_label().text.split(" ", 1)[-1]
+
+    @property
+    def kind_label(self) -> str:
+        return self._kind_label().text
+
+    def _kind_label(self) -> SemanticLabel:
         if self.entry.navigation_url is not None:
-            return "Folder"
+            return FOLDER_LABEL
         if self.entry.acquisition_links:
-            return "Book"
-        return "Entry"
+            return BOOK_LABEL
+        return ENTRY_LABEL
 
     @property
     def kind_class(self) -> str:
-        return f"kind-{self.kind.lower()}"
+        return self._kind_label().css_class
 
     @property
     def renderable(self) -> str:
@@ -213,7 +238,7 @@ class CatalogEntryRow(Container):
     def compose(self) -> ComposeResult:
         yield Static(">" if self.selected else " ", classes="row-marker")
         yield Static(f"{self.index + 1}.", classes="row-index")
-        yield Static(self.kind, classes="row-kind")
+        yield Static(self.kind_label, classes="row-kind")
         yield Static(self.entry.title, classes="row-title")
         yield Static(self._meta_text(), classes="row-meta")
 
@@ -236,7 +261,7 @@ class CatalogEntryRow(Container):
         return self.entry.updated or ""
 
     def _row_text(self) -> str:
-        label = f"[{self.kind}] {self.entry.title}"
+        label = f"{self.kind_label} {self.entry.title}"
         meta = self._meta_text()
         if meta:
             label = f"{label} - {meta}"
@@ -277,7 +302,7 @@ class FeedEntryList(VerticalScroll):
         if self.updated:
             yield Static(f"Updated: {self.updated}", id="feed-updated", classes="feed-updated")
         if not self.entries:
-            yield Static("No entries", classes="empty-state")
+            yield Static(f"{glyph(ENTRY_LABEL)} No entries", classes="empty-state")
             return
         for index, entry in enumerate(self.entries):
             yield CatalogEntryRow(
@@ -309,7 +334,7 @@ class FeedEntryList(VerticalScroll):
         if updated:
             lines.append(f"Updated: {updated}")
         if not entries:
-            lines.append("No entries")
+            lines.append(f"{glyph(ENTRY_LABEL)} No entries")
             return "\n".join(lines)
         for index, entry in enumerate(entries):
             lines.append(CatalogEntryRow(entry, index=index, selected=index == selected_index).renderable)
@@ -403,7 +428,7 @@ class AcquisitionRow(Container):
     @property
     def renderable(self) -> str:
         marker = ">" if self.selected else " "
-        return f"{marker} {self.label} - {self.metadata}"
+        return f"{marker} {glyph(DOWNLOADS_LABEL)} {self.label} - {self.metadata}"
 
     @property
     def label(self) -> str:
@@ -419,7 +444,7 @@ class AcquisitionRow(Container):
     def compose(self) -> ComposeResult:
         yield Static(">" if self.selected else " ", classes="row-marker")
         yield Static(f"{self.index + 1}.", classes="row-index")
-        yield Static(self.label, classes="acquisition-label")
+        yield Static(f"{glyph(DOWNLOADS_LABEL)} {self.label}", classes="acquisition-label")
         yield Static(self.metadata, classes="acquisition-meta")
 
     def set_selected(self, selected: bool) -> None:
@@ -459,7 +484,7 @@ class EntryDetailView(VerticalScroll):
             yield Static("Description", classes="entry-section-title")
             yield Static(summary, classes="entry-summary")
 
-        yield Static("Downloads", classes="entry-section-title")
+        yield Static(DOWNLOADS_LABEL.text, classes="entry-section-title")
         if not self.entry.acquisition_links:
             yield Static("No acquisition links", classes="empty-state")
             return
@@ -497,7 +522,7 @@ class EntryDetailView(VerticalScroll):
             lines.append("No acquisition links")
             return "\n".join(lines)
 
-        lines.append("Downloads:")
+        lines.append(f"{DOWNLOADS_LABEL.text}:")
         for index, link in enumerate(entry.acquisition_links):
             lines.append(AcquisitionRow(link, index=index, selected=index == selected_index).renderable)
         return "\n".join(lines)
@@ -552,7 +577,7 @@ class LibraryBookRow(Container):
         yield Static(self.book.title, classes="row-title")
         yield Static(self._authors_text(), classes="row-meta")
         yield Static(self._metadata_text(), classes="row-metadata")
-        yield Static(str(self.book.local_file_path), classes="row-path")
+        yield Static(labeled(LOCAL_PATH_LABEL, self.book.local_file_path, separator=": "), classes="row-path")
 
     def set_selected(self, selected: bool) -> None:
         self.selected = selected
@@ -577,13 +602,15 @@ class LibraryBookRow(Container):
         self.query_one(".row-title", Static).update(book.title)
         self.query_one(".row-meta", Static).update(self._authors_text())
         self.query_one(".row-metadata", Static).update(self._metadata_text())
-        self.query_one(".row-path", Static).update(str(book.local_file_path))
+        self.query_one(".row-path", Static).update(
+            labeled(LOCAL_PATH_LABEL, book.local_file_path, separator=": ")
+        )
 
     def _authors_text(self) -> str:
         return ", ".join(self.book.authors) if self.book.authors else "Unknown author"
 
     def _read_text(self) -> str:
-        return "Read" if self.book.is_read else "Unread"
+        return read_status_label(self.book.is_read).text
 
     def _progress_text(self) -> str:
         return "Finished" if self.book.is_read else "Not started"
@@ -599,7 +626,7 @@ class LibraryBookRow(Container):
             f"{'>' if self.selected else ' '} {self.index + 1}. "
             f"{self.book.title} - {self._authors_text()} [{self._read_text()}] "
             f"{self.book.media_type} | {self.book.source_catalog}\n"
-            f"  {self.book.local_file_path}"
+            f"  {labeled(LOCAL_PATH_LABEL, self.book.local_file_path, separator=': ')}"
         )
 
 
@@ -620,7 +647,11 @@ class LibraryBookList(VerticalScroll):
         return self.render_text(self.books, self.selected_index)
 
     def compose(self) -> ComposeResult:
-        empty_state = Static("No downloaded books", id="library-empty", classes="empty-state")
+        empty_state = Static(
+            f"{glyph(BOOK_LABEL)} No downloaded books",
+            id="library-empty",
+            classes="empty-state",
+        )
         empty_state.display = not self.books
         yield empty_state
         yield from self._book_widgets()
@@ -660,7 +691,7 @@ class LibraryBookList(VerticalScroll):
     @staticmethod
     def render_text(books: list[BookRecord], selected_index: int) -> str:
         if not books:
-            return "No downloaded books"
+            return f"{glyph(BOOK_LABEL)} No downloaded books"
         return "\n".join(
             LibraryBookRow(book, index=index, selected=index == selected_index).renderable
             for index, book in enumerate(books)
@@ -737,14 +768,14 @@ class LibraryDetailView(VerticalScroll):
         if book is None:
             return "\n".join(
                 [
-                    "No downloaded books",
+                    f"{glyph(BOOK_LABEL)} No downloaded books",
                     "Use c to open Catalogs and download books into your library.",
                     f"Status: {status}",
                 ]
             )
 
         authors = ", ".join(book.authors) if book.authors else "Unknown author"
-        read_status = "Read" if book.is_read else "Unread"
+        read_status = read_status_label(book.is_read).text
         return "\n".join(
             [
                 book.title,
@@ -752,8 +783,8 @@ class LibraryDetailView(VerticalScroll):
                 f"Read status: {read_status}",
                 f"Media type: {book.media_type}",
                 f"Source catalog: {book.source_catalog}",
-                f"Local path: {book.local_file_path}",
-                "Actions: Enter preview | m read/unread | x delete",
+                labeled(LOCAL_PATH_LABEL, book.local_file_path, separator=": "),
+                f"{OPEN_PREVIEW_LABEL.text}: Enter preview | m read/unread | x delete",
                 f"Status: {status}",
             ]
         )

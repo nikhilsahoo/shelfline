@@ -100,7 +100,11 @@ async def test_catalog_screen_renders_saved_catalogs(tmp_path: Path) -> None:
         library_path=tmp_path,
         catalogs=[
             CatalogConfig(name="Standard Ebooks", url="https://standardebooks.org/opds"),
-            CatalogConfig(name="Feedbooks", url="https://example.com/opds"),
+            CatalogConfig(
+                name="Feedbooks",
+                url="https://example.com/opds",
+                auth={"username": "reader", "password": "secret"},
+            ),
         ],
     )
     app = EpubTuiApp(config=config)
@@ -118,7 +122,8 @@ async def test_catalog_screen_renders_saved_catalogs(tmp_path: Path) -> None:
     assert "Standard Ebooks" in str(text)
     assert "Feedbooks" in str(text)
     assert "https://standardebooks.org/opds" in str(text)
-    assert "No auth" in str(text)
+    assert "— No auth" in str(text)
+    assert "🔒 Basic auth" in str(text)
 
 
 @pytest.mark.asyncio

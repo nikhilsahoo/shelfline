@@ -17,6 +17,7 @@ from epub_tui.reader import EpubPreview, ReaderError, extract_epub_preview
 from epub_tui.services import CatalogWorkflow
 from epub_tui.tui.layout import AppShell, KeyHintFooter, replace_region
 from epub_tui.tui.reader import EpubReaderScreen
+from epub_tui.tui.theme import BASIC_AUTH_LABEL, BOOK_LABEL, ENTRY_LABEL, FOLDER_LABEL, NO_AUTH_LABEL
 from epub_tui.tui.widgets import (
     BusyIndicator,
     CoverDisplay,
@@ -260,7 +261,11 @@ class CatalogsScreen(Screen[None]):
             empty_hint = hint if hint != "Press Enter to open" else "Press a to add a catalog"
             return f"No catalog selected\n{empty_hint}"
         catalog = self.config.catalogs[self.selected_index]
-        auth_status = "Basic auth configured" if catalog.auth else "No auth configured"
+        auth_status = (
+            f"{BASIC_AUTH_LABEL.text} configured"
+            if catalog.auth
+            else f"{NO_AUTH_LABEL.text} configured"
+        )
         return (
             f"{catalog.name}\n"
             f"{catalog.url}\n"
@@ -393,10 +398,10 @@ class FeedScreen(Screen[None]):
 
     def _entry_kind(self, entry: CatalogEntry) -> str:
         if entry.navigation_url is not None:
-            return "[Folder]"
+            return FOLDER_LABEL.text
         if entry.acquisition_links:
-            return "[Book]"
-        return "[Entry]"
+            return BOOK_LABEL.text
+        return ENTRY_LABEL.text
 
     def _entry_label(self, entry: CatalogEntry) -> str:
         label = f"{self._entry_kind(entry)} {entry.title}"
