@@ -535,6 +535,26 @@ async def test_entry_screen_download_error_stays_on_status_screen(tmp_path: Path
 
 
 @pytest.mark.asyncio
+async def test_entry_screen_download_filesystem_error_stays_on_status_screen(tmp_path: Path) -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FakeWorkflow(
+        download_path=tmp_path / "Interesting Book.epub",
+        download_error=OSError("disk full"),
+    )
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
+        await pilot.press("d")
+        await pilot.pause()
+
+        assert isinstance(app.screen, DownloadStatusScreen)
+        assert "Download failed: disk full" in str(
+            app.screen.query_one("#download-status").renderable
+        )
+
+
+@pytest.mark.asyncio
 async def test_entry_screen_selection_moves_before_downloading(tmp_path: Path) -> None:
     catalog = CatalogConfig(name="Example", url="https://example.test/opds")
     workflow = FakeWorkflow(download_path=tmp_path / "Interesting Book.pdf")
@@ -589,6 +609,30 @@ async def test_library_screen_renders_books_and_updates_repository(tmp_path: Pat
         screen.action_delete_book()
         assert repo.list_books() == []
         assert "No downloaded books" in str(screen.query_one("#library-body").renderable)
+
+
+@pytest.mark.asyncio
+async def test_library_screen_delete_failure_stays_on_library_screen(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, is_read=False))
+
+    def fail_delete(*args: object, **kwargs: object) -> None:
+        raise PermissionError("locked")
+
+    monkeypatch.setattr(repo, "delete_book", fail_delete)
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(LibraryScreen(library=repo))
+        screen = app.screen
+        screen.action_delete_book()
+
+        assert isinstance(app.screen, LibraryScreen)
+        assert "Interesting Book" in str(screen.query_one("#library-body").renderable)
+        assert "Delete failed: locked" in str(screen.query_one("#status-line").renderable)
 
 
 @pytest.mark.asyncio

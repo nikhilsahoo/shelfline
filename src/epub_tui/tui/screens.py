@@ -11,7 +11,7 @@ from textual.widgets import Button, Footer, Header, Input, Static
 
 from epub_tui.catalog.models import CatalogEntry, CatalogFeed
 from epub_tui.config import AppConfig, CatalogConfig
-from epub_tui.downloads import DownloadError, DownloadProgress
+from epub_tui.downloads import DownloadProgress
 from epub_tui.library import BookRecord, LibraryRepository, LibrarySearch
 from epub_tui.reader import EpubPreview, ReaderError, extract_epub_preview
 from epub_tui.services import CatalogWorkflow
@@ -431,8 +431,8 @@ class EntryScreen(Screen[None]):
                 on_status=status_screen.set_status,
                 on_progress=lambda progress: status_screen.update_progress(progress),
             )
-        except DownloadError as exc:
-            status_screen.set_status(f"Download failed: {exc}")
+        except Exception as exc:
+            status_screen.set_status(f"Download failed: {_error_message(exc)}")
             return
         status_screen.set_status("Download complete")
 
@@ -598,7 +598,11 @@ class LibraryScreen(Screen[None]):
             self._set_status("No book selected")
             return
 
-        self.library.delete_book(book.local_file_path, remove_file=True)
+        try:
+            self.library.delete_book(book.local_file_path, remove_file=True)
+        except Exception as exc:
+            self._set_status(f"Delete failed: {_error_message(exc)}")
+            return
         self.refresh_books()
         self._set_status("Book deleted")
 
