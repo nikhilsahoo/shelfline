@@ -30,6 +30,9 @@ epub-tui = "epub_tui.__main__:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+epub_tui = ["tui/*.tcss"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
