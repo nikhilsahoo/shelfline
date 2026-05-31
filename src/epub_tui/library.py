@@ -25,6 +25,14 @@ class BookRecord:
 
 
 @dataclass(frozen=True)
+class ReadingProgress:
+    local_file_path: Path
+    section_index: int
+    position: int = 0
+    updated_at: str | None = None
+
+
+@dataclass(frozen=True)
 class LibrarySearch:
     query: str | None = None
     source_catalog: str | None = None
@@ -68,6 +76,16 @@ class LibraryRepository:
                     title TEXT NOT NULL,
                     body TEXT NOT NULL,
                     fetched_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS reading_progress (
+                    local_file_path TEXT PRIMARY KEY,
+                    section_index INTEGER NOT NULL,
+                    position INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
@@ -199,6 +217,40 @@ class LibraryRepository:
                 (int(is_read), self._path_to_text(local_file_path)),
             )
 
+    def save_reading_progress(self, progress: ReadingProgress) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO reading_progress (
+                    local_file_path,
+                    section_index,
+                    position
+                )
+                VALUES (?, ?, ?)
+                ON CONFLICT(local_file_path) DO UPDATE SET
+                    section_index = excluded.section_index,
+                    position = excluded.position,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    self._path_to_text(progress.local_file_path),
+                    progress.section_index,
+                    progress.position,
+                ),
+            )
+
+    def get_reading_progress(self, local_file_path: Path) -> ReadingProgress | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT local_file_path, section_index, position, updated_at
+                FROM reading_progress
+                WHERE local_file_path = ?
+                """,
+                (self._path_to_text(local_file_path),),
+            ).fetchone()
+        return self._reading_progress_from_row(row) if row is not None else None
+
     def delete_book(self, local_file_path: Path, remove_file: bool = True) -> None:
         path_text = self._path_to_text(Path(local_file_path))
         with self._connect() as connection:
@@ -294,4 +346,13 @@ class LibraryRepository:
             local_file_path=Path(row["local_file_path"]),
             is_read=bool(row["is_read"]),
             deleted_at=row["deleted_at"],
+        )
+
+    @staticmethod
+    def _reading_progress_from_row(row: sqlite3.Row) -> ReadingProgress:
+        return ReadingProgress(
+            local_file_path=Path(row["local_file_path"]),
+            section_index=row["section_index"],
+            position=row["position"],
+            updated_at=row["updated_at"],
         )
