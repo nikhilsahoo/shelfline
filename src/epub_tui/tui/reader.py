@@ -3,13 +3,28 @@ from __future__ import annotations
 from pathlib import Path
 
 from textual.app import ComposeResult
-from textual.containers import VerticalScroll
+from textual.containers import Container, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Static
 
 from epub_tui.library import Bookmark, LibraryRepository, ReadingProgress
 from epub_tui.reader import EpubPreview
 from epub_tui.tui.widgets import StatusLine
+
+
+class ReaderChrome(Container):
+    def __init__(self, title: str, progress: str, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+        self.title = title
+        self.progress = progress
+
+    @property
+    def renderable(self) -> str:
+        return f"{self.title}\n{self.progress}"
+
+    def compose(self) -> ComposeResult:
+        yield StatusLine(self.title, id="reader-title", classes="reader-title")
+        yield StatusLine(self.progress, id="reader-progress", classes="reader-progress")
 
 
 class EpubReaderScreen(Screen[None]):
@@ -40,11 +55,17 @@ class EpubReaderScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         section = self.preview.section_at(self.section_index)
         yield Header()
-        yield StatusLine(self.preview.title, id="reader-title")
-        yield StatusLine(section.heading, id="reader-heading")
-        with VerticalScroll(id="reader-body"):
-            yield Static(section.text, id="reader-body-text")
-        yield StatusLine(self.preview.progress_label(self.section_index), id="reader-progress")
+        with Container(id="reader-surface", classes="reader-surface"):
+            with Container(id="reader-page", classes="reader-page"):
+                yield ReaderChrome(
+                    self.preview.title,
+                    self.preview.progress_label(self.section_index),
+                    id="reader-chrome",
+                    classes="reader-chrome",
+                )
+                yield StatusLine(section.heading, id="reader-heading", classes="reader-heading")
+                with VerticalScroll(id="reader-body", classes="reader-body"):
+                    yield Static(section.text, id="reader-body-text", classes="reader-text")
         yield StatusLine(self.KEY_HINT, id="status-line")
         yield Footer()
 
@@ -107,12 +128,12 @@ class EpubReaderScreen(Screen[None]):
 
     def _refresh_section(self) -> None:
         section = self.preview.section_at(self.section_index)
+        progress = self.preview.progress_label(self.section_index)
         self.query_one("#reader-heading", StatusLine).set_message(section.heading)
         self.query_one("#reader-body-text", Static).update(section.text)
         self.query_one("#reader-body", VerticalScroll).scroll_to(y=0, animate=False)
-        self.query_one("#reader-progress", StatusLine).set_message(
-            self.preview.progress_label(self.section_index)
-        )
+        self.query_one("#reader-progress", StatusLine).set_message(progress)
+        self.query_one("#reader-chrome", ReaderChrome).progress = progress
 
     def _initial_section_index(self, section_index: int) -> int:
         if self.library is None or self.book_path is None:

@@ -221,6 +221,33 @@ async def test_feed_screen_renders_feed_entries_and_busy_states() -> None:
 
 
 @pytest.mark.asyncio
+async def test_feed_screen_uses_entry_row_widgets_for_selection() -> None:
+    feed = CatalogFeed(
+        title="Example Feed",
+        source_url="https://example.test/opds",
+        updated="2026-05-30",
+        entries=[_navigation_entry(), _entry()],
+    )
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(feed))
+
+        rows = list(app.screen.query("#feed-body .feed-entry-row"))
+        assert [row.id for row in rows] == ["feed-entry-0", "feed-entry-1"]
+        assert rows[0].has_class("kind-folder")
+        assert rows[1].has_class("kind-book")
+        assert rows[0].has_class("selected")
+        assert not rows[1].has_class("selected")
+
+        await pilot.press("j")
+
+        rows = list(app.screen.query("#feed-body .feed-entry-row"))
+        assert not rows[0].has_class("selected")
+        assert rows[1].has_class("selected")
+
+
+@pytest.mark.asyncio
 async def test_catalog_screen_opens_feed_through_workflow() -> None:
     catalog = CatalogConfig(name="Example", url="https://example.test/opds")
     workflow = FakeWorkflow(feed=_feed())
@@ -609,6 +636,34 @@ async def test_library_screen_renders_books_and_updates_repository(tmp_path: Pat
         screen.action_delete_book()
         assert repo.list_books() == []
         assert "No downloaded books" in str(screen.query_one("#library-body").renderable)
+
+
+@pytest.mark.asyncio
+async def test_library_screen_uses_book_row_widgets_for_selection(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, title="Dune", is_read=False))
+    repo.add_book(_book(tmp_path, title="Foundation", is_read=True))
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(LibraryScreen(library=repo))
+
+        rows = list(app.screen.query("#library-body .library-book-row"))
+        assert [row.id for row in rows] == ["library-book-0", "library-book-1"]
+        assert rows[0].has_class("state-unread")
+        assert rows[1].has_class("state-read")
+        assert rows[0].has_class("selected")
+        assert not rows[1].has_class("selected")
+        assert "Ada Lovelace" in str(rows[0].renderable)
+        assert "application/epub+zip" in str(rows[0].renderable)
+        assert str(tmp_path) in str(rows[0].renderable)
+
+        await pilot.press("j")
+
+        rows = list(app.screen.query("#library-body .library-book-row"))
+        assert not rows[0].has_class("selected")
+        assert rows[1].has_class("selected")
 
 
 @pytest.mark.asyncio

@@ -41,6 +41,131 @@
     height: 1fr;
 }
 
+.feed-entry-list,
+.library-book-list {
+    height: 1fr;
+    padding: 0 1;
+}
+
+.feed-breadcrumbs {
+    text-style: bold;
+    color: $primary;
+}
+
+.feed-source,
+.feed-updated {
+    color: $text-muted;
+}
+
+.feed-entry-row,
+.library-book-row {
+    layout: horizontal;
+    padding: 0 1;
+    margin: 1 0 0 0;
+    border-left: solid $primary;
+    background: $surface;
+}
+
+.feed-entry-row.selected,
+.library-book-row.selected {
+    background: $primary 20%;
+    border-left: thick $accent;
+}
+
+.row-marker {
+    width: 2;
+    text-style: bold;
+    color: $accent;
+}
+
+.row-index {
+    width: 4;
+    color: $text-muted;
+}
+
+.row-kind {
+    width: 8;
+    text-style: bold;
+}
+
+.row-title {
+    width: 2fr;
+    text-style: bold;
+}
+
+.row-meta {
+    width: 1fr;
+    color: $text-muted;
+}
+
+.row-metadata {
+    width: 2fr;
+    color: $text;
+}
+
+.row-path {
+    width: 2fr;
+    color: $text-muted;
+}
+
+.empty-state {
+    margin: 1 0 0 0;
+    padding: 1;
+    border: dashed grey;
+    color: $text-muted;
+}
+
+#reader-surface {
+    height: 1fr;
+    align-horizontal: center;
+    background: $background;
+}
+
+#reader-page {
+    width: 84;
+    max-width: 100%;
+    height: 1fr;
+    padding: 1 2;
+    border-left: solid $primary;
+    border-right: solid $primary;
+    background: $surface;
+}
+
+#reader-chrome {
+    layout: horizontal;
+    height: 1;
+    color: $text-muted;
+}
+
+#reader-title {
+    width: 2fr;
+    text-style: bold;
+    color: $primary;
+}
+
+#reader-progress {
+    width: 1fr;
+    content-align: right middle;
+    color: $text-muted;
+}
+
+#reader-heading {
+    margin: 1 0 0 0;
+    text-style: bold;
+    color: $accent;
+}
+
+#reader-body {
+    margin: 1 0 0 0;
+    padding: 0 1;
+    border-top: solid $primary;
+}
+
+.reader-text {
+    width: 100%;
+    color: $text;
+}
+
 .state-error {
     color: $error;
 }

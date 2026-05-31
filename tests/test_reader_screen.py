@@ -147,6 +147,26 @@ async def test_reader_screen_body_is_scrollable() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reader_screen_uses_constrained_reading_surface() -> None:
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(EpubReaderScreen(_preview()))
+
+        surface = app.screen.query_one("#reader-surface")
+        page = app.screen.query_one("#reader-page")
+        chrome = app.screen.query_one("#reader-chrome")
+        text = app.screen.query_one("#reader-body-text")
+
+        assert surface.has_class("reader-surface")
+        assert page.has_class("reader-page")
+        assert chrome.has_class("reader-chrome")
+        assert text.has_class("reader-text")
+        assert "Reader Title" in str(chrome.renderable)
+        assert "1 / 2" in str(chrome.renderable)
+
+
+@pytest.mark.asyncio
 async def test_reader_screen_next_and_previous_update_section_and_progress() -> None:
     app = EpubTuiApp(config=None)
 

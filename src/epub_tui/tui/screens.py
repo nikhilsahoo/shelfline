@@ -20,6 +20,8 @@ from epub_tui.tui.reader import EpubReaderScreen
 from epub_tui.tui.widgets import (
     BusyIndicator,
     CoverDisplay,
+    FeedEntryList,
+    LibraryBookList,
     DownloadProgressDisplay,
     StatusLine,
 )
@@ -258,7 +260,13 @@ class FeedScreen(Screen[None]):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield StatusLine(self._feed_text(), id="feed-body")
+        yield FeedEntryList(
+            breadcrumbs=self.breadcrumbs,
+            source_url=self.feed.source_url,
+            updated=self.feed.updated,
+            entries=self.feed.entries,
+            selected_index=self.selected_index,
+        )
         yield BusyIndicator(id="busy-indicator")
         yield StatusLine(self.KEY_HINT, id="status-line")
         yield Footer()
@@ -327,7 +335,7 @@ class FeedScreen(Screen[None]):
         if not self.feed.entries:
             return
         self.selected_index = max(0, min(len(self.feed.entries) - 1, self.selected_index + delta))
-        self.query_one("#feed-body", StatusLine).set_message(self._feed_text())
+        self.query_one("#feed-body", FeedEntryList).set_selected_index(self.selected_index)
         self.query_one("#status-line", StatusLine).set_message(
             f"Selected {self.feed.entries[self.selected_index].title}"
         )
@@ -337,17 +345,13 @@ class FeedScreen(Screen[None]):
         self.query_one("#status-line", StatusLine).set_message(message)
 
     def _feed_text(self) -> str:
-        lines = [" > ".join(self.breadcrumbs), self.feed.source_url]
-        if self.feed.updated:
-            lines.append(f"Updated: {self.feed.updated}")
-        if not self.feed.entries:
-            lines.append("No entries")
-            return "\n".join(lines)
-
-        for index, entry in enumerate(self.feed.entries, start=1):
-            marker = ">" if index - 1 == self.selected_index else " "
-            lines.append(f"{marker} {index}. {self._entry_label(entry)}")
-        return "\n".join(lines)
+        return FeedEntryList.render_text(
+            self.breadcrumbs,
+            self.feed.source_url,
+            self.feed.updated,
+            self.feed.entries,
+            self.selected_index,
+        )
 
     def _entry_kind(self, entry: CatalogEntry) -> str:
         if entry.navigation_url is not None:
@@ -549,7 +553,7 @@ class LibraryScreen(Screen[None]):
         replace_region(
             self.query_one("#main-region"),
             Input(placeholder="Search library", disabled=True, id="library-search"),
-            StatusLine(self._library_text(), id="library-body"),
+            LibraryBookList(self.books, selected_index=self.selected_index),
         )
         replace_region(
             self.query_one("#detail-region"),
@@ -579,7 +583,7 @@ class LibraryScreen(Screen[None]):
         self.current_search_query = cleaned
         self.books = self.library.search_books(LibrarySearch(query=cleaned or None))
         self.selected_index = 0
-        self.query_one("#library-body", StatusLine).set_message(self._library_text())
+        self.query_one("#library-body", LibraryBookList).set_books(self.books, self.selected_index)
         self._set_status(f"Search: {cleaned}" if cleaned else "Search cleared")
 
     def action_toggle_read(self) -> None:
@@ -662,7 +666,7 @@ class LibraryScreen(Screen[None]):
                 self.books = self.library.list_books()
         if self.selected_index >= len(self.books):
             self.selected_index = max(0, len(self.books) - 1)
-        self.query_one("#library-body", StatusLine).set_message(self._library_text())
+        self.query_one("#library-body", LibraryBookList).set_books(self.books, self.selected_index)
 
     def _set_status(self, message: str) -> None:
         self.query_one("#status-line", StatusLine).set_message(message)
@@ -671,24 +675,11 @@ class LibraryScreen(Screen[None]):
         if not self.books:
             return
         self.selected_index = max(0, min(len(self.books) - 1, self.selected_index + delta))
-        self.query_one("#library-body", StatusLine).set_message(self._library_text())
+        self.query_one("#library-body", LibraryBookList).set_selected_index(self.selected_index)
         self._set_status(f"Selected {self.books[self.selected_index].title}")
 
     def _library_text(self) -> str:
-        if not self.books:
-            return "No downloaded books"
-
-        lines: list[str] = []
-        for index, book in enumerate(self.books, start=1):
-            authors = ", ".join(book.authors) if book.authors else "Unknown author"
-            read_state = "Read" if book.is_read else "Unread"
-            marker = ">" if index - 1 == self.selected_index else " "
-            lines.append(
-                f"{marker} {index}. {book.title} - {authors} [{read_state}] "
-                f"{book.media_type} | {book.source_catalog}"
-            )
-            lines.append(f"  {book.local_file_path}")
-        return "\n".join(lines)
+        return LibraryBookList.render_text(self.books, self.selected_index)
 
 
 def _error_message(error: Exception) -> str:
