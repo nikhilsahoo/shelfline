@@ -195,6 +195,14 @@ def _book(tmp_path: Path, *, title: str = "Interesting Book", is_read: bool = Fa
     )
 
 
+def _visible_library_detail_text(screen: Any) -> str:
+    return "\n".join(
+        str(line.render())
+        for line in screen.query("#library-detail Static")
+        if line.display
+    )
+
+
 @pytest.mark.asyncio
 async def test_feed_screen_renders_feed_entries_and_busy_states() -> None:
     feed = CatalogFeed(
@@ -849,7 +857,7 @@ async def test_library_screen_detail_pane_shows_selected_book_metadata_on_mount(
     async with app.run_test():
         await app.push_screen(LibraryScreen(library=repo))
 
-        rendered = str(app.screen.query_one("#library-detail").renderable)
+        rendered = _visible_library_detail_text(app.screen)
         assert "Dune" in rendered
         assert "Ada Lovelace" in rendered
         assert "Unread" in rendered
@@ -869,12 +877,74 @@ async def test_library_screen_detail_pane_updates_when_selection_moves(tmp_path:
 
     async with app.run_test() as pilot:
         await app.push_screen(LibraryScreen(library=repo))
+        rendered = _visible_library_detail_text(app.screen)
+        assert "Dune" in rendered
+        assert "Read status: Unread" in rendered
+        assert "Foundation" not in rendered
+
         await pilot.press("j")
 
-        rendered = str(app.screen.query_one("#library-detail").renderable)
+        rendered = _visible_library_detail_text(app.screen)
         assert "Foundation" in rendered
-        assert "Read" in rendered
+        assert "Read status: Read" in rendered
+        assert "Status: Selected Foundation" in rendered
         assert "Dune" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_library_screen_detail_pane_updates_when_read_status_toggles(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, title="Dune", is_read=False))
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(LibraryScreen(library=repo))
+        await pilot.pause()
+
+        screen = app.screen
+        rendered = _visible_library_detail_text(screen)
+        assert "Dune" in rendered
+        assert "Read status: Unread" in rendered
+
+        screen.action_toggle_read()
+        await pilot.pause()
+
+        rendered = _visible_library_detail_text(screen)
+        assert "Dune" in rendered
+        assert "Read status: Read" in rendered
+        assert "Status: Read status updated" in rendered
+
+
+@pytest.mark.asyncio
+async def test_library_screen_detail_pane_updates_when_selected_book_is_deleted(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, title="Dune", is_read=False))
+    repo.add_book(_book(tmp_path, title="Foundation", is_read=True))
+    app = EpubTuiApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(LibraryScreen(library=repo))
+        await pilot.pause()
+        screen = app.screen
+
+        screen.action_delete_book()
+        await pilot.pause()
+
+        rendered = _visible_library_detail_text(screen)
+        assert "Foundation" in rendered
+        assert "Read status: Read" in rendered
+        assert "Status: Book deleted" in rendered
+        assert "Dune" not in rendered
+
+        screen.action_delete_book()
+        await pilot.pause()
+
+        rendered = _visible_library_detail_text(screen)
+        assert "No downloaded books" in rendered
+        assert "Status: Book deleted" in rendered
+        assert "Foundation" not in rendered
 
 
 @pytest.mark.asyncio
@@ -886,7 +956,7 @@ async def test_library_screen_detail_pane_shows_empty_message_for_empty_library(
     async with app.run_test():
         await app.push_screen(LibraryScreen(library=repo))
 
-        rendered = str(app.screen.query_one("#library-detail").renderable)
+        rendered = _visible_library_detail_text(app.screen)
         assert "No downloaded books" in rendered
         assert "Catalogs" in rendered
 
@@ -1043,12 +1113,16 @@ async def test_library_screen_refresh_binding_loads_new_books(tmp_path: Path) ->
     async with app.run_test() as pilot:
         await app.push_screen(LibraryScreen(library=repo))
         assert "No downloaded books" in str(app.screen.query_one("#library-body").renderable)
+        assert "No downloaded books" in _visible_library_detail_text(app.screen)
 
         repo.add_book(_book(tmp_path, is_read=False))
         await pilot.press("r")
 
         assert "Interesting Book" in str(app.screen.query_one("#library-body").renderable)
         assert "Library refreshed" in str(app.screen.query_one("#status-line").renderable)
+        detail = _visible_library_detail_text(app.screen)
+        assert "Interesting Book" in detail
+        assert "Status: Library refreshed" in detail
 
 
 @pytest.mark.asyncio
@@ -1069,6 +1143,24 @@ async def test_library_screen_filters_books_by_search_text(tmp_path: Path) -> No
         assert "Dune" in rendered
         assert "Foundation" not in rendered
         assert "Search: dune" in str(app.screen.query_one("#status-line").renderable)
+        detail = _visible_library_detail_text(app.screen)
+        assert "Dune" in detail
+        assert "Foundation" not in detail
+        assert "Status: Search: dune" in detail
+
+        await pilot.press("/")
+        app.screen.query_one("#library-search").value = "missing"
+        await pilot.press("enter")
+
+        rendered = str(app.screen.query_one("#library-body").renderable)
+        assert "No downloaded books" in rendered
+        assert "Dune" not in rendered
+        assert "Foundation" not in rendered
+        detail = _visible_library_detail_text(app.screen)
+        assert "No downloaded books" in detail
+        assert "Status: Search: missing" in detail
+        assert "Dune" not in detail
+        assert "Foundation" not in detail
 
 
 @pytest.mark.asyncio
