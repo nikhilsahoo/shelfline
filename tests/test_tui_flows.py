@@ -188,6 +188,7 @@ async def test_feed_screen_renders_feed_entries_and_busy_states() -> None:
         assert "Example Feed" in rendered
         assert "Catalog > Example Feed" in rendered
         assert "[Folder] Fiction" in rendered
+        assert "[Folder] Fiction - Unknown author" not in rendered
         assert "[Book] Interesting Book" in rendered
         assert "Interesting Book" in rendered
 

@@ -319,9 +319,8 @@ class FeedScreen(Screen[None]):
             return "\n".join(lines)
 
         for index, entry in enumerate(self.feed.entries, start=1):
-            authors = ", ".join(entry.authors) if entry.authors else "Unknown author"
             marker = ">" if index - 1 == self.selected_index else " "
-            lines.append(f"{marker} {index}. {self._entry_kind(entry)} {entry.title} - {authors}")
+            lines.append(f"{marker} {index}. {self._entry_label(entry)}")
         return "\n".join(lines)
 
     def _entry_kind(self, entry: CatalogEntry) -> str:
@@ -330,6 +329,16 @@ class FeedScreen(Screen[None]):
         if entry.acquisition_links:
             return "[Book]"
         return "[Entry]"
+
+    def _entry_label(self, entry: CatalogEntry) -> str:
+        label = f"{self._entry_kind(entry)} {entry.title}"
+        if entry.navigation_url is not None:
+            return label
+        if entry.authors:
+            return f"{label} - {', '.join(entry.authors)}"
+        if entry.acquisition_links:
+            return f"{label} - Unknown author"
+        return label
 
 
 class EntryScreen(Screen[None]):
