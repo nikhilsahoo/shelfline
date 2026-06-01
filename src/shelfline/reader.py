@@ -113,7 +113,7 @@ class _HtmlTextExtractor(HTMLParser):
     }
 
     def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
+        super().__init__(convert_charrefs=False)
         self._parts: list[str] = []
         self._headings: dict[str, str] = {}
         self._active_heading: str | None = None
@@ -168,6 +168,12 @@ class _HtmlTextExtractor(HTMLParser):
             self._heading_parts.append(data)
             return
         self._parts.append(data)
+
+    def handle_entityref(self, name: str) -> None:
+        self.handle_data(f"&{name};")
+
+    def handle_charref(self, name: str) -> None:
+        self.handle_data(f"&#{name};")
 
 
 def extract_epub_preview(path: Path) -> EpubPreview:
@@ -361,9 +367,31 @@ def _normalize_inline_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+_ESCAPED_BR_TAG_RE = re.compile(r"&lt;\s*br\s*/?\s*&gt;", flags=re.IGNORECASE)
+_ESCAPED_CLOSING_P_TAG_RE = re.compile(r"&lt;\s*/\s*p\s*&gt;", flags=re.IGNORECASE)
+_NBSP_ENTITY_PREFIXES = ("&nbsp;", "&amp;nbsp;", "&#160;", "&#xa0;")
+
+
 def _normalize_block_text(text: str) -> str:
-    text = html.unescape(text)
-    text = re.sub(r"<\s*br\s*/?\s*>", "\n", text, flags=re.IGNORECASE)
-    text = re.sub(r"<\s*/\s*p\s*>", "\n\n", text, flags=re.IGNORECASE)
+    text = _replace_escaped_markup_artifacts(text, _ESCAPED_BR_TAG_RE, "\n")
+    text = _replace_escaped_markup_artifacts(text, _ESCAPED_CLOSING_P_TAG_RE, "\n\n")
+    text = html.unescape(html.unescape(text))
     lines = [_normalize_inline_text(line) for line in text.splitlines()]
     return "\n\n".join(line for line in lines if line)
+
+
+def _replace_escaped_markup_artifacts(text: str, pattern: re.Pattern[str], replacement: str) -> str:
+    return pattern.sub(
+        lambda match: replacement if _looks_like_escaped_markup_artifact(text, match) else match.group(0),
+        text,
+    )
+
+
+def _looks_like_escaped_markup_artifact(text: str, match: re.Match[str]) -> bool:
+    right = text[match.end() :]
+    if right.casefold().startswith(_NBSP_ENTITY_PREFIXES):
+        return True
+
+    left_char = text[match.start() - 1] if match.start() else ""
+    right_char = right[:1]
+    return bool(left_char and right_char and not left_char.isspace() and not right_char.isspace())

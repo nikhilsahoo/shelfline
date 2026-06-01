@@ -113,6 +113,27 @@ def test_reader_cleanup_preserves_escaped_angle_bracket_prose(tmp_path: Path) ->
     assert "1 < 2 > 0 & true." in preview.sections[0].text
 
 
+def test_reader_cleanup_preserves_escaped_html_tag_examples(tmp_path: Path) -> None:
+    epub_path = tmp_path / "escaped-html-examples.epub"
+    chapter = _chapter(
+        "Examples",
+        "examples.xhtml",
+        b"""
+        <html><body>
+          <h1>Examples</h1>
+          <p>Use &lt;br /&gt; in HTML examples.</p>
+          <p>Escaped closing tags like &lt;/p&gt; should stay visible.</p>
+        </body></html>
+        """,
+    )
+    _write_epub(epub_path, [chapter])
+
+    preview = extract_epub_preview(epub_path)
+
+    assert "Use <br /> in HTML examples." in preview.sections[0].text
+    assert "Escaped closing tags like </p> should stay visible." in preview.sections[0].text
+
+
 def test_epub_preview_section_count_returns_number_of_sections() -> None:
     preview = _preview_with_sections("One", "Two", "Three")
 
