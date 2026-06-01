@@ -304,6 +304,39 @@ async def test_cover_display_auto_mode_does_not_expose_image_path_when_rendering
     assert str(image_path) not in rendered
 
 
+@pytest.mark.asyncio
+async def test_cover_display_refreshes_mounted_fallback_text() -> None:
+    app = ShelflineApp()
+
+    async with app.run_test():
+        display = CoverDisplay(
+            title="First Book",
+            authors=["Ada Lovelace"],
+            image_path=None,
+            display_mode="text",
+        )
+        await app.mount(display)
+        fallback = display.query_one(".cover-fallback")
+
+        display.update_cover(
+            title="Second Book",
+            authors=["Mary Shelley"],
+            image_path=None,
+            display_mode="text",
+            media_type="application/pdf",
+            source="Example",
+            cache_status=None,
+        )
+
+        rendered = str(fallback.render())
+
+    assert "Second Book" in rendered
+    assert "Mary Shelley" in rendered
+    assert "application/pdf" in rendered
+    assert "First Book" not in rendered
+    assert "Ada Lovelace" not in rendered
+
+
 def test_cover_display_text_mode_shows_polished_metadata(tmp_path: Path) -> None:
     image_path = tmp_path / "cover.jpg"
     image_path.write_bytes(b"not a real image")

@@ -853,8 +853,57 @@ class CoverDisplay(Static):
 
         image_widget = self._image_widget()
         if image_widget is not None:
+            image_widget.add_class("cover-image")
             yield image_widget
         yield Static(self._renderable, classes="cover-fallback")
+
+    def update_cover(
+        self,
+        *,
+        title: str,
+        authors: list[str] | tuple[str, ...] | None,
+        image_path: str | Path | None,
+        display_mode: str,
+        media_type: str | None,
+        source: str | None,
+        cache_status: str | None,
+        terminal_graphics: bool | None = None,
+    ) -> None:
+        self.title = title
+        self.authors = list(authors or [])
+        self.image_path = Path(image_path) if image_path is not None else None
+        if terminal_graphics is not None:
+            self.terminal_graphics = terminal_graphics
+        self.display_mode = display_mode
+        self.media_type = media_type
+        self.source = source
+        self.cache_status = cache_status
+
+        rendered = self._render_cover()
+        self._renderable = rendered
+        self.update(rendered)
+        if not self.is_mounted:
+            return
+
+        if self.display_mode == "off":
+            self.display = False
+            return
+
+        self.display = True
+        fallback = next(iter(self.query(".cover-fallback")), None)
+        if fallback is None:
+            fallback = Static(rendered, classes="cover-fallback")
+            self.mount(fallback)
+        else:
+            fallback.display = True
+            fallback.update(rendered)
+
+        for image in self.query(".cover-image"):
+            image.remove()
+        image_widget = self._image_widget()
+        if image_widget is not None:
+            image_widget.add_class("cover-image")
+            self.mount(image_widget, before=fallback)
 
     def _image_widget(self) -> Widget | None:
         if self.display_mode != "auto":

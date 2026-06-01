@@ -501,16 +501,15 @@ class EntryScreen(Screen[None]):
 
     def _update_cover_display(self) -> None:
         cover = self.query_one("#cover-display", CoverDisplay)
-        cover.title = self.entry.title
-        cover.authors = list(self.entry.authors)
-        cover.image_path = None
-        cover.display_mode = _cover_display_mode(getattr(self.app, "config", None))
-        cover.media_type = self._selected_media_type()
-        cover.source = self.catalog.name if self.catalog is not None else None
-        cover.cache_status = None
-        rendered = cover._render_cover()
-        cover._renderable = rendered
-        cover.update(rendered)
+        cover.update_cover(
+            title=self.entry.title,
+            authors=self.entry.authors,
+            image_path=None,
+            display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            media_type=self._selected_media_type(),
+            source=self.catalog.name if self.catalog is not None else None,
+            cache_status=None,
+        )
 
     def _selected_media_type(self) -> str | None:
         if not self.entry.acquisition_links:
@@ -749,27 +748,27 @@ class LibraryScreen(Screen[None]):
         cover = self.query_one("#cover-display", CoverDisplay)
         if book is None:
             cover.display = False
-            cover.title = ""
-            cover.authors = []
-            cover.image_path = None
-            cover.media_type = None
-            cover.source = None
-            cover.cache_status = None
-            cover._renderable = ""
-            cover.update("")
+            cover.update_cover(
+                title="",
+                authors=[],
+                image_path=None,
+                display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+                media_type=None,
+                source=None,
+                cache_status=None,
+            )
+            cover.display = False
             return
 
-        cover.display = True
-        cover.title = book.title
-        cover.authors = list(book.authors)
-        cover.image_path = book.cover_image_path
-        cover.display_mode = _cover_display_mode(getattr(self.app, "config", None))
-        cover.media_type = book.media_type
-        cover.source = book.source_catalog
-        cover.cache_status = book.cover_cache_status
-        rendered = cover._render_cover()
-        cover._renderable = rendered
-        cover.update(rendered)
+        cover.update_cover(
+            title=book.title,
+            authors=book.authors,
+            image_path=book.cover_image_path,
+            display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            media_type=book.media_type,
+            source=book.source_catalog,
+            cache_status=book.cover_cache_status,
+        )
 
 
 def _error_message(error: Exception) -> str:
