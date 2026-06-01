@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import html
 from html.parser import HTMLParser
 from pathlib import Path
 import re
@@ -60,14 +61,19 @@ class ReaderError(RuntimeError):
 
 _STRUCTURAL_LABEL_TOKENS = {
     "contents",
+    "copyright",
+    "cover",
     "guide",
     "landmark",
     "landmarks",
     "nav",
     "navigation",
+    "titlepage",
     "toc",
 }
-_STRUCTURAL_LABEL_PHRASES = ("table of contents",)
+_STRUCTURAL_LABEL_PHRASES = ("table of contents", "title page")
+_TITLEPAGE_LIKE_STRUCTURAL_TOKENS = {"copyright", "cover", "titlepage"}
+_TITLEPAGE_LIKE_STRUCTURAL_PHRASES = ("title page",)
 
 
 class _HtmlTextExtractor(HTMLParser):
@@ -258,6 +264,8 @@ def _section_from_item(item: Any) -> EpubSection | None:
 
 
 def _is_structural_document_item(item: Any, section: EpubSection) -> bool:
+    if _has_titlepage_like_structural_label(item, section):
+        return _looks_like_titlepage_text(section.text)
     return _has_structural_label(item, section) and _looks_like_navigation_text(section.text)
 
 
@@ -269,6 +277,18 @@ def _has_structural_label(item: Any, section: EpubSection) -> bool:
         if any(phrase in label for phrase in _STRUCTURAL_LABEL_PHRASES):
             return True
         if set(re.findall(r"[a-z0-9]+", label)) & _STRUCTURAL_LABEL_TOKENS:
+            return True
+    return False
+
+
+def _has_titlepage_like_structural_label(item: Any, section: EpubSection) -> bool:
+    for value in _item_label_values(item, section):
+        label = _normalize_label(value)
+        if not label:
+            continue
+        if any(phrase in label for phrase in _TITLEPAGE_LIKE_STRUCTURAL_PHRASES):
+            return True
+        if set(re.findall(r"[a-z0-9]+", label)) & _TITLEPAGE_LIKE_STRUCTURAL_TOKENS:
             return True
     return False
 
@@ -305,6 +325,22 @@ def _looks_like_navigation_text(text: str) -> bool:
     )
 
 
+def _looks_like_titlepage_text(text: str) -> bool:
+    lines = [line for line in (_normalize_inline_text(line) for line in text.splitlines()) if line]
+    if not lines:
+        return False
+
+    word_count = len(re.findall(r"\w+", " ".join(lines)))
+    short_lines = sum(len(line) <= 80 for line in lines)
+    compact_lines = sum(len(re.findall(r"\w+", line)) <= 12 for line in lines)
+
+    return (
+        word_count <= 80
+        and short_lines == len(lines)
+        and compact_lines / len(lines) >= 0.8
+    )
+
+
 def _normalize_label(value: str) -> str:
     label = value.casefold()
     label = re.sub(r"\.[a-z0-9]+$", "", label)
@@ -326,5 +362,9 @@ def _normalize_inline_text(text: str) -> str:
 
 
 def _normalize_block_text(text: str) -> str:
+    text = html.unescape(text)
+    text = re.sub(r"<\s*br\s*/?\s*>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<\s*/\s*p\s*>", "\n\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
     lines = [_normalize_inline_text(line) for line in text.splitlines()]
     return "\n\n".join(line for line in lines if line)

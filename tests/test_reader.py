@@ -71,6 +71,27 @@ def test_extract_epub_preview_reads_spine_text_with_outline(tmp_path: Path) -> N
     assert preview.outline == (EpubOutlineItem(title="Chapter One", section_index=0),)
 
 
+def test_reader_cleanup_removes_leftover_break_tags_and_entities(tmp_path: Path) -> None:
+    epub_path = tmp_path / "cleanup.epub"
+    chapter = _chapter(
+        "Cleanup",
+        "cleanup.xhtml",
+        b"""
+        <html><body>
+          <h1>Cleanup</h1>
+          <p>One &lt;br /&gt;&amp;nbsp;Two &amp;amp; Three</p>
+        </body></html>
+        """,
+    )
+    _write_epub(epub_path, [chapter])
+
+    preview = extract_epub_preview(epub_path)
+
+    assert "<br" not in preview.sections[0].text
+    assert "One" in preview.sections[0].text
+    assert "Two & Three" in preview.sections[0].text
+
+
 def test_epub_preview_section_count_returns_number_of_sections() -> None:
     preview = _preview_with_sections("One", "Two", "Three")
 
@@ -245,6 +266,27 @@ def test_structural_guide_spine_document_is_skipped(tmp_path: Path) -> None:
         EpubOutlineItem(title="Intro", section_index=0),
         EpubOutlineItem(title="Chapter 1", section_index=1),
     )
+
+
+def test_reader_skips_titlepage_like_structural_sections(tmp_path: Path) -> None:
+    epub_path = tmp_path / "titlepage.epub"
+    titlepage = _chapter(
+        "Cover",
+        "titlepage.xhtml",
+        b"<html><body><h1>Cover</h1><p>Cover</p></body></html>",
+        uid="titlepage",
+    )
+    chapter = _chapter(
+        "Real Chapter",
+        "chapter.xhtml",
+        b"<html><body><h1>Real Chapter</h1><p>The actual book starts here.</p></body></html>",
+        uid="chapter",
+    )
+    _write_epub(epub_path, [titlepage, chapter], spine=["titlepage", "chapter"])
+
+    preview = extract_epub_preview(epub_path)
+
+    assert [section.heading for section in preview.sections] == ["Real Chapter"]
 
 
 def test_prose_chapter_with_guide_or_contents_words_is_kept(tmp_path: Path) -> None:
