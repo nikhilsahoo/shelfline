@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Fiction</title>
+  <id>urn:example:fiction</id>
+  <updated>2026-05-30T00:00:00Z</updated>
+  <entry>
+    <title>Sample Book</title>
+    <id>urn:isbn:9780000000001</id>
+    <updated>2026-05-30T00:00:00Z</updated>
+    <author><name>Ada Writer</name></author>
+    <summary>A short fixture book.</summary>
+    <link rel="http://opds-spec.org/image" href="covers/sample.jpg" type="image/jpeg" title="Cover"/>
+    <link rel="http://opds-spec.org/image/thumbnail" href="covers/sample-thumb.jpg" type="image/jpeg" title="Thumbnail"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/sample.epub" type="application/epub+zip" title="EPUB"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/sample.pdf" type="application/pdf" title="PDF"/>
+  </entry>
+</feed>
