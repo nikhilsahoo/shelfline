@@ -10,7 +10,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Header, Input, Static
 
 from shelfline.catalog.models import CatalogEntry, CatalogFeed
-from shelfline.config import AppConfig, AppPreferences, CatalogConfig
+from shelfline.config import AppConfig, AppPreferences, CatalogConfig, ReaderPreferences
 from shelfline.downloads import DownloadProgress
 from shelfline.library import BookRecord, LibraryRepository, LibrarySearch
 from shelfline.reader import EpubPreview, ReaderError, extract_epub_preview
@@ -671,6 +671,7 @@ class LibraryScreen(Screen[None]):
                 preview,
                 library=self.library,
                 book_path=book.local_file_path,
+                preferences=_reader_preferences(getattr(self.app, "config", None)),
             )
         )
 
@@ -780,6 +781,13 @@ def _cover_display_mode(config: AppConfig | None) -> str:
     if isinstance(preferences, AppPreferences):
         return preferences.covers.display
     return "auto"
+
+
+def _reader_preferences(config: AppConfig | None) -> ReaderPreferences | None:
+    preferences = getattr(config, "preferences", None)
+    if isinstance(preferences, AppPreferences):
+        return preferences.reader
+    return None
 
 
 class EpubPreviewScreen(Screen[None]):

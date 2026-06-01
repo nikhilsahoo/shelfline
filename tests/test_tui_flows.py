@@ -11,7 +11,13 @@ from textual.widgets import Footer
 from shelfline.app import ShelflineApp
 from shelfline.catalog.client import CatalogFetchError
 from shelfline.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
-from shelfline.config import AppConfig, AppPreferences, CatalogConfig, CoverPreferences
+from shelfline.config import (
+    AppConfig,
+    AppPreferences,
+    CatalogConfig,
+    CoverPreferences,
+    ReaderPreferences,
+)
 from shelfline.downloads import DownloadError, DownloadProgress
 from shelfline.library import BookRecord, LibraryRepository
 from shelfline.reader import EpubOutlineItem, EpubPreview, EpubSection
@@ -1146,6 +1152,43 @@ async def test_library_screen_selects_and_opens_epub_reader(tmp_path: Path) -> N
         await pilot.press("enter")
 
         assert isinstance(app.screen, EpubReaderScreen)
+
+
+@pytest.mark.asyncio
+async def test_library_screen_open_reader_applies_reader_preferences(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(_book(tmp_path, is_read=False))
+    app = ShelflineApp(
+        config=AppConfig(
+            library_path=tmp_path,
+            preferences=AppPreferences(
+                reader=ReaderPreferences(
+                    width="wide",
+                    theme="warm",
+                    paragraph_spacing="relaxed",
+                    show_progress=False,
+                    show_chapter_title=False,
+                )
+            ),
+        ),
+        library=repo,
+    )
+
+    async with app.run_test() as pilot:
+        await app.push_screen(LibraryScreen(library=repo))
+        await pilot.press("enter")
+
+        assert isinstance(app.screen, EpubReaderScreen)
+        page = app.screen.query_one("#reader-page")
+        progress = app.screen.query_one("#reader-progress")
+        heading = app.screen.query_one("#reader-heading")
+
+        assert page.has_class("reader-width-wide")
+        assert page.has_class("reader-theme-warm")
+        assert page.has_class("reader-spacing-relaxed")
+        assert progress.display is False
+        assert heading.display is False
 
 
 @pytest.mark.asyncio
