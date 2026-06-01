@@ -3,9 +3,11 @@ import base64
 
 import httpx
 import pytest
+from ebooklib import epub
 from pytest_httpx import HTTPXMock
 
 from shelfline.config import AppConfig, CatalogConfig, load_config
+from shelfline.covers import cached_cover_path
 from shelfline.credentials import CredentialStore, MemoryCredentialBackend
 from shelfline.downloads import DownloadError, DownloadProgress
 from shelfline.services import CatalogWorkflow
@@ -20,6 +22,11 @@ async def test_workflow_fetches_parses_caches_and_downloads(
     feed_xml = (fixture_dir / "opds" / "acquisition.xml").read_text(encoding="utf-8")
     httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
     httpx_mock.add_response(url="https://example.test/opds/books/sample.epub", content=b"epub bytes")
+    httpx_mock.add_response(
+        url="https://example.test/opds/covers/sample.jpg",
+        content=b"cover bytes",
+        headers={"content-type": "image/jpeg"},
+    )
 
     config = AppConfig(
         library_path=tmp_path / "books",
@@ -43,8 +50,221 @@ async def test_workflow_fetches_parses_caches_and_downloads(
     assert workflow.library.list_books()[0].media_type == "application/epub+zip"
     assert workflow.library.list_books()[0].cover_image_url == "https://example.test/opds/covers/sample.jpg"
     assert workflow.library.list_books()[0].thumbnail_url == "https://example.test/opds/covers/sample-thumb.jpg"
+    assert workflow.library.list_books()[0].cover_image_path == cached_cover_path(
+        tmp_path / "books",
+        "https://example.test/opds/covers/sample.jpg",
+        "image/jpeg",
+    )
+    assert workflow.library.list_books()[0].cover_cache_status == "cached"
     assert workflow.library.list_books()[0].local_file_path == tmp_path / "books" / "Sample Book.epub"
     assert workflow.library.list_books()[0].is_read is False
+
+
+@pytest.mark.asyncio
+async def test_workflow_caches_remote_cover_and_updates_book_metadata(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Public</title>
+  <entry>
+    <title>Covered Book</title>
+    <link rel="http://opds-spec.org/image" href="covers/full.png" type="image/png"/>
+    <link rel="http://opds-spec.org/image/thumbnail" href="covers/thumb.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/covered.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    httpx_mock.add_response(url="https://example.test/opds/books/covered.epub", content=b"epub bytes")
+    httpx_mock.add_response(
+        url="https://example.test/opds/covers/full.png",
+        content=b"full-cover",
+        headers={"content-type": "image/png"},
+    )
+    catalog = CatalogConfig(name="Public", url="https://example.test/opds")
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    feed = await workflow.fetch_catalog(catalog)
+    await workflow.download_best_epub(catalog, feed.entries[0])
+
+    book = workflow.library.list_books()[0]
+    assert book.cover_image_url == "https://example.test/opds/covers/full.png"
+    assert book.thumbnail_url == "https://example.test/opds/covers/thumb.jpg"
+    assert book.cover_image_path == cached_cover_path(
+        tmp_path / "books",
+        "https://example.test/opds/covers/full.png",
+        "image/png",
+    )
+    assert book.cover_image_path.read_bytes() == b"full-cover"
+    assert book.cover_cache_status == "cached"
+
+
+@pytest.mark.asyncio
+async def test_workflow_caches_thumbnail_when_full_cover_is_absent(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Public</title>
+  <entry>
+    <title>Thumbnail Book</title>
+    <link rel="http://opds-spec.org/image/thumbnail" href="covers/thumb.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/thumb.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    httpx_mock.add_response(url="https://example.test/opds/books/thumb.epub", content=b"epub bytes")
+    httpx_mock.add_response(
+        url="https://example.test/opds/covers/thumb.jpg",
+        content=b"thumb-cover",
+        headers={"content-type": "image/jpeg"},
+    )
+    catalog = CatalogConfig(name="Public", url="https://example.test/opds")
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    feed = await workflow.fetch_catalog(catalog)
+    await workflow.download_best_epub(catalog, feed.entries[0])
+
+    book = workflow.library.list_books()[0]
+    assert book.cover_image_url == "https://example.test/opds/covers/thumb.jpg"
+    assert book.cover_image_path == cached_cover_path(
+        tmp_path / "books",
+        "https://example.test/opds/covers/thumb.jpg",
+        "image/jpeg",
+    )
+    assert book.cover_image_path.read_bytes() == b"thumb-cover"
+    assert book.cover_cache_status == "cached"
+
+
+@pytest.mark.asyncio
+async def test_workflow_cover_cache_failure_does_not_fail_download(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Public</title>
+  <entry>
+    <title>Missing Cover Book</title>
+    <link rel="http://opds-spec.org/image" href="covers/missing.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/missing-cover.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    httpx_mock.add_response(url="https://example.test/opds/books/missing-cover.epub", content=b"not an epub")
+    httpx_mock.add_response(url="https://example.test/opds/covers/missing.jpg", status_code=404)
+    catalog = CatalogConfig(name="Public", url="https://example.test/opds")
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    feed = await workflow.fetch_catalog(catalog)
+    downloaded = await workflow.download_best_epub(catalog, feed.entries[0])
+
+    assert downloaded.read_bytes() == b"not an epub"
+    book = workflow.library.list_books()[0]
+    assert book.cover_image_path is None
+    assert book.cover_cache_status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_workflow_skips_cover_cache_when_cover_display_is_off(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Public</title>
+  <entry>
+    <title>Text Only Book</title>
+    <link rel="http://opds-spec.org/image" href="covers/full.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/text-only.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    httpx_mock.add_response(url="https://example.test/opds/books/text-only.epub", content=b"epub bytes")
+    catalog = CatalogConfig(name="Public", url="https://example.test/opds")
+    workflow = CatalogWorkflow(
+        AppConfig(
+            library_path=tmp_path / "books",
+            catalogs=[catalog],
+            preferences={"covers": {"display": "off"}},
+        ),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    feed = await workflow.fetch_catalog(catalog)
+    await workflow.download_best_epub(catalog, feed.entries[0])
+
+    book = workflow.library.list_books()[0]
+    assert book.cover_image_path is None
+    assert book.cover_cache_status == "skipped"
+
+
+@pytest.mark.asyncio
+async def test_workflow_extracts_embedded_epub_cover_after_remote_cover_failure(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    epub_path = tmp_path / "source.epub"
+    cover_bytes = b"embedded-cover"
+    book = epub.EpubBook()
+    book.set_identifier("embedded")
+    book.set_title("Embedded")
+    book.set_language("en")
+    book.set_cover("cover.jpg", cover_bytes)
+    chapter = epub.EpubHtml(title="Chapter", file_name="chapter.xhtml", lang="en")
+    chapter.content = b"<html><body><p>Text.</p></body></html>"
+    book.add_item(chapter)
+    book.spine = ["nav", chapter]
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    epub.write_epub(str(epub_path), book)
+
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Public</title>
+  <entry>
+    <title>Embedded Book</title>
+    <link rel="http://opds-spec.org/image" href="covers/broken.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/embedded.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    httpx_mock.add_response(url="https://example.test/opds/books/embedded.epub", content=epub_path.read_bytes())
+    httpx_mock.add_response(url="https://example.test/opds/covers/broken.jpg", status_code=500)
+    catalog = CatalogConfig(name="Public", url="https://example.test/opds")
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    feed = await workflow.fetch_catalog(catalog)
+    await workflow.download_best_epub(catalog, feed.entries[0])
+
+    downloaded_book = workflow.library.list_books()[0]
+    assert downloaded_book.cover_image_path is not None
+    assert downloaded_book.cover_image_path.read_bytes() == cover_bytes
+    assert downloaded_book.cover_cache_status == "cached"
 
 
 @pytest.mark.asyncio
@@ -82,7 +302,12 @@ async def test_workflow_uses_auth_without_exposing_credentials_in_callbacks(
         assert request.headers["authorization"] == expected_auth
         return httpx.Response(200, content=b"epub bytes", headers={"content-length": "10"})
 
+    def cover_handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == expected_auth
+        return httpx.Response(200, content=b"cover bytes", headers={"content-type": "image/jpeg"})
+
     httpx_mock.add_callback(download_handler, url="https://example.test/private/books/sample.epub")
+    httpx_mock.add_callback(cover_handler, url="https://example.test/private/covers/sample.jpg")
     catalog = CatalogConfig(
         name="Private",
         url="https://example.test/private",
@@ -131,6 +356,8 @@ async def test_workflow_resolves_password_ref_for_same_origin_fetch_and_download
         assert request.headers["authorization"] == expected_auth
         if request.url.path.endswith(".epub"):
             return httpx.Response(200, content=b"epub bytes")
+        if request.url.path.endswith(".jpg"):
+            return httpx.Response(200, content=b"cover bytes", headers={"content-type": "image/jpeg"})
         return httpx.Response(200, text=feed_xml)
 
     catalog = CatalogConfig(
@@ -146,6 +373,7 @@ async def test_workflow_resolves_password_ref_for_same_origin_fetch_and_download
     )
     httpx_mock.add_callback(assert_authorized, url="https://example.test/private")
     httpx_mock.add_callback(assert_authorized, url="https://example.test/private/books/sample.epub")
+    httpx_mock.add_callback(assert_authorized, url="https://example.test/private/covers/sample.jpg")
 
     feed = await workflow.fetch_catalog(catalog)
     downloaded = await workflow.download_best_epub(catalog, feed.entries[0])
@@ -343,6 +571,11 @@ async def test_workflow_stores_sanitized_cover_metadata_from_credentialed_opds_l
 """
     httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
     httpx_mock.add_response(url="https://example.test/opds/books/private.epub", content=b"epub bytes")
+    httpx_mock.add_response(
+        url="https://example.test/covers/private.jpg",
+        content=b"cover bytes",
+        headers={"content-type": "image/jpeg"},
+    )
     catalog = CatalogConfig(name="Private", url="https://example.test/opds")
     workflow = CatalogWorkflow(
         AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),

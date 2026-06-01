@@ -12,6 +12,7 @@ from shelfline.catalog.client import CatalogClient
 from shelfline.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
 from shelfline.catalog.parser import parse_opds_feed, sanitize_text_url_credentials, sanitize_url_credentials
 from shelfline.config import AppConfig, CatalogConfig
+from shelfline.covers import CoverCache, CoverError, extract_epub_cover
 from shelfline.credentials import CredentialStore
 from shelfline.downloads import DownloadError, DownloadProgress, DownloadService
 from shelfline.library import BookRecord, LibraryRepository
@@ -57,6 +58,7 @@ class CatalogWorkflow:
         )
         self._catalog_client = CatalogClient(self._http_client)
         self._download_service = DownloadService(self._http_client)
+        self._cover_cache = CoverCache(config.library_path, self._http_client)
         self.library = LibraryRepository(state_db)
         self.library.initialize()
 
@@ -139,16 +141,67 @@ class CatalogWorkflow:
                 is_read=False,
             )
         )
+        cover_path, cover_status = await self._cache_downloaded_book_cover(
+            catalog,
+            entry,
+            downloaded_path,
+            selected_link,
+        )
+        self.library.update_cover_cache(downloaded_path, cover_path, cover_status)
         _emit(on_status, "Download complete")
         return downloaded_path
 
     async def aclose(self) -> None:
         await self._http_client.aclose()
 
+    async def _cache_downloaded_book_cover(
+        self,
+        catalog: CatalogConfig,
+        entry: CatalogEntry,
+        downloaded_path: Path,
+        selected_link: AcquisitionLink,
+    ) -> tuple[Path | None, str]:
+        if _cover_cache_disabled(self.config):
+            return None, "skipped"
+
+        remote_url = entry.cover_image_url or entry.thumbnail_url
+        remote_failed = False
+        if remote_url is not None:
+            try:
+                return (
+                    await self._cover_cache.fetch(
+                        remote_url,
+                        auth=_auth_tuple(catalog, self._credentials)
+                        if _same_origin(catalog.url, remote_url)
+                        else None,
+                    ),
+                    "cached",
+                )
+            except CoverError:
+                remote_failed = True
+
+        if selected_link.media_type == "application/epub+zip":
+            try:
+                embedded_cover_path = extract_epub_cover(downloaded_path, self.config.library_path)
+            except Exception:
+                embedded_cover_path = None
+            if embedded_cover_path is not None:
+                return embedded_cover_path, "cached"
+
+        if remote_failed:
+            return None, "failed"
+        return None, "missing"
+
 
 def _emit(callback: StatusCallback | None, message: str) -> None:
     if callback is not None:
         callback(message)
+
+
+def _cover_cache_disabled(config: AppConfig) -> bool:
+    preferences = config.preferences
+    covers = getattr(preferences, "covers", None)
+    return getattr(covers, "display", "auto") == "off"
 
 
 def _auth_tuple(
