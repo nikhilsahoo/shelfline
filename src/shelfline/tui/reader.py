@@ -228,7 +228,7 @@ class ReaderPreferencesScreen(Screen[None]):
 
 
 class EpubReaderScreen(Screen[None]):
-    KEY_HINT = "Keys: n next | p previous | t toc | o options | m bookmark | b back | l library | c catalogs"
+    KEY_HINT = "Keys: n next | p previous | t toc | o options | m bookmark | z zen | b back | l library | c catalogs"
     BINDINGS = [
         ("n", "next_section", "Next"),
         ("p", "previous_section", "Previous"),
@@ -313,7 +313,7 @@ class EpubReaderScreen(Screen[None]):
         if len(self.app.screen_stack) > 1:
             self.app.pop_screen()
             return
-        self.query_one("#status-line", StatusLine).set_message("No previous screen")
+        self._set_status("No previous screen")
 
     def action_add_bookmark(self) -> None:
         if self.library is None or self.book_path is None:
@@ -459,4 +459,7 @@ class EpubReaderScreen(Screen[None]):
             self._set_status(f"Progress not saved: {error}")
 
     def _set_status(self, message: str) -> None:
-        self.query_one("#status-line", StatusLine).set_message(message)
+        status_line = self.query_one("#status-line", StatusLine)
+        status_line.set_message(message)
+        if self.zen_mode:
+            status_line.display = True

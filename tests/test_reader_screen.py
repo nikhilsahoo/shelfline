@@ -181,6 +181,16 @@ async def test_reader_screen_key_hint_includes_table_of_contents() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reader_screen_key_hint_includes_zen_mode() -> None:
+    app = ShelflineApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(EpubReaderScreen(_preview()))
+
+        assert "z zen" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
+
+
+@pytest.mark.asyncio
 async def test_reader_screen_t_opens_table_of_contents_with_outline_items() -> None:
     app = ShelflineApp(config=None)
 
@@ -484,6 +494,37 @@ async def test_reader_zen_mode_hides_nonessential_chrome_and_preserves_scroll() 
 
         assert not reader.has_class("zen-mode")
         assert reader.query_one("#key-hints").display is True
+
+
+@pytest.mark.asyncio
+async def test_reader_zen_mode_surfaces_status_messages_temporarily() -> None:
+    app = ShelflineApp(config=None)
+
+    async with app.run_test(size=(80, 20)) as pilot:
+        await app.push_screen(EpubReaderScreen(_long_preview()))
+        reader = app.screen
+        assert isinstance(reader, EpubReaderScreen)
+
+        await pilot.press("z")
+        await pilot.pause()
+        assert reader.query_one("#key-hints").display is False
+        assert reader.query_one("#status-line").display is False
+
+        await pilot.press("m")
+        await pilot.pause()
+
+        assert reader.query_one("#key-hints").display is False
+        status_line = reader.query_one("#status-line")
+        assert status_line.display is True
+        assert "Bookmark requires library-backed book" in str(status_line.renderable)
+
+        await pilot.press("z")
+        await pilot.press("z")
+        await pilot.pause()
+
+        assert reader.has_class("zen-mode")
+        assert reader.query_one("#key-hints").display is False
+        assert reader.query_one("#status-line").display is False
 
 
 @pytest.mark.asyncio
