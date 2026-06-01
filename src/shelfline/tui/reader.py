@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from textual.app import ComposeResult
@@ -7,7 +8,7 @@ from textual.containers import Container, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Header, Static
 
-from shelfline.config import ReaderPreferences
+from shelfline.config import AppPreferences, ReaderPreferences
 from shelfline.library import Bookmark, LibraryRepository, ReadingProgress
 from shelfline.reader import EpubOutlineItem, EpubPreview
 from shelfline.tui.layout import KeyHintFooter
@@ -189,12 +190,50 @@ class ReaderTocScreen(Screen[None]):
         )
 
 
+class ReaderPreferencesScreen(Screen[None]):
+    KEY_HINT = "Keys: n narrow | m medium | w wide | b back"
+    BINDINGS = [
+        ("n", "set_narrow", "Narrow"),
+        ("m", "set_medium", "Medium"),
+        ("w", "set_wide", "Wide"),
+        ("b", "dismiss_options", "Back"),
+    ]
+
+    def __init__(self, reader: EpubReaderScreen, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+        self.reader = reader
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with Container(id="reader-options"):
+            yield StatusLine("Reader Options", id="reader-options-title")
+            yield StatusLine("Width: n narrow | m medium | w wide", id="reader-options-width")
+        yield KeyHintFooter(self.KEY_HINT)
+
+    def action_set_narrow(self) -> None:
+        self._set_width("narrow")
+
+    def action_set_medium(self) -> None:
+        self._set_width("medium")
+
+    def action_set_wide(self) -> None:
+        self._set_width("wide")
+
+    def action_dismiss_options(self) -> None:
+        self.app.pop_screen()
+
+    def _set_width(self, width: str) -> None:
+        self.reader.update_preferences(replace(self.reader.preferences, width=width))
+        self.app.pop_screen()
+
+
 class EpubReaderScreen(Screen[None]):
-    KEY_HINT = "Keys: n next | p previous | t toc | m bookmark | b back | l library | c catalogs"
+    KEY_HINT = "Keys: n next | p previous | t toc | o options | m bookmark | b back | l library | c catalogs"
     BINDINGS = [
         ("n", "next_section", "Next"),
         ("p", "previous_section", "Previous"),
         ("t", "table_of_contents", "TOC"),
+        ("o", "reader_options", "Options"),
         ("m", "add_bookmark", "Bookmark"),
         ("b", "go_back", "Back"),
     ]
@@ -264,6 +303,9 @@ class EpubReaderScreen(Screen[None]):
     def action_table_of_contents(self) -> None:
         self.app.push_screen(ReaderTocScreen(self))
 
+    def action_reader_options(self) -> None:
+        self.app.push_screen(ReaderPreferencesScreen(self))
+
     def action_go_back(self) -> None:
         if len(self.app.screen_stack) > 1:
             self.app.pop_screen()
@@ -306,6 +348,25 @@ class EpubReaderScreen(Screen[None]):
         self._refresh_section()
         self._save_progress()
 
+    def update_preferences(self, preferences: ReaderPreferences) -> None:
+        self.preferences = preferences
+        app_config = getattr(self.app, "config", None)
+        app_preferences = getattr(app_config, "preferences", None)
+        if isinstance(app_preferences, AppPreferences):
+            self.app.config = replace(  # type: ignore[attr-defined]
+                app_config,
+                preferences=replace(app_preferences, reader=preferences),
+            )
+
+        save_app_config = getattr(self.app, "save_config", None)
+        if callable(save_app_config):
+            try:
+                save_app_config()
+            except Exception as error:
+                self._set_status(f"Preferences not saved: {error}")
+
+        self._apply_preference_classes()
+
     def _refresh_section(self) -> None:
         section = self.preview.section_at(self.section_index)
         progress = self.preview.progress_label(self.section_index)
@@ -342,6 +403,33 @@ class EpubReaderScreen(Screen[None]):
                 f"reader-theme-{self.preferences.theme}",
                 f"reader-spacing-{self.preferences.paragraph_spacing}",
             )
+        )
+
+    def _apply_preference_classes(self) -> None:
+        page = self.query_one("#reader-page")
+        for class_name in (
+            "reader-width-narrow",
+            "reader-width-medium",
+            "reader-width-wide",
+            "reader-theme-default",
+            "reader-theme-warm",
+            "reader-theme-high_contrast",
+            "reader-spacing-compact",
+            "reader-spacing-normal",
+            "reader-spacing-relaxed",
+        ):
+            page.remove_class(class_name)
+        page.add_class(f"reader-width-{self.preferences.width}")
+        page.add_class(f"reader-theme-{self.preferences.theme}")
+        page.add_class(f"reader-spacing-{self.preferences.paragraph_spacing}")
+        self.query_one("#reader-progress", StatusLine).display = (
+            self.preferences.show_progress
+        )
+        self.query_one("#reader-heading", StatusLine).display = (
+            self.preferences.show_chapter_title
+        )
+        self.query_one("#reader-chrome", ReaderChrome).show_progress = (
+            self.preferences.show_progress
         )
 
     def _save_progress(self) -> None:

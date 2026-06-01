@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,7 @@ from textual.pilot import Pilot
 from textual.widgets import Footer
 
 from shelfline.app import ShelflineApp
-from shelfline.config import ReaderPreferences
+from shelfline.config import AppConfig, ReaderPreferences
 from shelfline.library import Bookmark, BookRecord, LibraryRepository, ReadingProgress
 from shelfline.reader import EpubOutlineItem, EpubPreview, EpubSection
 from shelfline.tui.layout import KeyHintFooter
@@ -356,6 +357,32 @@ async def test_reader_screen_applies_reader_preference_classes() -> None:
         assert page.has_class("reader-spacing-relaxed")
         assert progress.display is False
         assert heading.display is False
+
+
+@pytest.mark.asyncio
+async def test_reader_preferences_overlay_changes_width_and_saves(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.json"
+    config = AppConfig(library_path=tmp_path)
+    app = ShelflineApp(config=config, config_path=config_path)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(
+            EpubReaderScreen(_preview(), preferences=config.preferences.reader)
+        )
+        reader = app.screen
+        assert isinstance(reader, EpubReaderScreen)
+
+        await pilot.press("o")
+        await pilot.press("w")
+
+        assert app.screen is reader
+        assert reader.preferences.width == "wide"
+        assert reader.query_one("#reader-page").has_class("reader-width-wide")
+
+    saved = json.loads(config_path.read_text(encoding="utf-8"))
+    assert saved["preferences"]["reader"]["width"] == "wide"
 
 
 @pytest.mark.asyncio

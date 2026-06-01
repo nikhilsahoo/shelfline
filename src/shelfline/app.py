@@ -68,6 +68,11 @@ class ShelflineApp(App[None]):
         if self.config_path is not None:
             save_config(self.config_path, config)
 
+    def save_config(self) -> None:
+        if self.config is None or self.config_path is None:
+            return
+        save_config(self.config_path, self.config)
+
     async def complete_setup(self, library_path: Path) -> None:
         self.apply_config(AppConfig(library_path=library_path, catalogs=[], preferences={}))
         await self.push_screen(CatalogsScreen(self.config, workflow=self.workflow))
