@@ -7,6 +7,29 @@ The app is catalog-first: add an OPDS catalog, browse folders and book
 entries, download one book at a time, then read supported EPUB text directly
 inside the terminal.
 
+## Screenshots
+
+OPDS catalog book listing from Calibre-Web, showing authors and the current
+selection:
+
+![OPDS catalog book listing](docs/assets/screenshots/catalog-books.png)
+
+Saved catalog selector with the catalog detail pane:
+
+![Saved catalog selector](docs/assets/screenshots/catalogs.png)
+
+OPDS folder and group navigation:
+
+![OPDS folder navigation](docs/assets/screenshots/catalog-folders.png)
+
+Local library with book details:
+
+![Local library](docs/assets/screenshots/library.png)
+
+EPUB reader view:
+
+![EPUB reader](docs/assets/screenshots/reader.png)
+
 ## Capabilities
 
 - Browse OPDS 1.x Atom catalogs, including nested folders/groups.
