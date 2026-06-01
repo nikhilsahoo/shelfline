@@ -1,7 +1,7 @@
 from pathlib import Path
 import tomllib
 
-from epub_tui import __version__
+from shelfline import __version__
 
 
 def test_package_has_version() -> None:
@@ -14,4 +14,8 @@ def test_textual_css_is_included_as_package_data() -> None:
 
     package_data = pyproject["tool"]["setuptools"]["package-data"]
 
-    assert "tui/*.tcss" in package_data["epub_tui"]
+    assert pyproject["project"]["name"] == "shelfline"
+    assert pyproject["project"]["scripts"] == {
+        "shelfline": "shelfline.__main__:main",
+    }
+    assert "tui/*.tcss" in package_data["shelfline"]

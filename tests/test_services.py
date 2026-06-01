@@ -5,10 +5,10 @@ import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
-from epub_tui.config import AppConfig, CatalogConfig, load_config
-from epub_tui.credentials import CredentialStore, MemoryCredentialBackend
-from epub_tui.downloads import DownloadError, DownloadProgress
-from epub_tui.services import CatalogWorkflow
+from shelfline.config import AppConfig, CatalogConfig, load_config
+from shelfline.credentials import CredentialStore, MemoryCredentialBackend
+from shelfline.downloads import DownloadError, DownloadProgress
+from shelfline.services import CatalogWorkflow
 
 
 @pytest.mark.asyncio
@@ -135,7 +135,7 @@ async def test_workflow_resolves_password_ref_for_same_origin_fetch_and_download
     catalog = CatalogConfig(
         name="Private",
         url="https://example.test/private",
-        auth={"username": "alice", "password_ref": "epub-tui:Private"},
+        auth={"username": "alice", "password_ref": "shelfline:Private"},
     )
     workflow = CatalogWorkflow(
         config=AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
@@ -168,7 +168,7 @@ async def test_workflow_omits_auth_when_password_ref_lookup_misses(
     catalog = CatalogConfig(
         name="Private",
         url="https://example.test/private",
-        auth={"username": "alice", "password_ref": "epub-tui:Private"},
+        auth={"username": "alice", "password_ref": "shelfline:Private"},
     )
     workflow = CatalogWorkflow(
         config=AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),

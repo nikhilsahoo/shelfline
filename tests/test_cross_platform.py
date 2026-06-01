@@ -1,18 +1,18 @@
 from pathlib import Path, PureWindowsPath
 
-from epub_tui.config import default_config_path
-from epub_tui.downloads import partial_download_path, safe_replace
-from epub_tui.tui.widgets import CoverDisplay
+from shelfline.config import default_config_path
+from shelfline.downloads import partial_download_path, safe_replace
+from shelfline.tui.widgets import CoverDisplay
 
 
 def test_default_config_path_windows_shape(tmp_path: Path) -> None:
     path = default_config_path(env={"APPDATA": str(tmp_path)}, platform_name="nt")
-    assert path == tmp_path / "epub-tui" / "config.json"
+    assert path == tmp_path / "shelfline" / "config.json"
 
 
 def test_default_config_path_linux_shape(tmp_path: Path) -> None:
     path = default_config_path(env={}, platform_name="posix", home=tmp_path / "home")
-    assert path == tmp_path / "home" / ".config" / "epub-tui" / "config.json"
+    assert path == tmp_path / "home" / ".config" / "shelfline" / "config.json"
 
 
 def test_partial_download_path_stays_in_destination_directory() -> None:

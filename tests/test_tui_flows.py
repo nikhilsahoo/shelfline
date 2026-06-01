@@ -8,16 +8,16 @@ from ebooklib import epub
 from textual.containers import VerticalScroll
 from textual.widgets import Footer
 
-from epub_tui.app import EpubTuiApp
-from epub_tui.catalog.client import CatalogFetchError
-from epub_tui.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
-from epub_tui.config import AppConfig, CatalogConfig
-from epub_tui.downloads import DownloadError, DownloadProgress
-from epub_tui.library import BookRecord, LibraryRepository
-from epub_tui.reader import EpubOutlineItem, EpubPreview, EpubSection
-from epub_tui.tui.layout import KeyHintFooter
-from epub_tui.tui.reader import EpubReaderScreen
-from epub_tui.tui.screens import (
+from shelfline.app import ShelflineApp
+from shelfline.catalog.client import CatalogFetchError
+from shelfline.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
+from shelfline.config import AppConfig, CatalogConfig
+from shelfline.downloads import DownloadError, DownloadProgress
+from shelfline.library import BookRecord, LibraryRepository
+from shelfline.reader import EpubOutlineItem, EpubPreview, EpubSection
+from shelfline.tui.layout import KeyHintFooter
+from shelfline.tui.reader import EpubReaderScreen
+from shelfline.tui.screens import (
     CatalogAuthScreen,
     CatalogsScreen,
     DownloadStatusScreen,
@@ -27,7 +27,7 @@ from epub_tui.tui.screens import (
     LibraryScreen,
     SetupScreen,
 )
-from epub_tui.tui.theme import (
+from shelfline.tui.theme import (
     BOOK_LABEL,
     DOWNLOADS_LABEL,
     FOLDER_LABEL,
@@ -37,7 +37,7 @@ from epub_tui.tui.theme import (
     UNREAD_LABEL,
     glyph,
 )
-from epub_tui.tui.widgets import CatalogList, FeedEntryList, LibraryBookList
+from shelfline.tui.widgets import CatalogList, FeedEntryList, LibraryBookList
 
 
 class FakeWorkflow:
@@ -221,7 +221,7 @@ async def test_feed_screen_renders_feed_entries_and_busy_states() -> None:
         updated="2026-05-30",
         entries=[_navigation_entry(), _entry()],
     )
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(FeedScreen(feed))
@@ -245,7 +245,7 @@ async def test_feed_screen_renders_feed_entries_and_busy_states() -> None:
 
 @pytest.mark.asyncio
 async def test_feed_screen_uses_custom_key_hint_footer() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(FeedScreen(_feed()))
@@ -263,7 +263,7 @@ async def test_feed_screen_uses_entry_row_widgets_for_selection() -> None:
         updated="2026-05-30",
         entries=[_navigation_entry(), _entry()],
     )
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(feed))
@@ -307,7 +307,7 @@ async def test_feed_screen_many_entries_use_contiguous_scrollable_rows() -> None
         updated=None,
         entries=entries,
     )
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test(size=(80, 24)) as pilot:
         await app.push_screen(FeedScreen(feed))
@@ -355,7 +355,7 @@ async def test_feed_screen_many_entries_use_contiguous_scrollable_rows() -> None
 async def test_catalog_screen_opens_feed_through_workflow() -> None:
     catalog = CatalogConfig(name="Example", url="https://example.test/opds")
     workflow = FakeWorkflow(feed=_feed())
-    app = EpubTuiApp(
+    app = ShelflineApp(
         config=AppConfig(library_path=Path("books"), catalogs=[catalog]),
         workflow=workflow,
     )
@@ -373,7 +373,7 @@ async def test_catalog_screen_opens_feed_through_workflow() -> None:
 async def test_catalog_screen_reports_fetch_failure_without_opening_feed() -> None:
     catalog = CatalogConfig(name="Example", url="https://example.test/opds")
     workflow = FailingFetchWorkflow(CatalogFetchError("network unavailable"))
-    app = EpubTuiApp(
+    app = ShelflineApp(
         config=AppConfig(library_path=Path("books"), catalogs=[catalog]),
         workflow=workflow,
     )
@@ -393,7 +393,7 @@ async def test_catalog_screen_reports_fetch_failure_without_opening_feed() -> No
 async def test_catalog_screen_enter_binding_opens_feed_through_workflow() -> None:
     catalog = CatalogConfig(name="Example", url="https://example.test/opds")
     workflow = FakeWorkflow(feed=_feed())
-    app = EpubTuiApp(
+    app = ShelflineApp(
         config=AppConfig(library_path=Path("books"), catalogs=[catalog]),
         workflow=workflow,
     )
@@ -412,7 +412,7 @@ async def test_catalog_screen_selection_moves_before_opening() -> None:
         CatalogConfig(name="Second", url="https://second.test/opds"),
     ]
     workflow = FakeWorkflow(feed=_feed())
-    app = EpubTuiApp(
+    app = ShelflineApp(
         config=AppConfig(library_path=Path("books"), catalogs=catalogs),
         workflow=workflow,
     )
@@ -436,7 +436,7 @@ async def test_catalog_screen_selection_moves_before_opening() -> None:
 @pytest.mark.asyncio
 async def test_catalog_screen_empty_state_uses_catalog_list_widget(tmp_path: Path) -> None:
     config = AppConfig(library_path=tmp_path, catalogs=[])
-    app = EpubTuiApp(config=config)
+    app = ShelflineApp(config=config)
 
     async with app.run_test():
         catalog_list = app.screen.query_one("#catalog-list")
@@ -452,7 +452,7 @@ async def test_catalog_screen_empty_state_uses_catalog_list_widget(tmp_path: Pat
 
 @pytest.mark.asyncio
 async def test_feed_screen_opens_entry_details() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(_feed()))
@@ -465,7 +465,7 @@ async def test_feed_screen_opens_entry_details() -> None:
 
 @pytest.mark.asyncio
 async def test_feed_screen_enter_binding_opens_entry_details() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(_feed()))
@@ -482,7 +482,7 @@ async def test_feed_screen_selection_moves_before_opening_entry() -> None:
         updated=None,
         entries=[_navigation_entry(), _entry()],
     )
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(feed))
@@ -513,7 +513,7 @@ async def test_feed_screen_navigation_entry_fetches_next_feed() -> None:
         updated=None,
         entries=[_navigation_entry()],
     )
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(feed, catalog=catalog, workflow=workflow))
@@ -535,7 +535,7 @@ async def test_feed_screen_reports_navigation_fetch_failure_without_opening_feed
         updated=None,
         entries=[_navigation_entry()],
     )
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(feed, catalog=catalog, workflow=workflow))
@@ -569,7 +569,7 @@ async def test_feed_screen_back_binding_returns_to_parent_feed() -> None:
         updated=None,
         entries=[_navigation_entry()],
     )
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(feed, catalog=catalog, workflow=workflow))
@@ -585,7 +585,7 @@ async def test_feed_screen_back_binding_returns_to_parent_feed() -> None:
 
 @pytest.mark.asyncio
 async def test_entry_screen_footer_shows_back_hint() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(EntryScreen(_entry()))
@@ -597,7 +597,7 @@ async def test_entry_screen_footer_shows_back_hint() -> None:
 
 @pytest.mark.asyncio
 async def test_entry_screen_back_binding_returns_to_feed_screen() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(_feed()))
@@ -612,7 +612,7 @@ async def test_entry_screen_back_binding_returns_to_feed_screen() -> None:
 
 @pytest.mark.asyncio
 async def test_entry_screen_renders_cover_fallback_and_all_acquisitions() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(EntryScreen(_entry()))
@@ -653,7 +653,7 @@ async def test_entry_screen_cleans_html_summary_for_detail_display() -> None:
             )
         ],
     )
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(EntryScreen(entry))
@@ -675,7 +675,7 @@ async def test_entry_screen_cleans_html_summary_for_detail_display() -> None:
 
 @pytest.mark.asyncio
 async def test_entry_screen_uses_acquisition_rows_for_selection() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EntryScreen(_entry()))
@@ -700,7 +700,7 @@ async def test_entry_screen_uses_acquisition_rows_for_selection() -> None:
 async def test_entry_screen_downloads_acquisition_through_workflow(tmp_path: Path) -> None:
     catalog = CatalogConfig(name="Example", url="https://example.test/opds")
     workflow = FakeWorkflow(download_path=tmp_path / "Interesting Book.pdf")
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
@@ -720,7 +720,7 @@ async def test_entry_screen_downloads_acquisition_through_workflow(tmp_path: Pat
 async def test_entry_screen_download_binding_uses_workflow(tmp_path: Path) -> None:
     catalog = CatalogConfig(name="Example", url="https://example.test/opds")
     workflow = FakeWorkflow(download_path=tmp_path / "Interesting Book.epub")
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
@@ -734,7 +734,7 @@ async def test_entry_screen_download_binding_uses_workflow(tmp_path: Path) -> No
 async def test_download_status_back_returns_to_entry_screen(tmp_path: Path) -> None:
     catalog = CatalogConfig(name="Example", url="https://example.test/opds")
     workflow = FakeWorkflow(download_path=tmp_path / "Interesting Book.epub")
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
@@ -752,7 +752,7 @@ async def test_download_status_library_binding_opens_library(tmp_path: Path) -> 
     workflow = FakeWorkflow(download_path=tmp_path / "Interesting Book.epub")
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
-    app = EpubTuiApp(config=AppConfig(library_path=tmp_path), workflow=workflow, library=repo)
+    app = ShelflineApp(config=AppConfig(library_path=tmp_path), workflow=workflow, library=repo)
 
     async with app.run_test() as pilot:
         await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
@@ -771,7 +771,7 @@ async def test_entry_screen_download_error_stays_on_status_screen(tmp_path: Path
         download_path=tmp_path / "Interesting Book.epub",
         download_error=DownloadError("Download destination already exists"),
     )
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
@@ -791,7 +791,7 @@ async def test_entry_screen_download_filesystem_error_stays_on_status_screen(tmp
         download_path=tmp_path / "Interesting Book.epub",
         download_error=OSError("disk full"),
     )
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
@@ -808,7 +808,7 @@ async def test_entry_screen_download_filesystem_error_stays_on_status_screen(tmp
 async def test_entry_screen_selection_moves_before_downloading(tmp_path: Path) -> None:
     catalog = CatalogConfig(name="Example", url="https://example.test/opds")
     workflow = FakeWorkflow(download_path=tmp_path / "Interesting Book.pdf")
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EntryScreen(_entry(), catalog=catalog, workflow=workflow))
@@ -823,7 +823,7 @@ async def test_entry_screen_selection_moves_before_downloading(tmp_path: Path) -
 
 @pytest.mark.asyncio
 async def test_download_status_screen_renders_known_and_unknown_progress() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(DownloadStatusScreen(status="Waiting"))
@@ -844,7 +844,7 @@ async def test_library_screen_renders_books_and_updates_repository(tmp_path: Pat
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
     repo.add_book(_book(tmp_path, is_read=False))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(LibraryScreen(library=repo))
@@ -866,7 +866,7 @@ async def test_library_screen_detail_pane_shows_selected_book_metadata_on_mount(
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
     repo.add_book(_book(tmp_path, title="Dune", is_read=False))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(LibraryScreen(library=repo))
@@ -887,7 +887,7 @@ async def test_library_screen_detail_pane_updates_when_selection_moves(tmp_path:
     repo.initialize()
     repo.add_book(_book(tmp_path, title="Dune", is_read=False))
     repo.add_book(_book(tmp_path, title="Foundation", is_read=True))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(LibraryScreen(library=repo))
@@ -912,7 +912,7 @@ async def test_library_screen_detail_pane_updates_when_read_status_toggles(tmp_p
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
     repo.add_book(_book(tmp_path, title="Dune", is_read=False))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(LibraryScreen(library=repo))
@@ -940,7 +940,7 @@ async def test_library_screen_detail_pane_updates_when_selected_book_is_deleted(
     repo.initialize()
     repo.add_book(_book(tmp_path, title="Dune", is_read=False))
     repo.add_book(_book(tmp_path, title="Foundation", is_read=True))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(LibraryScreen(library=repo))
@@ -970,7 +970,7 @@ async def test_library_screen_detail_pane_updates_when_selected_book_is_deleted(
 async def test_library_screen_detail_pane_shows_empty_message_for_empty_library(tmp_path: Path) -> None:
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(LibraryScreen(library=repo))
@@ -986,7 +986,7 @@ async def test_library_screen_uses_book_row_widgets_for_selection(tmp_path: Path
     repo.initialize()
     repo.add_book(_book(tmp_path, title="Dune", is_read=False))
     repo.add_book(_book(tmp_path, title="Foundation", is_read=True))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(LibraryScreen(library=repo))
@@ -1016,7 +1016,7 @@ async def test_library_screen_many_books_use_contiguous_scrollable_rows(tmp_path
     repo.initialize()
     for index in range(24):
         repo.add_book(_book(tmp_path, title=f"Library Book {index + 1:02d}", is_read=False))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test(size=(80, 24)) as pilot:
         await app.push_screen(LibraryScreen(library=repo))
@@ -1072,7 +1072,7 @@ async def test_library_screen_delete_failure_stays_on_library_screen(
         raise PermissionError("locked")
 
     monkeypatch.setattr(repo, "delete_book", fail_delete)
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(LibraryScreen(library=repo))
@@ -1090,7 +1090,7 @@ async def test_library_screen_selects_and_opens_epub_reader(tmp_path: Path) -> N
     repo.initialize()
     repo.add_book(_book(tmp_path, is_read=False))
     repo.add_book(_book(tmp_path, title="Second Book", is_read=False))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(LibraryScreen(library=repo))
@@ -1112,7 +1112,7 @@ async def test_library_screen_reports_epub_preview_failure_without_opening_reade
     stale_book = _book(tmp_path, is_read=False)
     stale_book.local_file_path.unlink()
     repo.add_book(stale_book)
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(LibraryScreen(library=repo))
@@ -1129,7 +1129,7 @@ async def test_library_screen_reports_epub_preview_failure_without_opening_reade
 async def test_library_screen_refresh_binding_loads_new_books(tmp_path: Path) -> None:
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(LibraryScreen(library=repo))
@@ -1152,7 +1152,7 @@ async def test_library_screen_filters_books_by_search_text(tmp_path: Path) -> No
     repo.initialize()
     repo.add_book(_book(tmp_path, title="Dune", is_read=False))
     repo.add_book(_book(tmp_path, title="Foundation", is_read=True))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(LibraryScreen(library=repo))
@@ -1191,7 +1191,7 @@ async def test_library_screen_preserves_search_during_library_actions(tmp_path: 
     repo.add_book(_book(tmp_path, title="Dune", is_read=False))
     repo.add_book(_book(tmp_path, title="Dune Messiah", is_read=False))
     repo.add_book(_book(tmp_path, title="Foundation", is_read=False))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(LibraryScreen(library=repo))
@@ -1240,7 +1240,7 @@ async def test_library_screen_rows_show_format_catalog_and_progress(tmp_path: Pa
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
     repo.add_book(_book(tmp_path, title="Dune", is_read=True))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(LibraryScreen(library=repo))
@@ -1255,7 +1255,7 @@ async def test_library_screen_rows_show_format_catalog_and_progress(tmp_path: Pa
 async def test_primary_screens_show_key_hints(tmp_path: Path) -> None:
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     def assert_menu_only_in_footer() -> None:
         assert "Keys:" in str(app.screen.query_one("#key-hints", KeyHintFooter).render())
@@ -1302,7 +1302,7 @@ async def test_app_library_bindings_delegate_to_active_library_screen(tmp_path: 
     repo.initialize()
     repo.add_book(_book(tmp_path, is_read=False))
     config = AppConfig(library_path=tmp_path)
-    app = EpubTuiApp(config=config, library=repo)
+    app = ShelflineApp(config=config, library=repo)
 
     async with app.run_test() as pilot:
         app.action_show_library()
@@ -1322,7 +1322,7 @@ async def test_app_catalog_binding_returns_from_library_to_catalogs(tmp_path: Pa
     config = AppConfig(library_path=tmp_path, catalogs=[catalog])
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
-    app = EpubTuiApp(config=config, library=repo)
+    app = ShelflineApp(config=config, library=repo)
 
     async with app.run_test() as pilot:
         app.action_show_library()
@@ -1341,7 +1341,7 @@ async def test_app_add_catalog_binding_opens_catalogs_with_form_visible(tmp_path
     config = AppConfig(library_path=tmp_path, catalogs=[])
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
-    app = EpubTuiApp(config=config, library=repo)
+    app = ShelflineApp(config=config, library=repo)
 
     async with app.run_test() as pilot:
         app.action_show_library()
@@ -1357,7 +1357,7 @@ async def test_app_add_catalog_binding_opens_catalogs_with_form_visible(tmp_path
 @pytest.mark.asyncio
 async def test_catalog_screen_hides_add_form_until_requested(tmp_path: Path) -> None:
     config = AppConfig(library_path=tmp_path, catalogs=[])
-    app = EpubTuiApp(config=config)
+    app = ShelflineApp(config=config)
 
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -1375,7 +1375,7 @@ async def test_catalog_screen_add_binding_toggles_form_without_pushing_screen(
     tmp_path: Path,
 ) -> None:
     config = AppConfig(library_path=tmp_path, catalogs=[])
-    app = EpubTuiApp(config=config)
+    app = ShelflineApp(config=config)
 
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -1399,7 +1399,7 @@ async def test_catalog_screen_add_binding_toggles_form_without_pushing_screen(
 @pytest.mark.asyncio
 async def test_catalog_screen_add_form_has_visible_cancel_button(tmp_path: Path) -> None:
     config = AppConfig(library_path=tmp_path, catalogs=[])
-    app = EpubTuiApp(config=config)
+    app = ShelflineApp(config=config)
 
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -1417,7 +1417,7 @@ async def test_catalog_screen_cancel_add_form_hides_form_without_pushing_screen(
     tmp_path: Path,
 ) -> None:
     config = AppConfig(library_path=tmp_path, catalogs=[])
-    app = EpubTuiApp(config=config)
+    app = ShelflineApp(config=config)
 
     async with app.run_test() as pilot:
         await pilot.pause()
@@ -1470,7 +1470,7 @@ async def test_feed_screen_can_drill_down_multiple_navigation_levels() -> None:
             "https://example.test/opds/fiction/classics": books_feed,
         }
     )
-    app = EpubTuiApp(
+    app = ShelflineApp(
         config=AppConfig(library_path=Path("books"), catalogs=[catalog]),
         workflow=workflow,
     )
@@ -1500,7 +1500,7 @@ async def test_epub_preview_screen_renders_plain_text_preview() -> None:
         outline=(EpubOutlineItem(title="Chapter One", section_index=0),),
         sections=(EpubSection(heading="Chapter One", text="Plain text body."),),
     )
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(EpubPreviewScreen(preview))
@@ -1518,7 +1518,7 @@ async def test_catalog_auth_screen_redacts_password() -> None:
         url="https://example.test/opds",
         auth={"username": "reader", "password": "secret-password"},
     )
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(CatalogAuthScreen(catalog))

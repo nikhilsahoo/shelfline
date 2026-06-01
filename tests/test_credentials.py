@@ -3,7 +3,7 @@ import traceback
 
 import pytest
 
-from epub_tui.credentials import (
+from shelfline.credentials import (
     CredentialError,
     CredentialStore,
     KeyringCredentialBackend,
@@ -37,19 +37,19 @@ def test_delete_removes_password() -> None:
 def test_service_name_includes_prefix_and_catalog() -> None:
     store = CredentialStore(MemoryCredentialBackend())
 
-    assert store.service_name("standard-ebooks") == "epub-tui:standard-ebooks"
+    assert store.service_name("standard-ebooks") == "shelfline:standard-ebooks"
 
 
 def test_service_name_preserves_default_private_spec_behavior() -> None:
     store = CredentialStore(MemoryCredentialBackend())
 
-    assert store.service_name("Private") == "epub-tui:Private"
+    assert store.service_name("Private") == "shelfline:Private"
 
 
 def test_service_name_can_include_namespace() -> None:
     store = CredentialStore(MemoryCredentialBackend(), namespace="config-a")
 
-    assert store.service_name("Private") == "epub-tui:config-a:Private"
+    assert store.service_name("Private") == "shelfline:config-a:Private"
 
 
 def test_service_name_disambiguates_delimiter_characters() -> None:

@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from pathlib import Path
 import sqlite3
 
-from epub_tui.library import BookRecord, LibraryRepository
+from shelfline.library import BookRecord, LibraryRepository
 
 
 def test_repository_initializes_schema_and_saves_book(tmp_path: Path) -> None:

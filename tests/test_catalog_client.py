@@ -4,8 +4,8 @@ import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
-from epub_tui.catalog.client import CatalogClient, CatalogFetchError
-from epub_tui.config import CatalogConfig
+from shelfline.catalog.client import CatalogClient, CatalogFetchError
+from shelfline.config import CatalogConfig
 
 
 @pytest.mark.asyncio

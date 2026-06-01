@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from ebooklib import epub
 
-from epub_tui.reader import (
+from shelfline.reader import (
     EpubOutlineItem,
     EpubPreview,
     EpubSection,

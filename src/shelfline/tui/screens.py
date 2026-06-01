@@ -9,16 +9,16 @@ from textual.containers import Container
 from textual.screen import Screen
 from textual.widgets import Button, Header, Input, Static
 
-from epub_tui.catalog.models import CatalogEntry, CatalogFeed
-from epub_tui.config import AppConfig, CatalogConfig
-from epub_tui.downloads import DownloadProgress
-from epub_tui.library import BookRecord, LibraryRepository, LibrarySearch
-from epub_tui.reader import EpubPreview, ReaderError, extract_epub_preview
-from epub_tui.services import CatalogWorkflow
-from epub_tui.tui.layout import AppShell, KeyHintFooter, replace_region
-from epub_tui.tui.reader import EpubReaderScreen
-from epub_tui.tui.theme import BASIC_AUTH_LABEL, NO_AUTH_LABEL
-from epub_tui.tui.widgets import (
+from shelfline.catalog.models import CatalogEntry, CatalogFeed
+from shelfline.config import AppConfig, CatalogConfig
+from shelfline.downloads import DownloadProgress
+from shelfline.library import BookRecord, LibraryRepository, LibrarySearch
+from shelfline.reader import EpubPreview, ReaderError, extract_epub_preview
+from shelfline.services import CatalogWorkflow
+from shelfline.tui.layout import AppShell, KeyHintFooter, replace_region
+from shelfline.tui.reader import EpubReaderScreen
+from shelfline.tui.theme import BASIC_AUTH_LABEL, NO_AUTH_LABEL
+from shelfline.tui.widgets import (
     BusyIndicator,
     CoverDisplay,
     CatalogList,

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from epub_tui.catalog.parser import OpdsParseError, parse_opds_feed
+from shelfline.catalog.parser import OpdsParseError, parse_opds_feed
 
 
 def test_parse_navigation_feed_resolves_relative_links(fixture_dir: Path) -> None:

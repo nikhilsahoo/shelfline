@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 
-from epub_tui.config import CatalogConfig
+from shelfline.config import CatalogConfig
 
 
 class CatalogFetchError(RuntimeError):

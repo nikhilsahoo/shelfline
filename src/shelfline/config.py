@@ -38,10 +38,10 @@ def default_config_path(
     values = os.environ if env is None else env
     system = os.name if platform_name is None else platform_name
     if system == "nt" and values.get("APPDATA"):
-        return Path(values["APPDATA"]) / "epub-tui" / "config.json"
+        return Path(values["APPDATA"]) / "shelfline" / "config.json"
     if values.get("XDG_CONFIG_HOME"):
-        return Path(values["XDG_CONFIG_HOME"]) / "epub-tui" / "config.json"
-    return (home or Path.home()) / ".config" / "epub-tui" / "config.json"
+        return Path(values["XDG_CONFIG_HOME"]) / "shelfline" / "config.json"
+    return (home or Path.home()) / ".config" / "shelfline" / "config.json"
 
 
 def load_config(path: Path) -> AppConfig:

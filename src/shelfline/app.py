@@ -2,15 +2,15 @@ from textual.app import App
 
 from pathlib import Path
 
-from epub_tui.config import AppConfig, CatalogConfig, save_config
-from epub_tui.credentials import CredentialStore
-from epub_tui.library import LibraryRepository
-from epub_tui.services import CatalogWorkflow
-from epub_tui.tui.screens import CatalogsScreen, LibraryScreen, SetupScreen
+from shelfline.config import AppConfig, CatalogConfig, save_config
+from shelfline.credentials import CredentialStore
+from shelfline.library import LibraryRepository
+from shelfline.services import CatalogWorkflow
+from shelfline.tui.screens import CatalogsScreen, LibraryScreen, SetupScreen
 
 
-class EpubTuiApp(App[None]):
-    TITLE = "epub-tui"
+class ShelflineApp(App[None]):
+    TITLE = "Shelfline"
     CSS_PATH = "tui/app.tcss"
     BINDINGS = [
         ("q", "quit", "Quit"),
@@ -86,7 +86,7 @@ class EpubTuiApp(App[None]):
 
     @staticmethod
     def _state_db_path(library_path: Path) -> Path:
-        return library_path / ".epub-tui" / "state.db"
+        return library_path / ".shelfline" / "state.db"
 
     def action_show_library(self) -> None:
         if self.library is not None:

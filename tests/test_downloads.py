@@ -6,7 +6,7 @@ import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
-from epub_tui.downloads import DownloadError, DownloadProgress, DownloadService
+from shelfline.downloads import DownloadError, DownloadProgress, DownloadService
 
 
 class CancellingStream(httpx.AsyncByteStream):

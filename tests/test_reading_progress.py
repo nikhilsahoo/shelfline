@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from epub_tui import library
-from epub_tui.library import BookRecord, LibraryRepository
+from shelfline import library
+from shelfline.library import BookRecord, LibraryRepository
 
 
 def test_reading_progress_round_trip_preserves_section_and_position(

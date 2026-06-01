@@ -8,13 +8,13 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
-from epub_tui.catalog.client import CatalogClient
-from epub_tui.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
-from epub_tui.catalog.parser import parse_opds_feed, sanitize_text_url_credentials, sanitize_url_credentials
-from epub_tui.config import AppConfig, CatalogConfig
-from epub_tui.credentials import CredentialStore
-from epub_tui.downloads import DownloadError, DownloadProgress, DownloadService
-from epub_tui.library import BookRecord, LibraryRepository
+from shelfline.catalog.client import CatalogClient
+from shelfline.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
+from shelfline.catalog.parser import parse_opds_feed, sanitize_text_url_credentials, sanitize_url_credentials
+from shelfline.config import AppConfig, CatalogConfig
+from shelfline.credentials import CredentialStore
+from shelfline.downloads import DownloadError, DownloadProgress, DownloadService
+from shelfline.library import BookRecord, LibraryRepository
 
 
 StatusCallback = Callable[[str], None]

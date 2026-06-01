@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from epub_tui.config import (
+from shelfline.config import (
     AppConfig,
     CatalogConfig,
     ConfigError,
@@ -54,7 +54,7 @@ def test_load_config_with_catalog_auth_password_ref(tmp_path: Path) -> None:
                     {
                         "name": "Private",
                         "url": "https://example.test/opds",
-                        "auth": {"username": "alice", "password_ref": "epub-tui:Private"},
+                        "auth": {"username": "alice", "password_ref": "shelfline:Private"},
                     }
                 ],
             }
@@ -66,7 +66,7 @@ def test_load_config_with_catalog_auth_password_ref(tmp_path: Path) -> None:
 
     assert config.catalogs[0].auth == {
         "username": "alice",
-        "password_ref": "epub-tui:Private",
+        "password_ref": "shelfline:Private",
     }
 
 
@@ -166,7 +166,7 @@ def test_save_and_redact_config_preserve_password_ref_without_secret(tmp_path: P
             CatalogConfig(
                 name="Private",
                 url="https://example.test/opds",
-                auth={"username": "alice", "password_ref": "epub-tui:Private"},
+                auth={"username": "alice", "password_ref": "shelfline:Private"},
             )
         ],
     )
@@ -179,7 +179,7 @@ def test_save_and_redact_config_preserve_password_ref_without_secret(tmp_path: P
     expected_catalog = {
         "name": "Private",
         "url": "https://example.test/opds",
-        "auth": {"username": "alice", "password_ref": "epub-tui:Private"},
+        "auth": {"username": "alice", "password_ref": "shelfline:Private"},
     }
     assert saved_payload["catalogs"][0] == expected_catalog
     assert redacted_payload["catalogs"][0] == expected_catalog
@@ -211,8 +211,8 @@ def test_save_config_restricts_file_permissions_when_supported(
     def fake_chmod(path: Path, mode: int) -> None:
         chmod_calls.append((path, mode))
 
-    monkeypatch.setattr("epub_tui.config.os.name", "posix")
-    monkeypatch.setattr("epub_tui.config.os.chmod", fake_chmod)
+    monkeypatch.setattr("shelfline.config.os.name", "posix")
+    monkeypatch.setattr("shelfline.config.os.chmod", fake_chmod)
 
     config_path = tmp_path / "config.json"
     config = AppConfig(library_path=tmp_path / "books")
@@ -252,9 +252,9 @@ def test_save_config_restricts_open_file_descriptor_before_writing(
     def recording_fdopen(fd: int, *args: object, **kwargs: object) -> RecordingFile:
         return RecordingFile(real_fdopen(fd, *args, **kwargs))
 
-    monkeypatch.setattr("epub_tui.config.os.name", "posix")
-    monkeypatch.setattr("epub_tui.config.os.fchmod", fake_fchmod, raising=False)
-    monkeypatch.setattr("epub_tui.config.os.fdopen", recording_fdopen)
+    monkeypatch.setattr("shelfline.config.os.name", "posix")
+    monkeypatch.setattr("shelfline.config.os.fchmod", fake_fchmod, raising=False)
+    monkeypatch.setattr("shelfline.config.os.fdopen", recording_fdopen)
 
     config_path = tmp_path / "config.json"
     config_path.write_text("{}", encoding="utf-8")
@@ -368,7 +368,7 @@ def test_rejects_non_string_auth_password_even_with_password_ref(tmp_path: Path)
                         "auth": {
                             "username": "alice",
                             "password": 123,
-                            "password_ref": "epub-tui:Broken",
+                            "password_ref": "shelfline:Broken",
                         },
                     }
                 ],
@@ -429,7 +429,7 @@ def test_redact_config_hides_password(tmp_path: Path) -> None:
 def test_default_config_path_uses_appdata_on_windows(tmp_path: Path) -> None:
     path = default_config_path(env={"APPDATA": str(tmp_path)}, platform_name="nt")
 
-    assert path == tmp_path / "epub-tui" / "config.json"
+    assert path == tmp_path / "shelfline" / "config.json"
 
 
 def test_default_config_path_uses_xdg_config_home(tmp_path: Path) -> None:
@@ -439,10 +439,10 @@ def test_default_config_path_uses_xdg_config_home(tmp_path: Path) -> None:
         home=tmp_path / "home",
     )
 
-    assert path == tmp_path / "epub-tui" / "config.json"
+    assert path == tmp_path / "shelfline" / "config.json"
 
 
 def test_default_config_path_falls_back_to_linux_home(tmp_path: Path) -> None:
     path = default_config_path(env={}, platform_name="posix", home=tmp_path / "home")
 
-    assert path == tmp_path / "home" / ".config" / "epub-tui" / "config.json"
+    assert path == tmp_path / "home" / ".config" / "shelfline" / "config.json"

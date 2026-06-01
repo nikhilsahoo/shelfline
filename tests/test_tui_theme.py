@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from epub_tui.tui.theme import (
+from shelfline.tui.theme import (
     BASIC_AUTH_LABEL,
     BOOK_LABEL,
     DOWNLOADS_LABEL,

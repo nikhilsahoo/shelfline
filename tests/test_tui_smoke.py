@@ -5,18 +5,18 @@ from pathlib import Path
 
 import pytest
 
-from epub_tui.app import EpubTuiApp
-from epub_tui.config import AppConfig, CatalogConfig
-from epub_tui.downloads import DownloadProgress
-from epub_tui.library import BookRecord, LibraryRepository
-from epub_tui.tui.screens import CatalogsScreen, LibraryScreen, SetupScreen
-from epub_tui.tui.theme import BASIC_AUTH_LABEL, NO_AUTH_LABEL
-from epub_tui.tui.widgets import CatalogList, CatalogRow, CoverDisplay, DownloadProgressDisplay
+from shelfline.app import ShelflineApp
+from shelfline.config import AppConfig, CatalogConfig
+from shelfline.downloads import DownloadProgress
+from shelfline.library import BookRecord, LibraryRepository
+from shelfline.tui.screens import CatalogsScreen, LibraryScreen, SetupScreen
+from shelfline.tui.theme import BASIC_AUTH_LABEL, NO_AUTH_LABEL
+from shelfline.tui.widgets import CatalogList, CatalogRow, CoverDisplay, DownloadProgressDisplay
 
 
 @pytest.mark.asyncio
 async def test_app_opens_setup_screen_without_config() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         assert isinstance(app.screen, SetupScreen)
@@ -26,7 +26,7 @@ async def test_app_opens_setup_screen_without_config() -> None:
 @pytest.mark.asyncio
 async def test_app_opens_catalog_screen_with_config_and_no_catalogs(tmp_path: Path) -> None:
     config = AppConfig(library_path=tmp_path, catalogs=[])
-    app = EpubTuiApp(config=config)
+    app = ShelflineApp(config=config)
 
     async with app.run_test():
         assert isinstance(app.screen, CatalogsScreen)
@@ -40,7 +40,7 @@ async def test_app_opens_catalog_screen_with_config_catalogs_and_empty_library(t
         library_path=tmp_path,
         catalogs=[CatalogConfig(name="Standard Ebooks", url="https://standardebooks.org/opds")],
     )
-    app = EpubTuiApp(config=config, library=repo)
+    app = ShelflineApp(config=config, library=repo)
 
     async with app.run_test():
         assert isinstance(app.screen, CatalogsScreen)
@@ -68,7 +68,7 @@ async def test_app_opens_library_screen_with_config_catalogs_and_books(tmp_path:
         library_path=tmp_path,
         catalogs=[CatalogConfig(name="Standard Ebooks", url="https://standardebooks.org/opds")],
     )
-    app = EpubTuiApp(config=config, library=repo)
+    app = ShelflineApp(config=config, library=repo)
 
     async with app.run_test():
         assert isinstance(app.screen, LibraryScreen)
@@ -89,7 +89,7 @@ async def test_app_opens_catalog_screen_when_library_check_fails(
         library_path=tmp_path,
         catalogs=[CatalogConfig(name="Standard Ebooks", url="https://standardebooks.org/opds")],
     )
-    app = EpubTuiApp(config=config, library=repo)
+    app = ShelflineApp(config=config, library=repo)
 
     async with app.run_test():
         assert isinstance(app.screen, CatalogsScreen)
@@ -108,7 +108,7 @@ async def test_catalog_screen_renders_saved_catalogs(tmp_path: Path) -> None:
             ),
         ],
     )
-    app = EpubTuiApp(config=config)
+    app = ShelflineApp(config=config)
 
     async with app.run_test():
         catalog_list = app.screen.query_one("#catalog-list")
@@ -130,7 +130,7 @@ async def test_catalog_screen_renders_saved_catalogs(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_catalog_screen_uses_bottom_action_area(tmp_path: Path) -> None:
     config = AppConfig(library_path=tmp_path, catalogs=[])
-    app = EpubTuiApp(config=config)
+    app = ShelflineApp(config=config)
 
     async with app.run_test():
         action_area = app.screen.query_one("#catalog-actions")
@@ -143,7 +143,7 @@ async def test_catalog_screen_uses_bottom_action_area(tmp_path: Path) -> None:
 async def test_catalog_screen_adds_catalog_to_config_file(tmp_path: Path) -> None:
     config_path = tmp_path / "config.json"
     config = AppConfig(library_path=tmp_path / "books", catalogs=[])
-    app = EpubTuiApp(config=config, config_path=config_path)
+    app = ShelflineApp(config=config, config_path=config_path)
 
     async with app.run_test():
         screen = app.screen
@@ -180,7 +180,7 @@ async def test_setup_screen_saves_library_path_and_opens_catalogs(tmp_path: Path
     config_path = tmp_path / "config.json"
     library_path = tmp_path / "books"
     library_path.mkdir()
-    app = EpubTuiApp(config=None, config_path=config_path)
+    app = ShelflineApp(config=None, config_path=config_path)
 
     async with app.run_test() as pilot:
         screen = app.screen
@@ -203,7 +203,7 @@ async def test_setup_screen_saves_library_path_and_opens_catalogs(tmp_path: Path
 @pytest.mark.asyncio
 async def test_catalog_screen_busy_indicator_for_outgoing_call(tmp_path: Path) -> None:
     config = AppConfig(library_path=tmp_path)
-    app = EpubTuiApp(config=config)
+    app = ShelflineApp(config=config)
 
     async with app.run_test():
         screen = app.screen

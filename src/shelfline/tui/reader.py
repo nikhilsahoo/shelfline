@@ -7,10 +7,10 @@ from textual.containers import Container, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Header, Static
 
-from epub_tui.library import Bookmark, LibraryRepository, ReadingProgress
-from epub_tui.reader import EpubOutlineItem, EpubPreview
-from epub_tui.tui.layout import KeyHintFooter
-from epub_tui.tui.widgets import StatusLine
+from shelfline.library import Bookmark, LibraryRepository, ReadingProgress
+from shelfline.reader import EpubOutlineItem, EpubPreview
+from shelfline.tui.layout import KeyHintFooter
+from shelfline.tui.widgets import StatusLine
 
 
 class ReaderChrome(Container):

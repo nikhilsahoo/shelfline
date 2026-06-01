@@ -2,13 +2,14 @@ from pathlib import Path
 
 import pytest
 
-from epub_tui.__main__ import build_app
-from epub_tui.app import EpubTuiApp
+from shelfline.__main__ import build_app
+from shelfline.app import ShelflineApp
 
 
 def test_build_app_returns_textual_app(tmp_path: Path) -> None:
     app = build_app([], default_config=tmp_path / "missing.json")
-    assert isinstance(app, EpubTuiApp)
+    assert isinstance(app, ShelflineApp)
+    assert app.TITLE == "Shelfline"
 
 
 def test_build_app_uses_default_config_when_present(tmp_path: Path) -> None:
@@ -31,8 +32,16 @@ def test_build_app_uses_default_config_when_present(tmp_path: Path) -> None:
     assert app.config.catalogs[0].name == "Example"
     assert app.workflow is not None
     assert app.library is app.workflow.library
-    assert app.workflow.library.db_path == library_path / ".epub-tui" / "state.db"
+    assert app.workflow.library.db_path == library_path / ".shelfline" / "state.db"
     assert app.workflow._credentials is not None
+
+
+def test_build_app_help_uses_shelfline_prog(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        build_app(["--help"])
+
+    assert exc_info.value.code == 0
+    assert "usage: shelfline" in capsys.readouterr().out
 
 
 def test_build_app_uses_explicit_config_over_default(tmp_path: Path) -> None:

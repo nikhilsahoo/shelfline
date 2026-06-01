@@ -8,12 +8,12 @@ from textual.containers import VerticalScroll
 from textual.pilot import Pilot
 from textual.widgets import Footer
 
-from epub_tui.app import EpubTuiApp
-from epub_tui.library import Bookmark, BookRecord, LibraryRepository, ReadingProgress
-from epub_tui.reader import EpubOutlineItem, EpubPreview, EpubSection
-from epub_tui.tui.layout import KeyHintFooter
-from epub_tui.tui.reader import EpubReaderScreen
-from epub_tui.tui.screens import LibraryScreen
+from shelfline.app import ShelflineApp
+from shelfline.library import Bookmark, BookRecord, LibraryRepository, ReadingProgress
+from shelfline.reader import EpubOutlineItem, EpubPreview, EpubSection
+from shelfline.tui.layout import KeyHintFooter
+from shelfline.tui.reader import EpubReaderScreen
+from shelfline.tui.screens import LibraryScreen
 
 
 def _preview() -> EpubPreview:
@@ -139,7 +139,7 @@ class _FailingProgressLibrary:
 
 @pytest.mark.asyncio
 async def test_reader_screen_renders_current_section_and_progress() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(EpubReaderScreen(_preview()))
@@ -158,7 +158,7 @@ async def test_reader_screen_renders_current_section_and_progress() -> None:
 
 @pytest.mark.asyncio
 async def test_reader_screen_uses_custom_key_hint_footer() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(EpubReaderScreen(_preview()))
@@ -170,7 +170,7 @@ async def test_reader_screen_uses_custom_key_hint_footer() -> None:
 
 @pytest.mark.asyncio
 async def test_reader_screen_key_hint_includes_table_of_contents() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(EpubReaderScreen(_preview()))
@@ -180,7 +180,7 @@ async def test_reader_screen_key_hint_includes_table_of_contents() -> None:
 
 @pytest.mark.asyncio
 async def test_reader_screen_t_opens_table_of_contents_with_outline_items() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EpubReaderScreen(_preview()))
@@ -195,7 +195,7 @@ async def test_reader_screen_t_opens_table_of_contents_with_outline_items() -> N
 
 @pytest.mark.asyncio
 async def test_reader_toc_j_and_k_change_selection() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EpubReaderScreen(_preview()))
@@ -214,7 +214,7 @@ async def test_reader_toc_j_and_k_change_selection() -> None:
 
 @pytest.mark.asyncio
 async def test_reader_toc_scrolls_to_keep_long_outline_selection_visible() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test(size=(80, 12)) as pilot:
         await app.push_screen(EpubReaderScreen(_long_outline_preview()))
@@ -239,7 +239,7 @@ async def test_reader_toc_enter_jumps_to_selected_section_and_saves_progress(
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
     book_path = tmp_path / "books" / "reader-book.epub"
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test(size=(80, 20)) as pilot:
         await app.push_screen(
@@ -268,7 +268,7 @@ async def test_reader_toc_enter_jumps_to_selected_section_and_saves_progress(
 
 @pytest.mark.asyncio
 async def test_reader_toc_b_dismisses_without_changing_reader_section() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EpubReaderScreen(_preview()))
@@ -287,7 +287,7 @@ async def test_reader_toc_b_dismisses_without_changing_reader_section() -> None:
 @pytest.mark.asyncio
 async def test_reader_toc_falls_back_to_section_headings_when_outline_is_empty() -> None:
     preview = EpubPreview(title="Reader Title", outline=(), sections=_preview().sections)
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EpubReaderScreen(preview))
@@ -301,7 +301,7 @@ async def test_reader_toc_falls_back_to_section_headings_when_outline_is_empty()
 
 @pytest.mark.asyncio
 async def test_reader_screen_body_is_scrollable() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(EpubReaderScreen(_preview()))
@@ -314,7 +314,7 @@ async def test_reader_screen_body_is_scrollable() -> None:
 
 @pytest.mark.asyncio
 async def test_reader_screen_uses_constrained_reading_surface() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(EpubReaderScreen(_preview()))
@@ -334,7 +334,7 @@ async def test_reader_screen_uses_constrained_reading_surface() -> None:
 
 @pytest.mark.asyncio
 async def test_reader_screen_body_reserves_gutter_before_scrollbar() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test(size=(100, 30)) as pilot:
         await app.push_screen(EpubReaderScreen(_long_preview()))
@@ -349,7 +349,7 @@ async def test_reader_screen_body_reserves_gutter_before_scrollbar() -> None:
 
 @pytest.mark.asyncio
 async def test_reader_screen_next_and_previous_update_section_and_progress() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EpubReaderScreen(_preview()))
@@ -373,7 +373,7 @@ async def test_reader_screen_next_and_previous_update_section_and_progress() -> 
 
 @pytest.mark.asyncio
 async def test_reader_screen_next_resets_body_scroll_to_top() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test(size=(80, 20)) as pilot:
         await app.push_screen(EpubReaderScreen(_long_preview()))
@@ -390,7 +390,7 @@ async def test_reader_screen_next_resets_body_scroll_to_top() -> None:
 
 @pytest.mark.asyncio
 async def test_reader_screen_next_at_last_section_preserves_body_scroll() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test(size=(80, 20)) as pilot:
         await app.push_screen(EpubReaderScreen(_long_preview(), section_index=1))
@@ -408,7 +408,7 @@ async def test_reader_screen_next_at_last_section_preserves_body_scroll() -> Non
 
 @pytest.mark.asyncio
 async def test_reader_screen_previous_at_first_section_preserves_body_scroll() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test(size=(80, 20)) as pilot:
         await app.push_screen(EpubReaderScreen(_long_preview()))
@@ -432,7 +432,7 @@ async def test_reader_screen_resumes_saved_progress_and_clamps_section(
     repo.initialize()
     book_path = tmp_path / "books" / "reader-book.epub"
     repo.save_reading_progress(ReadingProgress(book_path, section_index=99, position=12))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(
@@ -450,7 +450,7 @@ async def test_reader_screen_resumes_saved_progress_and_clamps_section(
 @pytest.mark.asyncio
 async def test_reader_screen_opens_when_progress_load_fails() -> None:
     library = _FailingProgressLibrary(load_error=RuntimeError("database locked"))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test():
         await app.push_screen(
@@ -473,7 +473,7 @@ async def test_reader_screen_saves_progress_on_section_changes(tmp_path: Path) -
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
     book_path = tmp_path / "books" / "reader-book.epub"
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(
@@ -498,7 +498,7 @@ async def test_reader_screen_saves_progress_on_section_changes(tmp_path: Path) -
 @pytest.mark.asyncio
 async def test_reader_screen_navigation_continues_when_progress_save_fails() -> None:
     library = _FailingProgressLibrary(save_error=RuntimeError("read-only database"))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(
@@ -521,7 +521,7 @@ async def test_reader_screen_navigation_continues_when_progress_save_fails() -> 
 
 @pytest.mark.asyncio
 async def test_reader_screen_works_without_persistence_inputs() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EpubReaderScreen(_preview()))
@@ -540,7 +540,7 @@ async def test_reader_screen_adds_bookmark_with_current_section_heading(
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
     book_path = tmp_path / "books" / "reader-book.epub"
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(
@@ -569,7 +569,7 @@ async def test_reader_screen_toggles_bookmark_at_current_position(
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
     book_path = tmp_path / "books" / "reader-book.epub"
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(
@@ -609,7 +609,7 @@ async def test_reader_screen_removes_duplicate_bookmarks_at_current_position(
     other = repo.add_bookmark(
         Bookmark(book_path, section_index=0, position=0, label="Other section")
     )
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(
@@ -633,7 +633,7 @@ async def test_reader_screen_removes_duplicate_bookmarks_at_current_position(
 
 @pytest.mark.asyncio
 async def test_reader_screen_reports_bookmark_requires_library_backed_book() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(EpubReaderScreen(_preview()))
@@ -652,7 +652,7 @@ async def test_library_screen_enter_on_epub_opens_reader_screen(tmp_path: Path) 
     book = _book(tmp_path)
     repo.add_book(book)
     repo.save_reading_progress(ReadingProgress(book.local_file_path, section_index=1, position=0))
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(LibraryScreen(library=repo))

@@ -8,7 +8,7 @@ from textual.widgets import Static
 
 class ShellHeader(Static):
     def __init__(self, area: str, context: str = "", **kwargs: object) -> None:
-        title = f"epub-tui | {area}"
+        title = f"shelfline | {area}"
         if context:
             title = f"{title} | {context}"
         super().__init__(title, id="shell-header", **kwargs)

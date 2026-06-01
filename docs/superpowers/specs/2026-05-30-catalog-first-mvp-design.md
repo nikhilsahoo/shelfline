@@ -155,7 +155,7 @@ The JSON configuration file is the source of truth for user-managed settings:
 - `catalogs`: saved OPDS catalog entries with name, URL, and optional Basic Auth username/password.
 - `preferences`: small user-editable app preferences as needed.
 
-By default, the config file lives in the platform app configuration directory. On Windows this is `%APPDATA%\epub-tui\config.json`; on Unix-like systems this is `${XDG_CONFIG_HOME}/epub-tui/config.json` when `XDG_CONFIG_HOME` is set, otherwise `~/.config/epub-tui/config.json`. The CLI accepts `--config` to override this path for portable setups and tests.
+By default, the config file lives in the platform app configuration directory. On Windows this is `%APPDATA%\shelfline\config.json`; on Unix-like systems this is `${XDG_CONFIG_HOME}/shelfline/config.json` when `XDG_CONFIG_HOME` is set, otherwise `~/.config/shelfline/config.json`. The CLI accepts `--config` to override this path for portable setups and tests.
 
 The TUI can create and update this file, but the file should remain simple enough for a user to edit directly outside the app. Config validation should produce specific, recoverable errors for malformed JSON, missing library path, duplicate catalog names, invalid catalog URLs, and incomplete credentials.
 
@@ -226,7 +226,7 @@ Dependency choices should be confirmed during implementation planning against cu
 The MVP must run on Windows and Linux.
 
 - Use `pathlib.Path` for filesystem paths and avoid hard-coded path separators.
-- Use platform config defaults: `%APPDATA%\epub-tui\config.json` on Windows, `${XDG_CONFIG_HOME}/epub-tui/config.json` or `~/.config/epub-tui/config.json` on Linux.
+- Use platform config defaults: `%APPDATA%\shelfline\config.json` on Windows, `${XDG_CONFIG_HOME}/shelfline/config.json` or `~/.config/shelfline/config.json` on Linux.
 - Use atomic same-filesystem replacement for completed downloads and keep temporary download files in the destination directory.
 - Avoid shell-specific runtime behavior in the application code.
 - Terminal image support must be optional. If Sixel or another terminal graphics protocol is unavailable, the TUI must fall back to text cover placeholders.

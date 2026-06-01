@@ -1,6 +1,6 @@
-"""Textual screens and widgets for epub-tui."""
+"""Textual screens and widgets for shelfline."""
 
-from epub_tui.tui.screens import (
+from shelfline.tui.screens import (
     CatalogAuthScreen,
     CatalogsScreen,
     DownloadStatusScreen,
@@ -10,8 +10,8 @@ from epub_tui.tui.screens import (
     LibraryScreen,
     SetupScreen,
 )
-from epub_tui.tui.reader import EpubReaderScreen
-from epub_tui.tui.widgets import BusyIndicator, CoverDisplay, DownloadProgressDisplay, StatusLine
+from shelfline.tui.reader import EpubReaderScreen
+from shelfline.tui.widgets import BusyIndicator, CoverDisplay, DownloadProgressDisplay, StatusLine
 
 __all__ = [
     "BusyIndicator",

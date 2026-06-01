@@ -9,11 +9,11 @@ from textual.app import ComposeResult
 from textual.containers import Container, VerticalScroll
 from textual.widgets import Static
 
-from epub_tui.catalog.models import AcquisitionLink, CatalogEntry
-from epub_tui.config import CatalogConfig
-from epub_tui.downloads import DownloadProgress
-from epub_tui.library import BookRecord
-from epub_tui.tui.theme import (
+from shelfline.catalog.models import AcquisitionLink, CatalogEntry
+from shelfline.config import CatalogConfig
+from shelfline.downloads import DownloadProgress
+from shelfline.library import BookRecord
+from shelfline.tui.theme import (
     BASIC_AUTH_LABEL,
     BOOK_LABEL,
     DOWNLOADS_LABEL,

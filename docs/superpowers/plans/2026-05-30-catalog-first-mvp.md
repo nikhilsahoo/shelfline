@@ -14,18 +14,18 @@
 
 - `pyproject.toml`: package metadata, dependencies, pytest config, console script.
 - `README.md`: short setup and MVP usage notes.
-- `src/epub_tui/__init__.py`: package version.
-- `src/epub_tui/__main__.py`: `python -m epub_tui` entrypoint.
-- `src/epub_tui/app.py`: Textual app class and dependency wiring.
-- `src/epub_tui/config.py`: JSON config models, default config path, loading, saving, validation, credential redaction.
-- `src/epub_tui/catalog/models.py`: OPDS feed, entry, and acquisition dataclasses.
-- `src/epub_tui/catalog/parser.py`: OPDS 1.x Atom normalization from feedparser output.
-- `src/epub_tui/catalog/client.py`: HTTP fetching with optional Basic Auth.
-- `src/epub_tui/library.py`: SQLite schema plus book/cache repositories with read/unread and deletion operations.
-- `src/epub_tui/downloads.py`: single download service with progress callbacks and temporary-file completion.
-- `src/epub_tui/reader.py`: EPUB text extraction.
-- `src/epub_tui/tui/screens.py`: Textual screens for setup, catalogs, feeds, entries, library, preview.
-- `src/epub_tui/tui/widgets.py`: reusable list/detail/status widgets, including graceful cover image display, busy indicators, and download progress display.
+- `src/shelfline/__init__.py`: package version.
+- `src/shelfline/__main__.py`: `python -m shelfline` entrypoint.
+- `src/shelfline/app.py`: Textual app class and dependency wiring.
+- `src/shelfline/config.py`: JSON config models, default config path, loading, saving, validation, credential redaction.
+- `src/shelfline/catalog/models.py`: OPDS feed, entry, and acquisition dataclasses.
+- `src/shelfline/catalog/parser.py`: OPDS 1.x Atom normalization from feedparser output.
+- `src/shelfline/catalog/client.py`: HTTP fetching with optional Basic Auth.
+- `src/shelfline/library.py`: SQLite schema plus book/cache repositories with read/unread and deletion operations.
+- `src/shelfline/downloads.py`: single download service with progress callbacks and temporary-file completion.
+- `src/shelfline/reader.py`: EPUB text extraction.
+- `src/shelfline/tui/screens.py`: Textual screens for setup, catalogs, feeds, entries, library, preview.
+- `src/shelfline/tui/widgets.py`: reusable list/detail/status widgets, including graceful cover image display, busy indicators, and download progress display.
 - `tests/conftest.py`: shared fixtures.
 - `tests/fixtures/opds/navigation.xml`: OPDS navigation feed fixture.
 - `tests/fixtures/opds/acquisition.xml`: OPDS acquisition feed fixture.
@@ -46,9 +46,9 @@
 **Files:**
 - Create: `pyproject.toml`
 - Create: `README.md`
-- Create: `src/epub_tui/__init__.py`
-- Create: `src/epub_tui/__main__.py`
-- Create: `src/epub_tui/app.py`
+- Create: `src/shelfline/__init__.py`
+- Create: `src/shelfline/__main__.py`
+- Create: `src/shelfline/app.py`
 - Create: `tests/conftest.py`
 
 - [ ] **Step 1: Create the packaging test**
@@ -56,7 +56,7 @@
 Create `tests/test_package.py`:
 
 ```python
-from epub_tui import __version__
+from shelfline import __version__
 
 
 def test_package_has_version() -> None:
@@ -67,7 +67,7 @@ def test_package_has_version() -> None:
 
 Run: `pytest tests/test_package.py -v`
 
-Expected: FAIL with `ModuleNotFoundError: No module named 'epub_tui'`.
+Expected: FAIL with `ModuleNotFoundError: No module named 'shelfline'`.
 
 - [ ] **Step 3: Add package scaffold**
 
@@ -79,7 +79,7 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "epub-tui"
+name = "shelfline"
 version = "0.1.0"
 description = "Terminal OPDS catalog browser and book downloader"
 readme = "README.md"
@@ -101,7 +101,7 @@ dev = [
 ]
 
 [project.scripts]
-epub-tui = "epub_tui.__main__:main"
+shelfline = "shelfline.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -114,7 +114,7 @@ pythonpath = ["src"]
 Create `README.md`:
 
 ```markdown
-# epub-tui
+# shelfline
 
 Catalog-first terminal app for browsing OPDS 1.x catalogs, downloading books, and previewing EPUB text.
 
@@ -139,35 +139,35 @@ pytest
 - EPUB text preview
 ```
 
-Create `src/epub_tui/__init__.py`:
+Create `src/shelfline/__init__.py`:
 
 ```python
 __version__ = "0.1.0"
 ```
 
-Create `src/epub_tui/__main__.py`:
+Create `src/shelfline/__main__.py`:
 
 ```python
-from epub_tui.app import EpubTuiApp
+from shelfline.app import ShelflineApp
 
 
 def main() -> None:
-    EpubTuiApp().run()
+    ShelflineApp().run()
 
 
 if __name__ == "__main__":
     main()
 ```
 
-Create `src/epub_tui/app.py`:
+Create `src/shelfline/app.py`:
 
 ```python
 from textual.app import App, ComposeResult
 from textual.widgets import Footer, Header, Static
 
 
-class EpubTuiApp(App[None]):
-    TITLE = "epub-tui"
+class ShelflineApp(App[None]):
+    TITLE = "shelfline"
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("l", "show_library", "Library"),
@@ -177,7 +177,7 @@ class EpubTuiApp(App[None]):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Static("epub-tui catalog-first MVP")
+        yield Static("shelfline catalog-first MVP")
         yield Footer()
 
     def action_show_library(self) -> None:
@@ -221,7 +221,7 @@ git commit -m "chore: scaffold Python TUI project"
 ### Task 2: JSON Configuration
 
 **Files:**
-- Create: `src/epub_tui/config.py`
+- Create: `src/shelfline/config.py`
 - Create: `tests/test_config.py`
 
 - [ ] **Step 1: Write failing config tests**
@@ -234,7 +234,7 @@ from pathlib import Path
 
 import pytest
 
-from epub_tui.config import (
+from shelfline.config import (
     AppConfig,
     CatalogConfig,
     ConfigError,
@@ -352,7 +352,7 @@ def test_redact_config_hides_password(tmp_path: Path) -> None:
 def test_default_config_path_uses_appdata_on_windows(tmp_path: Path) -> None:
     path = default_config_path(env={"APPDATA": str(tmp_path)}, platform_name="nt")
 
-    assert path == tmp_path / "epub-tui" / "config.json"
+    assert path == tmp_path / "shelfline" / "config.json"
 
 
 def test_default_config_path_uses_xdg_config_home(tmp_path: Path) -> None:
@@ -362,24 +362,24 @@ def test_default_config_path_uses_xdg_config_home(tmp_path: Path) -> None:
         home=tmp_path / "home",
     )
 
-    assert path == tmp_path / "epub-tui" / "config.json"
+    assert path == tmp_path / "shelfline" / "config.json"
 
 
 def test_default_config_path_falls_back_to_linux_home(tmp_path: Path) -> None:
     path = default_config_path(env={}, platform_name="posix", home=tmp_path / "home")
 
-    assert path == tmp_path / "home" / ".config" / "epub-tui" / "config.json"
+    assert path == tmp_path / "home" / ".config" / "shelfline" / "config.json"
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_config.py -v`
 
-Expected: FAIL with `ModuleNotFoundError` or missing symbols from `epub_tui.config`.
+Expected: FAIL with `ModuleNotFoundError` or missing symbols from `shelfline.config`.
 
 - [ ] **Step 3: Implement config module**
 
-Create `src/epub_tui/config.py`:
+Create `src/shelfline/config.py`:
 
 ```python
 from __future__ import annotations
@@ -418,10 +418,10 @@ def default_config_path(
     values = os.environ if env is None else env
     system = os.name if platform_name is None else platform_name
     if system == "nt" and values.get("APPDATA"):
-        return Path(values["APPDATA"]) / "epub-tui" / "config.json"
+        return Path(values["APPDATA"]) / "shelfline" / "config.json"
     if values.get("XDG_CONFIG_HOME"):
-        return Path(values["XDG_CONFIG_HOME"]) / "epub-tui" / "config.json"
-    return (home or Path.home()) / ".config" / "epub-tui" / "config.json"
+        return Path(values["XDG_CONFIG_HOME"]) / "shelfline" / "config.json"
+    return (home or Path.home()) / ".config" / "shelfline" / "config.json"
 
 
 def load_config(path: Path) -> AppConfig:
@@ -535,7 +535,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/epub_tui/config.py tests/test_config.py
+git add src/shelfline/config.py tests/test_config.py
 git commit -m "feat: add JSON configuration"
 ```
 
@@ -544,9 +544,9 @@ git commit -m "feat: add JSON configuration"
 ### Task 3: OPDS Models And Parser
 
 **Files:**
-- Create: `src/epub_tui/catalog/__init__.py`
-- Create: `src/epub_tui/catalog/models.py`
-- Create: `src/epub_tui/catalog/parser.py`
+- Create: `src/shelfline/catalog/__init__.py`
+- Create: `src/shelfline/catalog/models.py`
+- Create: `src/shelfline/catalog/parser.py`
 - Create: `tests/fixtures/opds/navigation.xml`
 - Create: `tests/fixtures/opds/acquisition.xml`
 - Create: `tests/fixtures/opds/invalid.xml`
@@ -608,7 +608,7 @@ from pathlib import Path
 
 import pytest
 
-from epub_tui.catalog.parser import OpdsParseError, parse_opds_feed
+from shelfline.catalog.parser import OpdsParseError, parse_opds_feed
 
 
 def test_parse_navigation_feed_resolves_relative_links(fixture_dir: Path) -> None:
@@ -648,15 +648,15 @@ def test_invalid_feed_raises_parse_error(fixture_dir: Path) -> None:
 
 Run: `pytest tests/test_catalog_parser.py -v`
 
-Expected: FAIL with missing `epub_tui.catalog.parser`.
+Expected: FAIL with missing `shelfline.catalog.parser`.
 
 - [ ] **Step 4: Implement models and parser**
 
-Create `src/epub_tui/catalog/__init__.py`:
+Create `src/shelfline/catalog/__init__.py`:
 
 ```python
-from epub_tui.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
-from epub_tui.catalog.parser import OpdsParseError, parse_opds_feed
+from shelfline.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
+from shelfline.catalog.parser import OpdsParseError, parse_opds_feed
 
 __all__ = [
     "AcquisitionLink",
@@ -667,7 +667,7 @@ __all__ = [
 ]
 ```
 
-Create `src/epub_tui/catalog/models.py`:
+Create `src/shelfline/catalog/models.py`:
 
 ```python
 from __future__ import annotations
@@ -711,7 +711,7 @@ class CatalogFeed:
     entries: list[CatalogEntry]
 ```
 
-Create `src/epub_tui/catalog/parser.py`:
+Create `src/shelfline/catalog/parser.py`:
 
 ```python
 from __future__ import annotations
@@ -721,7 +721,7 @@ from urllib.parse import urljoin
 
 import feedparser
 
-from epub_tui.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
+from shelfline.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
 
 
 class OpdsParseError(ValueError):
@@ -810,7 +810,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/epub_tui/catalog tests/fixtures/opds tests/test_catalog_parser.py
+git add src/shelfline/catalog tests/fixtures/opds tests/test_catalog_parser.py
 git commit -m "feat: parse OPDS 1 feeds"
 ```
 
@@ -819,7 +819,7 @@ git commit -m "feat: parse OPDS 1 feeds"
 ### Task 4: Catalog HTTP Client With Basic Auth
 
 **Files:**
-- Create: `src/epub_tui/catalog/client.py`
+- Create: `src/shelfline/catalog/client.py`
 - Create: `tests/test_catalog_client.py`
 
 - [ ] **Step 1: Write failing client tests**
@@ -833,8 +833,8 @@ import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
-from epub_tui.catalog.client import CatalogClient, CatalogFetchError
-from epub_tui.config import CatalogConfig
+from shelfline.catalog.client import CatalogClient, CatalogFetchError
+from shelfline.config import CatalogConfig
 
 
 @pytest.mark.asyncio
@@ -891,18 +891,18 @@ async def test_fetch_feed_redacts_password_on_error(httpx_mock: HTTPXMock) -> No
 
 Run: `pytest tests/test_catalog_client.py -v`
 
-Expected: FAIL with missing `epub_tui.catalog.client`.
+Expected: FAIL with missing `shelfline.catalog.client`.
 
 - [ ] **Step 3: Implement catalog client**
 
-Create `src/epub_tui/catalog/client.py`:
+Create `src/shelfline/catalog/client.py`:
 
 ```python
 from __future__ import annotations
 
 import httpx
 
-from epub_tui.config import CatalogConfig
+from shelfline.config import CatalogConfig
 
 
 class CatalogFetchError(RuntimeError):
@@ -945,7 +945,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/epub_tui/catalog/client.py tests/test_catalog_client.py
+git add src/shelfline/catalog/client.py tests/test_catalog_client.py
 git commit -m "feat: fetch catalogs with basic auth"
 ```
 
@@ -954,7 +954,7 @@ git commit -m "feat: fetch catalogs with basic auth"
 ### Task 5: SQLite Library Repository
 
 **Files:**
-- Create: `src/epub_tui/library.py`
+- Create: `src/shelfline/library.py`
 - Create: `tests/test_library.py`
 
 - [ ] **Step 1: Write failing library tests**
@@ -964,7 +964,7 @@ Create `tests/test_library.py`:
 ```python
 from pathlib import Path
 
-from epub_tui.library import BookRecord, LibraryRepository
+from shelfline.library import BookRecord, LibraryRepository
 
 
 def test_repository_initializes_schema_and_saves_book(tmp_path: Path) -> None:
@@ -1070,11 +1070,11 @@ def test_feed_cache_round_trip(tmp_path: Path) -> None:
 
 Run: `pytest tests/test_library.py -v`
 
-Expected: FAIL with missing `epub_tui.library`.
+Expected: FAIL with missing `shelfline.library`.
 
 - [ ] **Step 3: Implement repository**
 
-Create `src/epub_tui/library.py`:
+Create `src/shelfline/library.py`:
 
 ```python
 from __future__ import annotations
@@ -1258,7 +1258,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/epub_tui/library.py tests/test_library.py
+git add src/shelfline/library.py tests/test_library.py
 git commit -m "feat: add library metadata store"
 ```
 
@@ -1267,7 +1267,7 @@ git commit -m "feat: add library metadata store"
 ### Task 6: Single Download Service
 
 **Files:**
-- Create: `src/epub_tui/downloads.py`
+- Create: `src/shelfline/downloads.py`
 - Create: `tests/test_downloads.py`
 
 - [ ] **Step 1: Write failing download tests**
@@ -1281,7 +1281,7 @@ import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
-from epub_tui.downloads import DownloadError, DownloadProgress, DownloadService
+from shelfline.downloads import DownloadError, DownloadProgress, DownloadService
 
 
 @pytest.mark.asyncio
@@ -1370,11 +1370,11 @@ async def test_download_reports_progress_without_known_total(tmp_path: Path, htt
 
 Run: `pytest tests/test_downloads.py -v`
 
-Expected: FAIL with missing `epub_tui.downloads`.
+Expected: FAIL with missing `shelfline.downloads`.
 
 - [ ] **Step 3: Implement download service**
 
-Create `src/epub_tui/downloads.py`:
+Create `src/shelfline/downloads.py`:
 
 ```python
 from __future__ import annotations
@@ -1472,7 +1472,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/epub_tui/downloads.py tests/test_downloads.py
+git add src/shelfline/downloads.py tests/test_downloads.py
 git commit -m "feat: add single download service"
 ```
 
@@ -1481,7 +1481,7 @@ git commit -m "feat: add single download service"
 ### Task 7: EPUB Text Preview
 
 **Files:**
-- Create: `src/epub_tui/reader.py`
+- Create: `src/shelfline/reader.py`
 - Create: `tests/test_reader.py`
 
 - [ ] **Step 1: Write failing reader tests**
@@ -1493,7 +1493,7 @@ from pathlib import Path
 
 from ebooklib import epub
 
-from epub_tui.reader import EpubPreview, extract_epub_preview
+from shelfline.reader import EpubPreview, extract_epub_preview
 
 
 def test_extract_epub_preview_reads_spine_text(tmp_path: Path) -> None:
@@ -1522,11 +1522,11 @@ def test_extract_epub_preview_reads_spine_text(tmp_path: Path) -> None:
 
 Run: `pytest tests/test_reader.py -v`
 
-Expected: FAIL with missing `epub_tui.reader`.
+Expected: FAIL with missing `shelfline.reader`.
 
 - [ ] **Step 3: Implement EPUB extraction**
 
-Create `src/epub_tui/reader.py`:
+Create `src/shelfline/reader.py`:
 
 ```python
 from __future__ import annotations
@@ -1604,7 +1604,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/epub_tui/reader.py tests/test_reader.py
+git add src/shelfline/reader.py tests/test_reader.py
 git commit -m "feat: extract EPUB text previews"
 ```
 
@@ -1613,10 +1613,10 @@ git commit -m "feat: extract EPUB text previews"
 ### Task 8: Textual Screens And App Wiring
 
 **Files:**
-- Modify: `src/epub_tui/app.py`
-- Create: `src/epub_tui/tui/__init__.py`
-- Create: `src/epub_tui/tui/screens.py`
-- Create: `src/epub_tui/tui/widgets.py`
+- Modify: `src/shelfline/app.py`
+- Create: `src/shelfline/tui/__init__.py`
+- Create: `src/shelfline/tui/screens.py`
+- Create: `src/shelfline/tui/widgets.py`
 - Create: `tests/test_tui_smoke.py`
 
 - [ ] **Step 1: Write failing TUI smoke tests**
@@ -1626,13 +1626,13 @@ Create `tests/test_tui_smoke.py`:
 ```python
 import pytest
 
-from epub_tui.app import EpubTuiApp
-from epub_tui.config import AppConfig, CatalogConfig
+from shelfline.app import ShelflineApp
+from shelfline.config import AppConfig, CatalogConfig
 
 
 @pytest.mark.asyncio
 async def test_app_shows_setup_when_config_missing() -> None:
-    app = EpubTuiApp(config=None)
+    app = ShelflineApp(config=None)
     async with app.run_test() as pilot:
         assert app.screen.id == "setup"
 
@@ -1644,7 +1644,7 @@ async def test_app_shows_catalogs_when_config_exists(tmp_path) -> None:
         catalogs=[CatalogConfig(name="Public", url="https://example.test/opds")],
         preferences={},
     )
-    app = EpubTuiApp(config=config)
+    app = ShelflineApp(config=config)
     async with app.run_test() as pilot:
         assert app.screen.id == "catalogs"
         assert "Public" in app.screen.renderable_text()
@@ -1657,7 +1657,7 @@ async def test_catalog_screen_shows_busy_indicator_for_outgoing_call(tmp_path) -
         catalogs=[CatalogConfig(name="Public", url="https://example.test/opds")],
         preferences={},
     )
-    app = EpubTuiApp(config=config)
+    app = ShelflineApp(config=config)
     async with app.run_test() as pilot:
         app.screen.begin_outgoing_call("Fetching catalog...")
         assert "Fetching catalog..." in app.screen.renderable_text()
@@ -1666,7 +1666,7 @@ async def test_catalog_screen_shows_busy_indicator_for_outgoing_call(tmp_path) -
 
 
 def test_cover_widget_falls_back_to_text_when_image_missing(tmp_path) -> None:
-    from epub_tui.tui.widgets import CoverDisplay
+    from shelfline.tui.widgets import CoverDisplay
 
     widget = CoverDisplay(title="Sample Book", author_line="Ada Writer", image_path=tmp_path / "missing.jpg")
 
@@ -1675,8 +1675,8 @@ def test_cover_widget_falls_back_to_text_when_image_missing(tmp_path) -> None:
 
 
 def test_download_progress_widget_renders_known_percent() -> None:
-    from epub_tui.downloads import DownloadProgress
-    from epub_tui.tui.widgets import DownloadProgressDisplay
+    from shelfline.downloads import DownloadProgress
+    from shelfline.tui.widgets import DownloadProgressDisplay
 
     widget = DownloadProgressDisplay()
     widget.set_progress(DownloadProgress(bytes_received=50, total_bytes=100))
@@ -1685,8 +1685,8 @@ def test_download_progress_widget_renders_known_percent() -> None:
 
 
 def test_download_progress_widget_renders_unknown_total() -> None:
-    from epub_tui.downloads import DownloadProgress
-    from epub_tui.tui.widgets import DownloadProgressDisplay
+    from shelfline.downloads import DownloadProgress
+    from shelfline.tui.widgets import DownloadProgressDisplay
 
     widget = DownloadProgressDisplay()
     widget.set_progress(DownloadProgress(bytes_received=4096, total_bytes=None))
@@ -1695,7 +1695,7 @@ def test_download_progress_widget_renders_unknown_total() -> None:
 
 
 def test_busy_indicator_names_waiting_operation() -> None:
-    from epub_tui.tui.widgets import BusyIndicator
+    from shelfline.tui.widgets import BusyIndicator
 
     widget = BusyIndicator()
     widget.start("Fetching catalog...")
@@ -1712,26 +1712,26 @@ def test_busy_indicator_names_waiting_operation() -> None:
 
 Run: `pytest tests/test_tui_smoke.py -v`
 
-Expected: FAIL because `EpubTuiApp` does not accept `config`.
+Expected: FAIL because `ShelflineApp` does not accept `config`.
 
 - [ ] **Step 3: Add TUI screens and wiring**
 
-Create `src/epub_tui/tui/__init__.py`:
+Create `src/shelfline/tui/__init__.py`:
 
 ```python
-from epub_tui.tui.screens import CatalogsScreen, SetupScreen
+from shelfline.tui.screens import CatalogsScreen, SetupScreen
 
 __all__ = ["CatalogsScreen", "SetupScreen"]
 ```
 
-Create `src/epub_tui/tui/widgets.py`:
+Create `src/shelfline/tui/widgets.py`:
 
 ```python
 from pathlib import Path
 
 from textual.widgets import LoadingIndicator, ProgressBar, Static
 
-from epub_tui.downloads import DownloadProgress
+from shelfline.downloads import DownloadProgress
 
 
 class StatusLine(Static):
@@ -1810,7 +1810,7 @@ class DownloadProgressBar(ProgressBar):
             self.update(total=progress.total_bytes, progress=progress.bytes_received)
 ```
 
-Create `src/epub_tui/tui/screens.py`:
+Create `src/shelfline/tui/screens.py`:
 
 ```python
 from __future__ import annotations
@@ -1819,8 +1819,8 @@ from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
-from epub_tui.config import AppConfig
-from epub_tui.tui.widgets import BusyIndicator, StatusLine
+from shelfline.config import AppConfig
+from shelfline.tui.widgets import BusyIndicator, StatusLine
 
 
 class SetupScreen(Screen[None]):
@@ -1865,17 +1865,17 @@ class CatalogsScreen(Screen[None]):
         self.query_one(BusyIndicator).stop(message)
 ```
 
-Modify `src/epub_tui/app.py`:
+Modify `src/shelfline/app.py`:
 
 ```python
 from textual.app import App
 
-from epub_tui.config import AppConfig
-from epub_tui.tui.screens import CatalogsScreen, SetupScreen
+from shelfline.config import AppConfig
+from shelfline.tui.screens import CatalogsScreen, SetupScreen
 
 
-class EpubTuiApp(App[None]):
-    TITLE = "epub-tui"
+class ShelflineApp(App[None]):
+    TITLE = "shelfline"
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("l", "show_library", "Library"),
@@ -1912,7 +1912,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/epub_tui/app.py src/epub_tui/tui tests/test_tui_smoke.py
+git add src/shelfline/app.py src/shelfline/tui tests/test_tui_smoke.py
 git commit -m "feat: add initial Textual screens"
 ```
 
@@ -1921,7 +1921,7 @@ git commit -m "feat: add initial Textual screens"
 ### Task 9: End-To-End Service Integration
 
 **Files:**
-- Create: `src/epub_tui/services.py`
+- Create: `src/shelfline/services.py`
 - Create: `tests/test_services.py`
 
 - [ ] **Step 1: Write failing integration service test**
@@ -1935,8 +1935,8 @@ import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
-from epub_tui.config import AppConfig, CatalogConfig
-from epub_tui.services import CatalogWorkflow
+from shelfline.config import AppConfig, CatalogConfig
+from shelfline.services import CatalogWorkflow
 
 
 @pytest.mark.asyncio
@@ -1990,11 +1990,11 @@ async def test_workflow_reports_waiting_status_for_outgoing_calls(
 
 Run: `pytest tests/test_services.py -v`
 
-Expected: FAIL with missing `epub_tui.services`.
+Expected: FAIL with missing `shelfline.services`.
 
 - [ ] **Step 3: Implement workflow service**
 
-Create `src/epub_tui/services.py`:
+Create `src/shelfline/services.py`:
 
 ```python
 from __future__ import annotations
@@ -2005,12 +2005,12 @@ from typing import Callable
 
 import httpx
 
-from epub_tui.catalog.client import CatalogClient
-from epub_tui.catalog.models import CatalogEntry, CatalogFeed
-from epub_tui.catalog.parser import parse_opds_feed
-from epub_tui.config import AppConfig, CatalogConfig
-from epub_tui.downloads import DownloadError, DownloadProgress, DownloadService
-from epub_tui.library import BookRecord, LibraryRepository
+from shelfline.catalog.client import CatalogClient
+from shelfline.catalog.models import CatalogEntry, CatalogFeed
+from shelfline.catalog.parser import parse_opds_feed
+from shelfline.config import AppConfig, CatalogConfig
+from shelfline.downloads import DownloadError, DownloadProgress, DownloadService
+from shelfline.library import BookRecord, LibraryRepository
 
 
 StatusCallback = Callable[[str], None]
@@ -2102,7 +2102,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/epub_tui/services.py tests/test_services.py
+git add src/shelfline/services.py tests/test_services.py
 git commit -m "feat: integrate catalog download workflow"
 ```
 
@@ -2111,7 +2111,7 @@ git commit -m "feat: integrate catalog download workflow"
 ### Task 10: CLI Entrypoint And Final Verification
 
 **Files:**
-- Modify: `src/epub_tui/__main__.py`
+- Modify: `src/shelfline/__main__.py`
 - Modify: `README.md`
 - Create: `tests/test_cli.py`
 
@@ -2122,13 +2122,13 @@ Create `tests/test_cli.py`:
 ```python
 from pathlib import Path
 
-from epub_tui.__main__ import build_app
-from epub_tui.app import EpubTuiApp
+from shelfline.__main__ import build_app
+from shelfline.app import ShelflineApp
 
 
 def test_build_app_returns_textual_app() -> None:
     app = build_app([])
-    assert isinstance(app, EpubTuiApp)
+    assert isinstance(app, ShelflineApp)
 
 
 def test_build_app_uses_default_config_when_present(tmp_path: Path) -> None:
@@ -2159,7 +2159,7 @@ Expected: FAIL with `ImportError` for `build_app`.
 
 - [ ] **Step 3: Implement CLI app builder**
 
-Modify `src/epub_tui/__main__.py`:
+Modify `src/shelfline/__main__.py`:
 
 ```python
 from __future__ import annotations
@@ -2168,12 +2168,12 @@ import argparse
 from pathlib import Path
 from typing import Sequence
 
-from epub_tui.app import EpubTuiApp
-from epub_tui.config import ConfigError, default_config_path, load_config
+from shelfline.app import ShelflineApp
+from shelfline.config import ConfigError, default_config_path, load_config
 
 
-def build_app(argv: Sequence[str] | None = None, default_config: Path | None = None) -> EpubTuiApp:
-    parser = argparse.ArgumentParser(prog="epub-tui")
+def build_app(argv: Sequence[str] | None = None, default_config: Path | None = None) -> ShelflineApp:
+    parser = argparse.ArgumentParser(prog="shelfline")
     parser.add_argument("--config", type=Path, default=None, help="Path to config JSON")
     args = parser.parse_args(argv)
     config_path = args.config or default_config or default_config_path()
@@ -2183,7 +2183,7 @@ def build_app(argv: Sequence[str] | None = None, default_config: Path | None = N
             config = load_config(config_path)
         except ConfigError as exc:
             raise SystemExit(str(exc)) from exc
-    return EpubTuiApp(config=config)
+    return ShelflineApp(config=config)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -2199,7 +2199,7 @@ if __name__ == "__main__":
 Modify `README.md`:
 
 ```markdown
-# epub-tui
+# shelfline
 
 Catalog-first terminal app for browsing OPDS 1.x catalogs, downloading books, and previewing EPUB text.
 
@@ -2213,11 +2213,11 @@ pytest
 ## Run
 
 ```powershell
-epub-tui
-epub-tui --config path\to\config.json
+shelfline
+shelfline --config path\to\config.json
 ```
 
-By default, `epub-tui` reads config from `%APPDATA%\epub-tui\config.json` on Windows, `${XDG_CONFIG_HOME}/epub-tui/config.json` when `XDG_CONFIG_HOME` is set, or `~/.config/epub-tui/config.json` otherwise. Use `--config` to override that location.
+By default, `shelfline` reads config from `%APPDATA%\shelfline\config.json` on Windows, `${XDG_CONFIG_HOME}/shelfline/config.json` when `XDG_CONFIG_HOME` is set, or `~/.config/shelfline/config.json` otherwise. Use `--config` to override that location.
 
 Example config:
 
@@ -2258,14 +2258,14 @@ Run: `pytest -v`
 
 Expected: PASS.
 
-Run: `python -m epub_tui --help`
+Run: `python -m shelfline --help`
 
 Expected: command prints usage including `--config`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/epub_tui/__main__.py README.md tests/test_cli.py
+git add src/shelfline/__main__.py README.md tests/test_cli.py
 git commit -m "feat: add CLI config entrypoint"
 ```
 
@@ -2284,21 +2284,21 @@ Create `tests/test_cross_platform.py`:
 ```python
 from pathlib import Path, PureWindowsPath
 
-from epub_tui.config import default_config_path
-from epub_tui.downloads import partial_download_path, safe_replace
-from epub_tui.tui.widgets import CoverDisplay
+from shelfline.config import default_config_path
+from shelfline.downloads import partial_download_path, safe_replace
+from shelfline.tui.widgets import CoverDisplay
 
 
 def test_default_config_path_windows_shape(tmp_path: Path) -> None:
     path = default_config_path(env={"APPDATA": str(tmp_path)}, platform_name="nt")
 
-    assert path == tmp_path / "epub-tui" / "config.json"
+    assert path == tmp_path / "shelfline" / "config.json"
 
 
 def test_default_config_path_linux_shape(tmp_path: Path) -> None:
     path = default_config_path(env={}, platform_name="posix", home=tmp_path / "home")
 
-    assert path == tmp_path / "home" / ".config" / "epub-tui" / "config.json"
+    assert path == tmp_path / "home" / ".config" / "shelfline" / "config.json"
 
 
 def test_partial_download_path_stays_in_destination_directory() -> None:
@@ -2335,7 +2335,7 @@ Expected: FAIL with missing `partial_download_path` and `safe_replace`.
 
 - [ ] **Step 3: Add download path helpers**
 
-Modify `src/epub_tui/downloads.py`:
+Modify `src/shelfline/downloads.py`:
 
 ```python
 from __future__ import annotations
@@ -2474,7 +2474,7 @@ On Windows PowerShell:
 ```powershell
 python -m pip install -e ".[dev]"
 pytest -v
-python -m epub_tui --help
+python -m shelfline --help
 ```
 
 Expected: tests pass and help output includes `--config`.
@@ -2484,7 +2484,7 @@ On Linux shell:
 ```bash
 python -m pip install -e '.[dev]'
 pytest -v
-python -m epub_tui --help
+python -m shelfline --help
 ```
 
 Expected: tests pass and help output includes `--config`.
@@ -2492,7 +2492,7 @@ Expected: tests pass and help output includes `--config`.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/epub_tui/downloads.py tests/test_cross_platform.py README.md
+git add src/shelfline/downloads.py tests/test_cross_platform.py README.md
 git commit -m "test: add cross-platform verification"
 ```
 
@@ -2502,5 +2502,5 @@ git commit -m "test: add cross-platform verification"
 
 - Spec coverage: OPDS 1.x parsing and cover image metadata are covered by Task 3. Basic Auth fetch and credential redaction are covered by Tasks 2 and 4. JSON config is covered by Task 2. SQLite cache/book metadata, including cover URLs, optional local cover paths, read/unread state, and soft deletion, is covered by Task 5. Single download workflow and progress callbacks are covered by Task 6. EPUB preview is covered by Task 7. Textual startup, catalog screen smoke coverage, library action bindings, busy indicators for outgoing calls, cover display fallback, and download progress display are covered by Task 8. End-to-end service integration and status callbacks for outgoing calls are covered by Task 9. CLI launch and usage docs are covered by Task 10. Windows/Linux portability is covered by Task 11.
 - Scope boundaries: OPDS 2.x, multi-download queue, PDF/DjVu/CBR rendering, OAuth, annotations, sync, and full-text search are not implemented in this plan.
-- Type consistency: `AppConfig`, `CatalogConfig`, `CatalogFeed`, `CatalogEntry`, `AcquisitionLink`, `BookRecord`, `LibraryRepository`, `CatalogClient`, `DownloadProgress`, `DownloadService`, `CatalogWorkflow`, `StatusCallback`, `ProgressCallback`, and `EpubTuiApp` signatures are used consistently across tasks.
+- Type consistency: `AppConfig`, `CatalogConfig`, `CatalogFeed`, `CatalogEntry`, `AcquisitionLink`, `BookRecord`, `LibraryRepository`, `CatalogClient`, `DownloadProgress`, `DownloadService`, `CatalogWorkflow`, `StatusCallback`, `ProgressCallback`, and `ShelflineApp` signatures are used consistently across tasks.
 - Red-flag scan: The plan contains no unresolved work markers.

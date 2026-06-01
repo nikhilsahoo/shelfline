@@ -51,7 +51,7 @@ class KeyringCredentialBackend:
 
 
 class CredentialStore:
-    SERVICE_PREFIX = "epub-tui"
+    SERVICE_PREFIX = "shelfline"
 
     def __init__(
         self,

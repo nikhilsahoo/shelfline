@@ -6,7 +6,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import feedparser
 
-from epub_tui.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
+from shelfline.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
 
 OPDS_ACQUISITION_REL = "http://opds-spec.org/acquisition"
 OPDS_IMAGE_REL = "http://opds-spec.org/image"

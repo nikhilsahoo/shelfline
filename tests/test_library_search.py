@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from epub_tui.library import BookRecord, LibraryRepository, LibrarySearch
+from shelfline.library import BookRecord, LibraryRepository, LibrarySearch
 
 
 def _book(
