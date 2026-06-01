@@ -296,3 +296,114 @@ def test_extract_epub_cover_falls_back_for_weird_embedded_suffix(tmp_path: Path)
     assert path is not None
     assert path.suffix == ".jpg"
     assert path.read_bytes() == cover_bytes
+
+
+def test_extract_epub_cover_uses_media_type_fallback_for_weird_embedded_suffix(
+    tmp_path: Path,
+) -> None:
+    epub_path = tmp_path / "weird-png-cover.epub"
+    cover_bytes = b"cover-image-bytes"
+    book = epub.EpubBook()
+    book.set_identifier("weird-png-cover")
+    book.set_title("Weird Png Cover")
+    book.set_language("en")
+    cover = epub.EpubImage(
+        uid="cover",
+        file_name="images/cover.not-image",
+        media_type="image/png",
+        content=cover_bytes,
+    )
+    book.add_item(cover)
+    chapter = epub.EpubHtml(title="Chapter", file_name="chapter.xhtml", lang="en")
+    chapter.content = b"<html><body><p>Text.</p></body></html>"
+    book.add_item(chapter)
+    book.spine = [chapter]
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    epub.write_epub(str(epub_path), book)
+
+    path = extract_epub_cover(epub_path, tmp_path)
+
+    assert path is not None
+    assert path.suffix == ".png"
+    assert path.read_bytes() == cover_bytes
+
+
+def test_extract_epub_cover_skips_oversized_candidate_and_uses_later_valid_cover(
+    tmp_path: Path,
+) -> None:
+    epub_path = tmp_path / "oversized-cover.epub"
+    valid_cover_bytes = b"valid-cover"
+    book = epub.EpubBook()
+    book.set_identifier("oversized-cover")
+    book.set_title("Oversized Cover")
+    book.set_language("en")
+    book.add_item(
+        epub.EpubImage(
+            uid="cover-huge",
+            file_name="images/cover-huge.jpg",
+            media_type="image/jpeg",
+            content=b"x" * (MAX_COVER_BYTES + 1),
+        )
+    )
+    book.add_item(
+        epub.EpubImage(
+            uid="cover-valid",
+            file_name="images/cover-valid.jpg",
+            media_type="image/jpeg",
+            content=valid_cover_bytes,
+        )
+    )
+    chapter = epub.EpubHtml(title="Chapter", file_name="chapter.xhtml", lang="en")
+    chapter.content = b"<html><body><p>Text.</p></body></html>"
+    book.add_item(chapter)
+    book.spine = [chapter]
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    epub.write_epub(str(epub_path), book)
+
+    path = extract_epub_cover(epub_path, tmp_path)
+
+    assert path is not None
+    assert path.suffix == ".jpg"
+    assert path.read_bytes() == valid_cover_bytes
+
+
+def test_extract_epub_cover_skips_unsupported_candidate_and_uses_later_valid_cover(
+    tmp_path: Path,
+) -> None:
+    epub_path = tmp_path / "unsupported-cover.epub"
+    valid_cover_bytes = b"valid-cover"
+    book = epub.EpubBook()
+    book.set_identifier("unsupported-cover")
+    book.set_title("Unsupported Cover")
+    book.set_language("en")
+    book.add_item(
+        epub.EpubImage(
+            uid="cover-svg",
+            file_name="images/cover.svg",
+            media_type="image/svg+xml",
+            content=b"<svg></svg>",
+        )
+    )
+    book.add_item(
+        epub.EpubImage(
+            uid="cover-valid",
+            file_name="images/cover-valid.png",
+            media_type="image/png",
+            content=valid_cover_bytes,
+        )
+    )
+    chapter = epub.EpubHtml(title="Chapter", file_name="chapter.xhtml", lang="en")
+    chapter.content = b"<html><body><p>Text.</p></body></html>"
+    book.add_item(chapter)
+    book.spine = [chapter]
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    epub.write_epub(str(epub_path), book)
+
+    path = extract_epub_cover(epub_path, tmp_path)
+
+    assert path is not None
+    assert path.suffix == ".png"
+    assert path.read_bytes() == valid_cover_bytes

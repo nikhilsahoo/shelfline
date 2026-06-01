@@ -107,11 +107,20 @@ def extract_epub_cover(epub_path: Path, library_path: Path) -> Path | None:
         if "cover" not in name and item.get_type() != ITEM_COVER:
             continue
 
-        extension = _safe_image_extension(Path(name).suffix.lower())
+        media_type = getattr(item, "media_type", "").lower()
+        extension = _CONTENT_TYPE_EXTENSIONS.get(media_type)
+        if extension is None:
+            continue
+
+        content = item.get_content()
+        if len(content) > MAX_COVER_BYTES:
+            continue
+
+        extension = _safe_image_extension(Path(name).suffix.lower(), fallback=extension)
         digest = sha256(f"{epub_path}:{name}".encode("utf-8")).hexdigest()[:24]
         path = cover_cache_dir(library_path) / f"{digest}{extension}"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(item.get_content())
+        path.write_bytes(content)
         return path
 
     return None
@@ -136,12 +145,12 @@ def _content_length_exceeds_limit(content_length: str) -> bool:
         return False
 
 
-def _safe_image_extension(suffix: str) -> str:
+def _safe_image_extension(suffix: str, *, fallback: str = ".jpg") -> str:
     if suffix == ".jpeg":
         return ".jpg"
     if suffix in {".jpg", ".png", ".webp", ".gif"}:
         return suffix
-    return ".jpg"
+    return fallback
 
 
 def _redact_url_credentials(source_url: str) -> str:
