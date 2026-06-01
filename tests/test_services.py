@@ -208,12 +208,16 @@ async def test_workflow_malformed_cover_url_does_not_fail_download(
     )
 
     feed = await workflow.fetch_catalog(catalog)
+    assert feed.entries[0].cover_image_url is None
+    assert feed.entries[0].thumbnail_url is None
+
     downloaded = await workflow.download_best_epub(catalog, feed.entries[0])
 
     assert downloaded.read_bytes() == b"not an epub"
     book = workflow.library.list_books()[0]
+    assert book.cover_image_url is None
     assert book.cover_image_path is None
-    assert book.cover_cache_status == "failed"
+    assert book.cover_cache_status == "missing"
 
 
 @pytest.mark.asyncio
