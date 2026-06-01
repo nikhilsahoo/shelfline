@@ -88,9 +88,9 @@ class CoverCache:
         safe_url = _redact_url_credentials(source_url)
         content = bytearray()
         async for chunk in response.aiter_bytes():
-            content.extend(chunk)
-            if len(content) > MAX_COVER_BYTES:
+            if len(content) + len(chunk) > MAX_COVER_BYTES:
                 raise CoverError(f"Cover response from {safe_url} is too large")
+            content.extend(chunk)
         return bytes(content)
 
 

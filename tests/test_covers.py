@@ -7,6 +7,7 @@ import pytest
 from ebooklib import epub
 from pytest_httpx import HTTPXMock
 
+import shelfline.covers as covers
 from shelfline.covers import (
     CoverCache,
     CoverError,
@@ -21,6 +22,15 @@ class ChunkedStream(httpx.AsyncByteStream):
         self.chunks = chunks
 
     async def __aiter__(self):
+        for chunk in self.chunks:
+            yield chunk
+
+
+class FakeCoverResponse:
+    def __init__(self, chunks: list[bytes]) -> None:
+        self.chunks = chunks
+
+    async def aiter_bytes(self):
         for chunk in self.chunks:
             yield chunk
 
@@ -164,6 +174,42 @@ async def test_cover_cache_rejects_oversized_chunked_stream_without_writing(
             await cache.fetch("https://example.test/covers/chunked-huge.jpg")
 
     assert not (tmp_path / ".shelfline" / "covers").exists()
+
+
+@pytest.mark.asyncio
+async def test_read_cover_content_rejects_oversized_chunk_before_appending(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class TrackingBuffer:
+        instances: list["TrackingBuffer"] = []
+
+        def __init__(self) -> None:
+            self.size = 0
+            self.extended_chunk_sizes: list[int] = []
+            self.instances.append(self)
+
+        def __len__(self) -> int:
+            return self.size
+
+        def extend(self, chunk: bytes) -> None:
+            self.extended_chunk_sizes.append(len(chunk))
+            self.size += len(chunk)
+
+        def __bytes__(self) -> bytes:
+            return b"x" * self.size
+
+    monkeypatch.setattr(covers, "bytearray", TrackingBuffer, raising=False)
+
+    async with httpx.AsyncClient() as client:
+        cache = CoverCache(tmp_path, client)
+        with pytest.raises(CoverError, match="too large"):
+            await cache._read_cover_content(
+                "https://example.test/covers/huge.jpg",
+                FakeCoverResponse([b"x" * (MAX_COVER_BYTES + 1)]),  # type: ignore[arg-type]
+            )
+
+    assert TrackingBuffer.instances[0].extended_chunk_sizes == []
 
 
 @pytest.mark.asyncio
