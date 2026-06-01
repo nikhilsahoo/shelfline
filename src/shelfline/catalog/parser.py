@@ -47,7 +47,9 @@ def _parse_entry(entry: Any, source_url: str) -> CatalogEntry:
         if not href:
             continue
 
-        resolved_href = sanitize_url_credentials(urljoin(source_url, href))
+        resolved_href = _resolve_link_href(source_url, href)
+        if resolved_href is None:
+            continue
         media_type = link.get("type", "")
 
         if _is_navigation_link(relation, media_type):
@@ -82,6 +84,13 @@ def _parse_entry(entry: Any, source_url: str) -> CatalogEntry:
 
 def _is_acquisition_relation(relation: str) -> bool:
     return relation == OPDS_ACQUISITION_REL or relation.startswith(f"{OPDS_ACQUISITION_REL}/")
+
+
+def _resolve_link_href(source_url: str, href: str) -> str | None:
+    try:
+        return sanitize_url_credentials(urljoin(source_url, href))
+    except ValueError:
+        return None
 
 
 def _is_navigation_link(relation: str, media_type: str) -> bool:

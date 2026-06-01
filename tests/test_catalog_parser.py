@@ -66,6 +66,47 @@ def test_parse_acquisition_feed_extracts_epub_and_pdf(fixture_dir: Path) -> None
     }
 
 
+def test_parse_acquisition_feed_ignores_malformed_optional_cover_link() -> None:
+    xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Catalog</title>
+  <entry>
+    <title>Broken Cover Book</title>
+    <link rel="http://opds-spec.org/image" href="https://[bad/cover.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/broken-cover.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+
+    feed = parse_opds_feed(xml, source_url="https://example.test/opds/fiction.xml")
+
+    entry = feed.entries[0]
+    assert entry.title == "Broken Cover Book"
+    assert entry.cover_image_url is None
+    assert entry.thumbnail_url is None
+    assert entry.best_epub_link().href == "https://example.test/opds/books/broken-cover.epub"
+
+
+def test_parse_acquisition_feed_skips_malformed_acquisition_link() -> None:
+    xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Catalog</title>
+  <entry>
+    <title>Mixed Links Book</title>
+    <link rel="http://opds-spec.org/acquisition" href="https://[bad/book.epub" type="application/epub+zip"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/good.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+
+    feed = parse_opds_feed(xml, source_url="https://example.test/opds/fiction.xml")
+
+    entry = feed.entries[0]
+    assert [link.href for link in entry.acquisition_links] == [
+        "https://example.test/opds/books/good.epub"
+    ]
+
+
 def test_parse_feed_sanitizes_links_resolved_from_credentialed_source_url() -> None:
     xml = """<?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
