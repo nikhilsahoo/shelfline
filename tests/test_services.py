@@ -183,6 +183,45 @@ async def test_workflow_cover_cache_failure_does_not_fail_download(
 
 
 @pytest.mark.asyncio
+async def test_workflow_remote_cover_oserror_does_not_fail_download(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Public</title>
+  <entry>
+    <title>Unwritable Cover Book</title>
+    <link rel="http://opds-spec.org/image" href="covers/unwritable.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/unwritable-cover.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    httpx_mock.add_response(url="https://example.test/opds/books/unwritable-cover.epub", content=b"not an epub")
+    catalog = CatalogConfig(name="Public", url="https://example.test/opds")
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    async def fail_cover_cache(*args: object, **kwargs: object) -> Path:
+        raise OSError("cache directory is unwritable")
+
+    monkeypatch.setattr(workflow._cover_cache, "fetch", fail_cover_cache)
+
+    feed = await workflow.fetch_catalog(catalog)
+    downloaded = await workflow.download_best_epub(catalog, feed.entries[0])
+
+    assert downloaded.read_bytes() == b"not an epub"
+    book = workflow.library.list_books()[0]
+    assert book.cover_image_path is None
+    assert book.cover_cache_status == "failed"
+
+
+@pytest.mark.asyncio
 async def test_workflow_skips_cover_cache_when_cover_display_is_off(
     tmp_path: Path,
     httpx_mock: HTTPXMock,

@@ -177,7 +177,7 @@ class CatalogWorkflow:
                     ),
                     "cached",
                 )
-            except CoverError:
+            except (CoverError, OSError):
                 remote_failed = True
 
         if selected_link.media_type == "application/epub+zip":
