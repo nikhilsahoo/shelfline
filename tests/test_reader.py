@@ -92,6 +92,27 @@ def test_reader_cleanup_removes_leftover_break_tags_and_entities(tmp_path: Path)
     assert "Two & Three" in preview.sections[0].text
 
 
+def test_reader_cleanup_preserves_escaped_angle_bracket_prose(tmp_path: Path) -> None:
+    epub_path = tmp_path / "escaped-angles.epub"
+    chapter = _chapter(
+        "Angles",
+        "angles.xhtml",
+        b"""
+        <html><body>
+          <h1>Angles</h1>
+          <p>Use &lt;angle brackets&gt; literally.</p>
+          <p>Also keep math like 1 &lt; 2 &gt; 0 &amp; true.</p>
+        </body></html>
+        """,
+    )
+    _write_epub(epub_path, [chapter])
+
+    preview = extract_epub_preview(epub_path)
+
+    assert "Use <angle brackets> literally." in preview.sections[0].text
+    assert "1 < 2 > 0 & true." in preview.sections[0].text
+
+
 def test_epub_preview_section_count_returns_number_of_sections() -> None:
     preview = _preview_with_sections("One", "Two", "Three")
 
@@ -287,6 +308,22 @@ def test_reader_skips_titlepage_like_structural_sections(tmp_path: Path) -> None
     preview = extract_epub_preview(epub_path)
 
     assert [section.heading for section in preview.sections] == ["Real Chapter"]
+
+
+def test_short_chapter_titled_cover_is_preserved_when_item_is_not_structural(tmp_path: Path) -> None:
+    epub_path = tmp_path / "cover-chapter.epub"
+    chapter = _chapter(
+        "Chapter 1",
+        "chapter.xhtml",
+        b"<html><body><h1>Cover</h1><p>Her letter covered the table.</p></body></html>",
+        uid="chapter",
+    )
+    _write_epub(epub_path, [chapter], spine=["chapter"])
+
+    preview = extract_epub_preview(epub_path)
+
+    assert [section.heading for section in preview.sections] == ["Cover"]
+    assert "Her letter covered the table." in preview.sections[0].text
 
 
 def test_prose_chapter_with_guide_or_contents_words_is_kept(tmp_path: Path) -> None:

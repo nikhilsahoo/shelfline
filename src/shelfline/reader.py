@@ -294,7 +294,7 @@ def _has_titlepage_like_structural_label(item: Any, section: EpubSection) -> boo
 
 
 def _item_label_values(item: Any, section: EpubSection) -> list[str]:
-    values = [section.heading]
+    values = []
     for attribute in ("id", "file_name", "title"):
         value = getattr(item, attribute, None)
         if value:
@@ -365,6 +365,5 @@ def _normalize_block_text(text: str) -> str:
     text = html.unescape(text)
     text = re.sub(r"<\s*br\s*/?\s*>", "\n", text, flags=re.IGNORECASE)
     text = re.sub(r"<\s*/\s*p\s*>", "\n\n", text, flags=re.IGNORECASE)
-    text = re.sub(r"<[^>]+>", " ", text)
     lines = [_normalize_inline_text(line) for line in text.splitlines()]
     return "\n\n".join(line for line in lines if line)
