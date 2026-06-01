@@ -221,6 +221,22 @@ def test_default_preferences_are_loaded_when_missing(tmp_path: Path) -> None:
     assert config.preferences.covers.prefer_thumbnails is True
 
 
+def test_app_config_normalizes_raw_preference_dicts(tmp_path: Path) -> None:
+    config = AppConfig(
+        library_path=tmp_path / "books",
+        preferences={
+            "reader": {"width": "wide"},
+            "covers": {"display": "text"},
+            "theme": "textual-dark",
+        },
+    )
+
+    assert config.preferences.reader.width == "wide"
+    assert config.preferences.reader.theme == "default"
+    assert config.preferences.covers.display == "text"
+    assert config.preferences.extra == {"theme": "textual-dark"}
+
+
 def test_reader_and_cover_preferences_round_trip(tmp_path: Path) -> None:
     path = tmp_path / "config.json"
     books = tmp_path / "books"

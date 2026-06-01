@@ -61,7 +61,12 @@ class AppPreferences:
 class AppConfig:
     library_path: Path
     catalogs: list[CatalogConfig] = field(default_factory=list)
-    preferences: AppPreferences = field(default_factory=AppPreferences)
+    preferences: AppPreferences | dict[str, Any] = field(default_factory=AppPreferences)
+
+    def __post_init__(self) -> None:
+        if isinstance(self.preferences, AppPreferences):
+            return
+        object.__setattr__(self, "preferences", _parse_preferences(self.preferences))
 
 
 _READER_WIDTHS = {"narrow", "medium", "wide"}

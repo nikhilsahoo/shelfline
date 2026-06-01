@@ -142,7 +142,15 @@ async def test_catalog_screen_uses_bottom_action_area(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_catalog_screen_adds_catalog_to_config_file(tmp_path: Path) -> None:
     config_path = tmp_path / "config.json"
-    config = AppConfig(library_path=tmp_path / "books", catalogs=[])
+    config = AppConfig(
+        library_path=tmp_path / "books",
+        catalogs=[],
+        preferences={
+            "reader": {"width": "wide"},
+            "covers": {"display": "text"},
+            "theme": "textual-dark",
+        },
+    )
     app = ShelflineApp(config=config, config_path=config_path)
 
     async with app.run_test():
@@ -155,10 +163,16 @@ async def test_catalog_screen_adds_catalog_to_config_file(tmp_path: Path) -> Non
 
         assert app.config is not None
         assert app.config.catalogs[0].name == "Example"
+        assert app.config.preferences.reader.width == "wide"
+        assert app.config.preferences.covers.display == "text"
+        assert app.config.preferences.extra == {"theme": "textual-dark"}
         assert "Example" in str(screen.query_one("#catalog-list").renderable)
 
     saved = json.loads(config_path.read_text(encoding="utf-8"))
     assert saved["catalogs"] == [{"name": "Example", "url": "https://example.test/opds"}]
+    assert saved["preferences"]["reader"]["width"] == "wide"
+    assert saved["preferences"]["covers"]["display"] == "text"
+    assert saved["preferences"]["theme"] == "textual-dark"
 
 
 def test_setup_screen_validates_library_path(tmp_path: Path) -> None:
@@ -193,6 +207,7 @@ async def test_setup_screen_saves_library_path_and_opens_catalogs(tmp_path: Path
         assert isinstance(app.screen, CatalogsScreen)
         assert app.config is not None
         assert app.config.library_path == library_path
+        assert app.config.preferences.reader.width == "medium"
         assert app.workflow is not None
         assert app.library is app.workflow.library
 
