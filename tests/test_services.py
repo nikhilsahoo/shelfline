@@ -42,6 +42,7 @@ async def test_workflow_fetches_parses_caches_and_downloads(
     assert workflow.library.list_books()[0].acquisition_url == "https://example.test/opds/books/sample.epub"
     assert workflow.library.list_books()[0].media_type == "application/epub+zip"
     assert workflow.library.list_books()[0].cover_image_url == "https://example.test/opds/covers/sample.jpg"
+    assert workflow.library.list_books()[0].thumbnail_url == "https://example.test/opds/covers/sample-thumb.jpg"
     assert workflow.library.list_books()[0].local_file_path == tmp_path / "books" / "Sample Book.epub"
     assert workflow.library.list_books()[0].is_read is False
 

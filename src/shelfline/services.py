@@ -133,6 +133,7 @@ class CatalogWorkflow:
                 acquisition_url=href,
                 media_type=selected_link.media_type,
                 cover_image_url=entry.cover_image_url or entry.thumbnail_url,
+                thumbnail_url=entry.thumbnail_url,
                 cover_image_path=None,
                 local_file_path=downloaded_path,
                 is_read=False,
