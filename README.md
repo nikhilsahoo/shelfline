@@ -271,15 +271,12 @@ Manual smoke checklist for an interactive terminal and test OPDS catalog:
 - Add a bookmark with `m`, then press `m` again at the same section to remove it.
 - Trigger a duplicate download error and confirm the error remains visible.
 
-## Current Limits
+## TODO
 
-- OPDS 2.x is not supported yet.
-- OAuth and browser-based authentication are not supported yet.
-- PDF, DjVu, CBR, and CBZ are downloaded and tracked but not rendered in the
-  terminal yet.
-- Cover image terminal graphics are not rendered yet; cover display currently
-  falls back to text metadata.
-- Downloads are intentionally single-file, not queued.
-- EPUB rendering is text-focused and section-based, not a full visual EPUB
-  layout engine.
-- Annotations, sync, and full-text book search are not supported yet.
+- Add OPDS 2.x support.
+- Add OAuth or browser-based authentication.
+- Render downloaded PDF, DjVu, CBR, and CBZ files in the terminal.
+- Render cover images with terminal graphics instead of text-only fallback.
+- Add queued or multi-file downloads.
+- Improve EPUB rendering beyond text-focused, section-based reading.
+- Add annotations, sync, and full-text book search.
