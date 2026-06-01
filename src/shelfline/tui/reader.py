@@ -236,6 +236,7 @@ class EpubReaderScreen(Screen[None]):
         ("o", "reader_options", "Options"),
         ("m", "add_bookmark", "Bookmark"),
         ("b", "go_back", "Back"),
+        ("z", "toggle_zen", "Zen"),
     ]
 
     def __init__(
@@ -253,6 +254,7 @@ class EpubReaderScreen(Screen[None]):
         self.library = library
         self.book_path = book_path
         self.preferences = preferences or ReaderPreferences()
+        self.zen_mode = self.preferences.zen_mode_default
         self._progress_load_error: str | None = None
         self.section_index = self._initial_section_index(section_index)
 
@@ -281,6 +283,7 @@ class EpubReaderScreen(Screen[None]):
         yield KeyHintFooter(self.KEY_HINT)
 
     def on_mount(self) -> None:
+        self._apply_zen_mode()
         if self._progress_load_error is not None:
             self._set_status(f"Progress unavailable: {self._progress_load_error}")
 
@@ -342,6 +345,10 @@ class EpubReaderScreen(Screen[None]):
             return
 
         self._set_status("Bookmark added")
+
+    def action_toggle_zen(self) -> None:
+        self.zen_mode = not self.zen_mode
+        self._apply_zen_mode()
 
     def jump_to_section(self, section_index: int) -> None:
         self.section_index = self._clamp_section_index(section_index)
@@ -431,6 +438,11 @@ class EpubReaderScreen(Screen[None]):
         self.query_one("#reader-chrome", ReaderChrome).show_progress = (
             self.preferences.show_progress
         )
+
+    def _apply_zen_mode(self) -> None:
+        self.set_class(self.zen_mode, "zen-mode")
+        self.query_one("#key-hints").display = not self.zen_mode
+        self.query_one("#status-line").display = not self.zen_mode
 
     def _save_progress(self) -> None:
         if self.library is None or self.book_path is None:

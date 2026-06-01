@@ -460,6 +460,33 @@ async def test_reader_screen_next_at_last_section_preserves_body_scroll() -> Non
 
 
 @pytest.mark.asyncio
+async def test_reader_zen_mode_hides_nonessential_chrome_and_preserves_scroll() -> None:
+    app = ShelflineApp(config=None)
+
+    async with app.run_test(size=(80, 20)) as pilot:
+        await app.push_screen(EpubReaderScreen(_long_preview()))
+        reader = app.screen
+        assert isinstance(reader, EpubReaderScreen)
+        reader_body = reader.query_one("#reader-body", VerticalScroll)
+        await _scroll_reader_body(reader_body, y=20, pilot=pilot)
+        scroll_y = reader_body.scroll_y
+
+        await pilot.press("z")
+        await pilot.pause()
+
+        assert reader.has_class("zen-mode")
+        assert reader.query_one("#key-hints").display is False
+        assert reader.query_one("#status-line").display is False
+        assert reader_body.scroll_y == scroll_y
+
+        await pilot.press("z")
+        await pilot.pause()
+
+        assert not reader.has_class("zen-mode")
+        assert reader.query_one("#key-hints").display is True
+
+
+@pytest.mark.asyncio
 async def test_reader_screen_previous_at_first_section_preserves_body_scroll() -> None:
     app = ShelflineApp(config=None)
 

@@ -199,6 +199,14 @@
     background: $surface;
 }
 
+.zen-mode #reader-surface {
+    padding: 0 2;
+}
+
+.zen-mode #reader-page {
+    border: none;
+}
+
 .reader-width-narrow {
     width: 68;
 }
