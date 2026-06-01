@@ -53,13 +53,18 @@ EPUB reader view:
   a byte counter.
 - Show busy indicators while the app waits on catalog, refresh, navigation, and
   download-related outgoing calls.
-- Show title/author metadata in catalog and library detail views, with text
-  fallback behavior where cover display is unavailable.
+- Cache OPDS and EPUB cover images under the configured library path at
+  `.shelfline/covers/`.
+- Show title/author metadata and optional covers in catalog and library detail
+  views. When `preferences.covers.display` is `auto`, Shelfline may use terminal
+  graphics where supported and falls back to a polished text cover otherwise.
 - Preview and read EPUB text in the terminal.
 - Navigate EPUB sections, open a table of contents with `t`, and jump to a
   selected section.
 - Save and resume EPUB reading progress for library-backed books.
 - Add/remove local EPUB bookmarks at the current section.
+- Tune the EPUB reader width, theme, paragraph spacing, progress display,
+  chapter title display, and default Zen Mode through JSON preferences.
 - Store catalog metadata in JSON and local book state/cache in SQLite.
 - Resolve Basic Auth passwords from an OS keyring reference where configured,
   with a JSON password fallback for portable or headless setups.
@@ -81,7 +86,13 @@ Python package dependencies are declared in `pyproject.toml`:
 - `feedparser`
 - `ebooklib`
 - `keyring`
-- `textual-image`
+
+Terminal graphics cover rendering is optional. Install the `images` extra to
+enable the optional `textual-image` dependency where your terminal supports it:
+
+```shell
+python -m pip install "shelfline[images]"
+```
 
 Development and test dependencies are available through the `dev` extra.
 
@@ -189,6 +200,34 @@ Example config:
 }
 ```
 
+Reader and cover behavior can be configured under `preferences`. Cover display
+defaults to `auto`, which tries terminal image rendering when the optional image
+dependency and terminal support are available, then falls back to text. Use
+`text` to always use the text cover fallback, or `off` to disable cover display.
+
+```json
+{
+  "preferences": {
+    "covers": {
+      "display": "auto",
+      "prefer_thumbnails": true
+    },
+    "reader": {
+      "width": "medium",
+      "theme": "default",
+      "paragraph_spacing": "normal",
+      "show_progress": true,
+      "show_chapter_title": true,
+      "zen_mode_default": false
+    }
+  }
+}
+```
+
+Reader `width` accepts `narrow`, `medium`, or `wide`; `theme` accepts `default`,
+`warm`, or `high_contrast`; and `paragraph_spacing` accepts `compact`, `normal`,
+or `relaxed`.
+
 ### Credentials
 
 Catalog metadata remains in JSON. Basic Auth usernames remain visible in JSON.
@@ -249,6 +288,11 @@ book, or entry rows with terminal-friendly glyphs. Download status screens show
 percentage and byte progress where the server reports a content length and an
 indeterminate byte counter otherwise.
 
+Catalog and library detail panes can show cached cover metadata and optional
+cover art. Covers are cached below the configured library path in
+`.shelfline/covers/`; if image rendering is unavailable or disabled, Shelfline
+shows a text fallback designed for terminals.
+
 ### Library
 
 - `l`: open the local library.
@@ -270,6 +314,9 @@ local SQLite library metadata.
 - `n`: next EPUB section.
 - `p`: previous EPUB section.
 - `t`: open the table of contents.
+- `g`: open the bookmark navigator.
+- `o`: open reader options.
+- `z`: toggle Zen Mode.
 - `enter`: jump to the selected table-of-contents entry while the TOC is open.
 - `m`: add a bookmark at the current section, or remove an existing bookmark at
   the same section and position.
@@ -288,6 +335,10 @@ Bookmarks are local-only. Pressing `m` in the reader adds a bookmark labeled
 with the current section heading. Pressing `m` again at the same section and
 position removes the existing bookmark.
 
+Zen Mode hides nonessential reader chrome while keeping navigation keys active.
+Reader options can change width during a reading session and save the updated
+preference back to the JSON config.
+
 ## Storage
 
 - JSON config stores the user-selected library path, saved catalogs, and
@@ -295,6 +346,8 @@ position removes the existing bookmark.
 - SQLite local state stores downloaded book metadata, feed cache, reading
   progress, bookmarks, and read/unread state.
 - Downloaded files are stored in the configured library path.
+- Cached covers are stored in the configured library path under
+  `.shelfline/covers/`.
 - Keyring-backed credentials can be resolved through the operating system
   keyring backend when a catalog uses `auth.password_ref`.
 
@@ -336,6 +389,9 @@ Manual smoke checklist for an interactive terminal and test OPDS catalog:
 - Open an EPUB reader from the library.
 - Navigate reader sections with `n` and `p`.
 - Open the reader table of contents with `t` and jump to another section.
+- Toggle Zen Mode with `z`.
+- Open reader options with `o`.
+- Open the bookmark navigator with `g`.
 - Close and reopen the EPUB, confirming progress resumes at the saved section.
 - Add a bookmark with `m`, then press `m` again at the same section to remove it.
 - Trigger a duplicate download error and confirm the error remains visible.
@@ -345,7 +401,6 @@ Manual smoke checklist for an interactive terminal and test OPDS catalog:
 - Add OPDS 2.x support.
 - Add OAuth or browser-based authentication.
 - Render downloaded PDF, DjVu, CBR, and CBZ files in the terminal.
-- Render cover images with terminal graphics instead of text-only fallback.
 - Add queued or multi-file downloads.
 - Improve EPUB rendering beyond text-focused, section-based reading.
 - Add annotations, sync, and full-text book search.

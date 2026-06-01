@@ -12,6 +12,15 @@ The README expects PNG screenshots at these exact paths:
   pane visible.
 - `docs/assets/screenshots/reader.png`: EPUB reader view.
 
+0.2.0 screenshot capture checklist:
+
+- Catalog detail view showing either terminal image cover rendering or the
+  polished text cover fallback.
+- Library detail view showing cached cover metadata for a downloaded book.
+- Normal EPUB reader view with configured paragraph spacing visible.
+- Zen Mode EPUB reader view.
+- Reader options overlay or bookmark navigator.
+
 Suggested capture size: about 1200x800 pixels, or a terminal window large enough
 to show the main list, status area, and detail pane without wrapping important
 labels. Keep all images as PNG files.
