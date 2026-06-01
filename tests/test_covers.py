@@ -4,6 +4,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from ebooklib import epub
 from pytest_httpx import HTTPXMock
 
 from shelfline.covers import (
@@ -74,8 +75,50 @@ async def test_cover_cache_failure_is_wrapped(
         await cache.fetch("https://example.test/missing.jpg")
 
 
+@pytest.mark.asyncio
+async def test_cover_cache_redacts_credentials_in_failure_message(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    url = "https://reader:secret@example.test/missing.jpg"
+    httpx_mock.add_response(url=url, status_code=404)
+    cache = CoverCache(tmp_path, httpx.AsyncClient())
+
+    with pytest.raises(CoverError) as error:
+        await cache.fetch(url)
+
+    message = str(error.value)
+    assert "reader" not in message
+    assert "secret" not in message
+    assert "https://example.test/missing.jpg" in message
+
+
 def test_extract_epub_cover_returns_none_without_cover(tmp_path: Path) -> None:
     epub_path = tmp_path / "empty.epub"
     epub_path.write_bytes(b"not an epub")
 
     assert extract_epub_cover(epub_path, tmp_path) is None
+
+
+def test_extract_epub_cover_caches_embedded_cover(tmp_path: Path) -> None:
+    epub_path = tmp_path / "covered.epub"
+    cover_bytes = b"cover-image-bytes"
+    book = epub.EpubBook()
+    book.set_identifier("covered")
+    book.set_title("Covered")
+    book.set_language("en")
+    book.set_cover("cover.jpg", cover_bytes)
+    chapter = epub.EpubHtml(title="Chapter", file_name="chapter.xhtml", lang="en")
+    chapter.content = b"<html><body><p>Text.</p></body></html>"
+    book.add_item(chapter)
+    book.spine = ["nav", chapter]
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    epub.write_epub(str(epub_path), book)
+
+    path = extract_epub_cover(epub_path, tmp_path)
+
+    assert path is not None
+    assert path.parent == tmp_path / ".shelfline" / "covers"
+    assert path.suffix == ".jpg"
+    assert path.read_bytes() == cover_bytes

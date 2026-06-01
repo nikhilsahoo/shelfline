@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from hashlib import sha256
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 from ebooklib import ITEM_COVER, ITEM_IMAGE, epub
@@ -50,7 +50,8 @@ class CoverCache:
             response = await self.http_client.get(source_url, auth=auth)
             response.raise_for_status()
         except Exception as exc:
-            raise CoverError(f"Could not fetch cover from {source_url}") from exc
+            safe_url = _redact_url_credentials(source_url)
+            raise CoverError(f"Could not fetch cover from {safe_url}") from exc
 
         content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
         path = cached_cover_path(self.library_path, source_url, content_type)
@@ -92,3 +93,14 @@ def _extension_for_cover(source_url: str, content_type: str | None) -> str:
     if suffix in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
         return ".jpg" if suffix == ".jpeg" else suffix
     return ".jpg"
+
+
+def _redact_url_credentials(source_url: str) -> str:
+    parsed = urlparse(source_url)
+    if parsed.hostname is None:
+        return source_url
+
+    netloc = parsed.hostname
+    if parsed.port is not None:
+        netloc = f"{netloc}:{parsed.port}"
+    return urlunparse(parsed._replace(netloc=netloc))
