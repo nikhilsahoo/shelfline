@@ -34,10 +34,12 @@ dependencies = [
   "keyring>=25.0",
   "rich>=13.7",
   "textual>=0.80",
-  "textual-image>=0.8",
 ]
 
 [project.optional-dependencies]
+images = [
+  "textual-image>=0.8",
+]
 dev = [
   "pytest>=9.0.3",
   "pytest-asyncio>=0.23",
