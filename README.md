@@ -290,8 +290,9 @@ indeterminate byte counter otherwise.
 
 Catalog and library detail panes can show cached cover metadata and optional
 cover art. Covers are cached below the configured library path in
-`.shelfline/covers/`; if image rendering is unavailable or disabled, Shelfline
-shows a text fallback designed for terminals.
+`.shelfline/covers/`; when cover display is enabled and image rendering is
+unavailable, Shelfline shows a text fallback designed for terminals. Set
+`preferences.covers.display` to `off` to disable cover display entirely.
 
 ### Library
 
