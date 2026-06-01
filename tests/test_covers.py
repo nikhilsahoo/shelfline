@@ -10,6 +10,7 @@ from pytest_httpx import HTTPXMock
 from shelfline.covers import (
     CoverCache,
     CoverError,
+    MAX_COVER_BYTES,
     cached_cover_path,
     extract_epub_cover,
 )
@@ -35,9 +36,9 @@ async def test_cover_cache_fetches_public_cover(
         content=b"image-bytes",
         headers={"content-type": "image/jpeg"},
     )
-    cache = CoverCache(tmp_path, httpx.AsyncClient())
-
-    path = await cache.fetch("https://example.test/covers/book.jpg")
+    async with httpx.AsyncClient() as client:
+        cache = CoverCache(tmp_path, client)
+        path = await cache.fetch("https://example.test/covers/book.jpg")
 
     assert path.read_bytes() == b"image-bytes"
     assert path.suffix == ".jpg"
@@ -53,12 +54,13 @@ async def test_cover_cache_uses_auth_for_same_origin_cover(
         return httpx.Response(200, content=b"cover", headers={"content-type": "image/jpeg"})
 
     httpx_mock.add_callback(handler, url="https://example.test/covers/private.jpg")
-    cache = CoverCache(tmp_path, httpx.AsyncClient())
 
-    path = await cache.fetch(
-        "https://example.test/covers/private.jpg",
-        auth=("reader", "secret"),
-    )
+    async with httpx.AsyncClient() as client:
+        cache = CoverCache(tmp_path, client)
+        path = await cache.fetch(
+            "https://example.test/covers/private.jpg",
+            auth=("reader", "secret"),
+        )
 
     assert path.exists()
 
@@ -69,10 +71,11 @@ async def test_cover_cache_failure_is_wrapped(
     httpx_mock: HTTPXMock,
 ) -> None:
     httpx_mock.add_response(url="https://example.test/missing.jpg", status_code=404)
-    cache = CoverCache(tmp_path, httpx.AsyncClient())
 
-    with pytest.raises(CoverError, match="Could not fetch cover"):
-        await cache.fetch("https://example.test/missing.jpg")
+    async with httpx.AsyncClient() as client:
+        cache = CoverCache(tmp_path, client)
+        with pytest.raises(CoverError, match="Could not fetch cover"):
+            await cache.fetch("https://example.test/missing.jpg")
 
 
 @pytest.mark.asyncio
@@ -82,15 +85,88 @@ async def test_cover_cache_redacts_credentials_in_failure_message(
 ) -> None:
     url = "https://reader:secret@example.test/missing.jpg"
     httpx_mock.add_response(url=url, status_code=404)
-    cache = CoverCache(tmp_path, httpx.AsyncClient())
 
-    with pytest.raises(CoverError) as error:
-        await cache.fetch(url)
+    async with httpx.AsyncClient() as client:
+        cache = CoverCache(tmp_path, client)
+        with pytest.raises(CoverError) as error:
+            await cache.fetch(url)
 
     message = str(error.value)
     assert "reader" not in message
     assert "secret" not in message
     assert "https://example.test/missing.jpg" in message
+
+
+@pytest.mark.asyncio
+async def test_cover_cache_rejects_oversized_cover_without_writing(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    httpx_mock.add_response(
+        url="https://example.test/covers/huge.jpg",
+        content=b"x" * (MAX_COVER_BYTES + 1),
+        headers={"content-type": "image/jpeg"},
+    )
+
+    async with httpx.AsyncClient() as client:
+        cache = CoverCache(tmp_path, client)
+        with pytest.raises(CoverError, match="too large"):
+            await cache.fetch("https://example.test/covers/huge.jpg")
+
+    assert not (tmp_path / ".shelfline" / "covers").exists()
+
+
+@pytest.mark.asyncio
+async def test_cover_cache_rejects_non_image_content_type_without_writing(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    httpx_mock.add_response(
+        url="https://example.test/covers/not-image.jpg",
+        content=b"<html></html>",
+        headers={"content-type": "text/html"},
+    )
+
+    async with httpx.AsyncClient() as client:
+        cache = CoverCache(tmp_path, client)
+        with pytest.raises(CoverError, match="not an image"):
+            await cache.fetch("https://example.test/covers/not-image.jpg")
+
+    assert not (tmp_path / ".shelfline" / "covers").exists()
+
+
+@pytest.mark.asyncio
+async def test_cover_cache_redacts_credentials_with_malformed_port() -> None:
+    url = "https://reader:secret@example.test:bad/missing.jpg"
+
+    async with httpx.AsyncClient() as client:
+        cache = CoverCache(Path("."), client)
+        with pytest.raises(CoverError) as error:
+            await cache.fetch(url)
+
+    message = str(error.value)
+    assert "reader" not in message
+    assert "secret" not in message
+    assert "https://example.test:bad/missing.jpg" in message
+
+
+@pytest.mark.asyncio
+async def test_cover_cache_redacts_credentials_and_preserves_ipv6_brackets(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    url = "https://reader:secret@[2001:db8::1]:8443/missing.jpg"
+    httpx_mock.add_response(url=url, status_code=404)
+
+    async with httpx.AsyncClient() as client:
+        cache = CoverCache(tmp_path, client)
+        with pytest.raises(CoverError) as error:
+            await cache.fetch(url)
+
+    message = str(error.value)
+    assert "reader" not in message
+    assert "secret" not in message
+    assert "https://[2001:db8::1]:8443/missing.jpg" in message
 
 
 def test_extract_epub_cover_returns_none_without_cover(tmp_path: Path) -> None:

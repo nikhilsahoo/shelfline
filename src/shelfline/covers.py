@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from hashlib import sha256
 from pathlib import Path
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlsplit, urlunsplit
 
 import httpx
 from ebooklib import ITEM_COVER, ITEM_IMAGE, epub
@@ -19,6 +19,7 @@ _CONTENT_TYPE_EXTENSIONS = {
     "image/webp": ".webp",
     "image/gif": ".gif",
 }
+MAX_COVER_BYTES = 5 * 1024 * 1024
 
 
 def cover_cache_dir(library_path: Path) -> Path:
@@ -54,10 +55,23 @@ class CoverCache:
             raise CoverError(f"Could not fetch cover from {safe_url}") from exc
 
         content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
+        self._validate_response(source_url, response.content, content_type)
         path = cached_cover_path(self.library_path, source_url, content_type)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(response.content)
         return path
+
+    def _validate_response(
+        self,
+        source_url: str,
+        content: bytes,
+        content_type: str,
+    ) -> None:
+        safe_url = _redact_url_credentials(source_url)
+        if not _is_image_content_type(content_type):
+            raise CoverError(f"Cover response from {safe_url} is not an image")
+        if len(content) > MAX_COVER_BYTES:
+            raise CoverError(f"Cover response from {safe_url} is too large")
 
 
 def extract_epub_cover(epub_path: Path, library_path: Path) -> Path | None:
@@ -95,12 +109,32 @@ def _extension_for_cover(source_url: str, content_type: str | None) -> str:
     return ".jpg"
 
 
+def _is_image_content_type(content_type: str) -> bool:
+    return content_type.startswith("image/") or content_type in _CONTENT_TYPE_EXTENSIONS
+
+
 def _redact_url_credentials(source_url: str) -> str:
-    parsed = urlparse(source_url)
-    if parsed.hostname is None:
+    try:
+        parsed = urlsplit(source_url)
+    except ValueError:
+        return _redact_unparsed_url(source_url)
+
+    netloc = _redact_netloc_credentials(parsed.netloc)
+    return urlunsplit(parsed._replace(netloc=netloc))
+
+
+def _redact_unparsed_url(source_url: str) -> str:
+    scheme_separator = "://"
+    if scheme_separator not in source_url:
         return source_url
 
-    netloc = parsed.hostname
-    if parsed.port is not None:
-        netloc = f"{netloc}:{parsed.port}"
-    return urlunparse(parsed._replace(netloc=netloc))
+    scheme, rest = source_url.split(scheme_separator, 1)
+    netloc, separator, path = rest.partition("/")
+    safe_netloc = _redact_netloc_credentials(netloc)
+    return f"{scheme}{scheme_separator}{safe_netloc}{separator}{path}"
+
+
+def _redact_netloc_credentials(netloc: str) -> str:
+    if "@" not in netloc:
+        return netloc
+    return netloc.rsplit("@", 1)[1]
