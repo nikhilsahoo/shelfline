@@ -860,6 +860,6 @@ class CoverDisplay(Static):
         return "\n".join(lines)
 
     def _cover_status_text(self) -> str:
-        if self.cache_status == "cached" and self.image_path is not None and self.image_path.exists():
+        if self.image_path is not None and (self.cache_status == "cached" or self.image_path.exists()):
             return "Cover cached"
         return "Cover unavailable"

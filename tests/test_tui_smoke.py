@@ -302,6 +302,38 @@ def test_cover_display_text_mode_shows_polished_metadata(tmp_path: Path) -> None
     assert str(image_path) not in rendered
 
 
+def test_cover_display_reports_cached_status_when_cached_path_is_known(tmp_path: Path) -> None:
+    image_path = tmp_path / "missing-cover.jpg"
+
+    display = CoverDisplay(
+        title="Cached Book",
+        authors=["Ada Lovelace"],
+        image_path=image_path,
+        cache_status="cached",
+    )
+
+    rendered = str(display.renderable)
+
+    assert "Cover cached" in rendered
+    assert "Cover unavailable" not in rendered
+
+
+def test_cover_display_reports_cached_status_when_image_path_exists(tmp_path: Path) -> None:
+    image_path = tmp_path / "cover.jpg"
+    image_path.write_bytes(b"not a real image")
+
+    display = CoverDisplay(
+        title="Existing Cover Book",
+        authors=["Ada Lovelace"],
+        image_path=image_path,
+    )
+
+    rendered = str(display.renderable)
+
+    assert "Cover cached" in rendered
+    assert "Cover unavailable" not in rendered
+
+
 def test_cover_display_off_mode_hides_cover_block(tmp_path: Path) -> None:
     image_path = tmp_path / "cover.jpg"
     image_path.write_bytes(b"not a real image")
