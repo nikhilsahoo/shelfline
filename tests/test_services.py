@@ -24,7 +24,7 @@ async def test_workflow_fetches_parses_caches_and_downloads(
     httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
     httpx_mock.add_response(url="https://example.test/opds/books/sample.epub", content=b"epub bytes")
     httpx_mock.add_response(
-        url="https://example.test/opds/covers/sample.jpg",
+        url="https://example.test/opds/covers/sample-thumb.jpg",
         content=b"cover bytes",
         headers={"content-type": "image/jpeg"},
     )
@@ -49,11 +49,11 @@ async def test_workflow_fetches_parses_caches_and_downloads(
     assert workflow.library.list_books()[0].source_catalog == "Public"
     assert workflow.library.list_books()[0].acquisition_url == "https://example.test/opds/books/sample.epub"
     assert workflow.library.list_books()[0].media_type == "application/epub+zip"
-    assert workflow.library.list_books()[0].cover_image_url == "https://example.test/opds/covers/sample.jpg"
+    assert workflow.library.list_books()[0].cover_image_url == "https://example.test/opds/covers/sample-thumb.jpg"
     assert workflow.library.list_books()[0].thumbnail_url == "https://example.test/opds/covers/sample-thumb.jpg"
     assert workflow.library.list_books()[0].cover_image_path == cached_cover_path(
         tmp_path / "books",
-        "https://example.test/opds/covers/sample.jpg",
+        "https://example.test/opds/covers/sample-thumb.jpg",
         "image/jpeg",
     )
     assert workflow.library.list_books()[0].cover_cache_status == "cached"
@@ -80,9 +80,9 @@ async def test_workflow_caches_remote_cover_and_updates_book_metadata(
     httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
     httpx_mock.add_response(url="https://example.test/opds/books/covered.epub", content=b"epub bytes")
     httpx_mock.add_response(
-        url="https://example.test/opds/covers/full.png",
-        content=b"full-cover",
-        headers={"content-type": "image/png"},
+        url="https://example.test/opds/covers/thumb.jpg",
+        content=b"thumb-cover",
+        headers={"content-type": "image/jpeg"},
     )
     catalog = CatalogConfig(name="Public", url="https://example.test/opds")
     workflow = CatalogWorkflow(
@@ -95,14 +95,14 @@ async def test_workflow_caches_remote_cover_and_updates_book_metadata(
     await workflow.download_best_epub(catalog, feed.entries[0])
 
     book = workflow.library.list_books()[0]
-    assert book.cover_image_url == "https://example.test/opds/covers/full.png"
+    assert book.cover_image_url == "https://example.test/opds/covers/thumb.jpg"
     assert book.thumbnail_url == "https://example.test/opds/covers/thumb.jpg"
     assert book.cover_image_path == cached_cover_path(
         tmp_path / "books",
-        "https://example.test/opds/covers/full.png",
-        "image/png",
+        "https://example.test/opds/covers/thumb.jpg",
+        "image/jpeg",
     )
-    assert book.cover_image_path.read_bytes() == b"full-cover"
+    assert book.cover_image_path.read_bytes() == b"thumb-cover"
     assert book.cover_cache_status == "cached"
 
 
@@ -147,6 +147,102 @@ async def test_workflow_caches_thumbnail_when_full_cover_is_absent(
     )
     assert book.cover_image_path.read_bytes() == b"thumb-cover"
     assert book.cover_cache_status == "cached"
+
+
+@pytest.mark.asyncio
+async def test_workflow_prefers_thumbnail_cover_when_configured(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Public</title>
+  <entry>
+    <title>Thumbnail First Book</title>
+    <link rel="http://opds-spec.org/image" href="covers/full.png" type="image/png"/>
+    <link rel="http://opds-spec.org/image/thumbnail" href="covers/thumb.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/thumb-first.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    httpx_mock.add_response(url="https://example.test/opds/books/thumb-first.epub", content=b"epub bytes")
+    httpx_mock.add_response(
+        url="https://example.test/opds/covers/thumb.jpg",
+        content=b"thumb-cover",
+        headers={"content-type": "image/jpeg"},
+    )
+    catalog = CatalogConfig(name="Public", url="https://example.test/opds")
+    workflow = CatalogWorkflow(
+        AppConfig(
+            library_path=tmp_path / "books",
+            catalogs=[catalog],
+            preferences={"covers": {"prefer_thumbnails": True}},
+        ),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    feed = await workflow.fetch_catalog(catalog)
+    await workflow.download_best_epub(catalog, feed.entries[0])
+
+    book = workflow.library.list_books()[0]
+    assert book.cover_image_url == "https://example.test/opds/covers/thumb.jpg"
+    assert book.thumbnail_url == "https://example.test/opds/covers/thumb.jpg"
+    assert book.cover_image_path == cached_cover_path(
+        tmp_path / "books",
+        "https://example.test/opds/covers/thumb.jpg",
+        "image/jpeg",
+    )
+    assert book.cover_image_path.read_bytes() == b"thumb-cover"
+
+
+@pytest.mark.asyncio
+async def test_workflow_prefers_full_cover_when_thumbnails_are_not_preferred(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    feed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Public</title>
+  <entry>
+    <title>Full First Book</title>
+    <link rel="http://opds-spec.org/image" href="covers/full.png" type="image/png"/>
+    <link rel="http://opds-spec.org/image/thumbnail" href="covers/thumb.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/full-first.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+    httpx_mock.add_response(url="https://example.test/opds", text=feed_xml)
+    httpx_mock.add_response(url="https://example.test/opds/books/full-first.epub", content=b"epub bytes")
+    httpx_mock.add_response(
+        url="https://example.test/opds/covers/full.png",
+        content=b"full-cover",
+        headers={"content-type": "image/png"},
+    )
+    catalog = CatalogConfig(name="Public", url="https://example.test/opds")
+    workflow = CatalogWorkflow(
+        AppConfig(
+            library_path=tmp_path / "books",
+            catalogs=[catalog],
+            preferences={"covers": {"prefer_thumbnails": False}},
+        ),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+
+    feed = await workflow.fetch_catalog(catalog)
+    await workflow.download_best_epub(catalog, feed.entries[0])
+
+    book = workflow.library.list_books()[0]
+    assert book.cover_image_url == "https://example.test/opds/covers/full.png"
+    assert book.thumbnail_url == "https://example.test/opds/covers/thumb.jpg"
+    assert book.cover_image_path == cached_cover_path(
+        tmp_path / "books",
+        "https://example.test/opds/covers/full.png",
+        "image/png",
+    )
+    assert book.cover_image_path.read_bytes() == b"full-cover"
 
 
 @pytest.mark.asyncio
@@ -422,7 +518,7 @@ async def test_workflow_uses_auth_without_exposing_credentials_in_callbacks(
         return httpx.Response(200, content=b"cover bytes", headers={"content-type": "image/jpeg"})
 
     httpx_mock.add_callback(download_handler, url="https://example.test/private/books/sample.epub")
-    httpx_mock.add_callback(cover_handler, url="https://example.test/private/covers/sample.jpg")
+    httpx_mock.add_callback(cover_handler, url="https://example.test/private/covers/sample-thumb.jpg")
     catalog = CatalogConfig(
         name="Private",
         url="https://example.test/private",
@@ -488,7 +584,7 @@ async def test_workflow_resolves_password_ref_for_same_origin_fetch_and_download
     )
     httpx_mock.add_callback(assert_authorized, url="https://example.test/private")
     httpx_mock.add_callback(assert_authorized, url="https://example.test/private/books/sample.epub")
-    httpx_mock.add_callback(assert_authorized, url="https://example.test/private/covers/sample.jpg")
+    httpx_mock.add_callback(assert_authorized, url="https://example.test/private/covers/sample-thumb.jpg")
 
     feed = await workflow.fetch_catalog(catalog)
     downloaded = await workflow.download_best_epub(catalog, feed.entries[0])

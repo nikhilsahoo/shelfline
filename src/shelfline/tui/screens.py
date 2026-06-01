@@ -492,6 +492,7 @@ class EntryScreen(Screen[None]):
             title=self.entry.title,
             authors=self.entry.authors,
             image_path=None,
+            terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
             display_mode=_cover_display_mode(getattr(self.app, "config", None)),
             media_type=self._selected_media_type(),
             source=self.catalog.name if self.catalog is not None else None,
@@ -505,6 +506,7 @@ class EntryScreen(Screen[None]):
             title=self.entry.title,
             authors=self.entry.authors,
             image_path=None,
+            terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
             display_mode=_cover_display_mode(getattr(self.app, "config", None)),
             media_type=self._selected_media_type(),
             source=self.catalog.name if self.catalog is not None else None,
@@ -738,6 +740,7 @@ class LibraryScreen(Screen[None]):
             title=book.title if book is not None else "",
             authors=book.authors if book is not None else [],
             image_path=book.cover_image_path if book is not None else None,
+            terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
             display_mode=_cover_display_mode(getattr(self.app, "config", None)),
             media_type=book.media_type if book is not None else None,
             source=book.source_catalog if book is not None else None,
@@ -753,6 +756,7 @@ class LibraryScreen(Screen[None]):
                 title="",
                 authors=[],
                 image_path=None,
+                terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
                 display_mode=_cover_display_mode(getattr(self.app, "config", None)),
                 media_type=None,
                 source=None,
@@ -765,6 +769,7 @@ class LibraryScreen(Screen[None]):
             title=book.title,
             authors=book.authors,
             image_path=book.cover_image_path,
+            terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
             display_mode=_cover_display_mode(getattr(self.app, "config", None)),
             media_type=book.media_type,
             source=book.source_catalog,
@@ -781,6 +786,10 @@ def _cover_display_mode(config: AppConfig | None) -> str:
     if isinstance(preferences, AppPreferences):
         return preferences.covers.display
     return "auto"
+
+
+def _cover_terminal_graphics(config: AppConfig | None) -> bool:
+    return _cover_display_mode(config) == "auto"
 
 
 def _reader_preferences(config: AppConfig | None) -> ReaderPreferences | None:

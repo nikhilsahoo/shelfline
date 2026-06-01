@@ -134,7 +134,7 @@ class CatalogWorkflow:
                 source_entry_url=None,
                 acquisition_url=href,
                 media_type=selected_link.media_type,
-                cover_image_url=entry.cover_image_url or entry.thumbnail_url,
+                cover_image_url=_preferred_cover_url(self.config, entry),
                 thumbnail_url=entry.thumbnail_url,
                 cover_image_path=None,
                 local_file_path=downloaded_path,
@@ -164,7 +164,7 @@ class CatalogWorkflow:
         if _cover_cache_disabled(self.config):
             return None, "skipped"
 
-        remote_url = entry.cover_image_url or entry.thumbnail_url
+        remote_url = _preferred_cover_url(self.config, entry)
         remote_failed = False
         if remote_url is not None:
             try:
@@ -202,6 +202,15 @@ def _cover_cache_disabled(config: AppConfig) -> bool:
     preferences = config.preferences
     covers = getattr(preferences, "covers", None)
     return getattr(covers, "display", "auto") == "off"
+
+
+def _preferred_cover_url(config: AppConfig, entry: CatalogEntry) -> str | None:
+    preferences = config.preferences
+    covers = getattr(preferences, "covers", None)
+    prefer_thumbnails = getattr(covers, "prefer_thumbnails", True)
+    if prefer_thumbnails:
+        return entry.thumbnail_url or entry.cover_image_url
+    return entry.cover_image_url or entry.thumbnail_url
 
 
 def _auth_tuple(
