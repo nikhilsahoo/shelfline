@@ -24,10 +24,50 @@ class CatalogConfig:
 
 
 @dataclass(frozen=True)
+class ReaderPreferences:
+    width: str = "medium"
+    theme: str = "default"
+    paragraph_spacing: str = "normal"
+    show_progress: bool = True
+    show_chapter_title: bool = True
+    zen_mode_default: bool = False
+
+
+@dataclass(frozen=True)
+class CoverPreferences:
+    display: str = "auto"
+    prefer_thumbnails: bool = True
+
+
+@dataclass(frozen=True, eq=False)
+class AppPreferences:
+    reader: ReaderPreferences = field(default_factory=ReaderPreferences)
+    covers: CoverPreferences = field(default_factory=CoverPreferences)
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, dict):
+            return self.extra == other
+        if not isinstance(other, AppPreferences):
+            return NotImplemented
+        return (
+            self.reader == other.reader
+            and self.covers == other.covers
+            and self.extra == other.extra
+        )
+
+
+@dataclass(frozen=True)
 class AppConfig:
     library_path: Path
     catalogs: list[CatalogConfig] = field(default_factory=list)
-    preferences: dict[str, Any] = field(default_factory=dict)
+    preferences: AppPreferences = field(default_factory=AppPreferences)
+
+
+_READER_WIDTHS = {"narrow", "medium", "wide"}
+_READER_THEMES = {"default", "warm", "high_contrast"}
+_PARAGRAPH_SPACING = {"compact", "normal", "relaxed"}
+_COVER_DISPLAY = {"auto", "text", "off"}
 
 
 def default_config_path(
@@ -60,7 +100,7 @@ def save_config(path: Path, config: AppConfig) -> None:
     payload: dict[str, Any] = {
         "library_path": str(config.library_path),
         "catalogs": [_catalog_to_json(catalog) for catalog in config.catalogs],
-        "preferences": config.preferences,
+        "preferences": _preferences_to_json(config.preferences),
     }
     text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
     _write_config_text(path, text)
@@ -70,7 +110,7 @@ def redact_config(config: AppConfig) -> str:
     payload = {
         "library_path": str(config.library_path),
         "catalogs": [_catalog_to_json(catalog, redact=True) for catalog in config.catalogs],
-        "preferences": config.preferences,
+        "preferences": _preferences_to_json(config.preferences),
     }
     return json.dumps(payload, indent=2, sort_keys=True)
 
@@ -96,9 +136,7 @@ def _parse_config(raw: Any) -> AppConfig:
         seen_names.add(catalog.name)
         catalogs.append(catalog)
 
-    preferences = raw.get("preferences", {})
-    if not isinstance(preferences, dict):
-        raise ConfigError("preferences must be an object")
+    preferences = _parse_preferences(raw.get("preferences", {}))
 
     return AppConfig(
         library_path=Path(library_value).expanduser(),
@@ -146,6 +184,97 @@ def _parse_catalog(raw: Any) -> CatalogConfig:
         auth_from_url = True
 
     return CatalogConfig(name=name, url=sanitized_url, auth=auth, auth_from_url=auth_from_url)
+
+
+def _parse_preferences(raw: Any) -> AppPreferences:
+    if raw is None:
+        return AppPreferences()
+    if not isinstance(raw, dict):
+        raise ConfigError("preferences must be an object")
+
+    known = {"reader", "covers"}
+    extra = {key: value for key, value in raw.items() if key not in known}
+    return AppPreferences(
+        reader=_parse_reader_preferences(raw.get("reader", {})),
+        covers=_parse_cover_preferences(raw.get("covers", {})),
+        extra=extra,
+    )
+
+
+def _parse_reader_preferences(raw: Any) -> ReaderPreferences:
+    if not isinstance(raw, dict):
+        raise ConfigError("preferences.reader must be an object")
+    return ReaderPreferences(
+        width=_enum_value(raw, "width", "medium", _READER_WIDTHS, "preferences.reader.width"),
+        theme=_enum_value(raw, "theme", "default", _READER_THEMES, "preferences.reader.theme"),
+        paragraph_spacing=_enum_value(
+            raw,
+            "paragraph_spacing",
+            "normal",
+            _PARAGRAPH_SPACING,
+            "preferences.reader.paragraph_spacing",
+        ),
+        show_progress=_bool_value(raw, "show_progress", True, "preferences.reader.show_progress"),
+        show_chapter_title=_bool_value(
+            raw,
+            "show_chapter_title",
+            True,
+            "preferences.reader.show_chapter_title",
+        ),
+        zen_mode_default=_bool_value(
+            raw,
+            "zen_mode_default",
+            False,
+            "preferences.reader.zen_mode_default",
+        ),
+    )
+
+
+def _parse_cover_preferences(raw: Any) -> CoverPreferences:
+    if not isinstance(raw, dict):
+        raise ConfigError("preferences.covers must be an object")
+    return CoverPreferences(
+        display=_enum_value(raw, "display", "auto", _COVER_DISPLAY, "preferences.covers.display"),
+        prefer_thumbnails=_bool_value(
+            raw,
+            "prefer_thumbnails",
+            True,
+            "preferences.covers.prefer_thumbnails",
+        ),
+    )
+
+
+def _enum_value(raw: dict[str, Any], key: str, default: str, allowed: set[str], label: str) -> str:
+    value = raw.get(key, default)
+    if not isinstance(value, str) or value not in allowed:
+        raise ConfigError(f"{label} must be one of: {', '.join(sorted(allowed))}")
+    return value
+
+
+def _bool_value(raw: dict[str, Any], key: str, default: bool, label: str) -> bool:
+    value = raw.get(key, default)
+    if not isinstance(value, bool):
+        raise ConfigError(f"{label} must be true or false")
+    return value
+
+
+def _preferences_to_json(preferences: AppPreferences) -> dict[str, Any]:
+    if isinstance(preferences, dict):
+        preferences = _parse_preferences(preferences)
+    payload: dict[str, Any] = dict(preferences.extra)
+    payload["reader"] = {
+        "width": preferences.reader.width,
+        "theme": preferences.reader.theme,
+        "paragraph_spacing": preferences.reader.paragraph_spacing,
+        "show_progress": preferences.reader.show_progress,
+        "show_chapter_title": preferences.reader.show_chapter_title,
+        "zen_mode_default": preferences.reader.zen_mode_default,
+    }
+    payload["covers"] = {
+        "display": preferences.covers.display,
+        "prefer_thumbnails": preferences.covers.prefer_thumbnails,
+    }
+    return payload
 
 
 def _catalog_to_json(catalog: CatalogConfig, redact: bool = False) -> dict[str, Any]:

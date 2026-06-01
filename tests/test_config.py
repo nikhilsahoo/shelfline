@@ -203,6 +203,205 @@ def test_save_config_is_human_editable_json(tmp_path: Path) -> None:
     assert loaded["catalogs"][0]["name"] == "Public"
 
 
+def test_default_preferences_are_loaded_when_missing(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    books = tmp_path / "books"
+    books.mkdir()
+    path.write_text(json.dumps({"library_path": str(books)}), encoding="utf-8")
+
+    config = load_config(path)
+
+    assert config.preferences.reader.width == "medium"
+    assert config.preferences.reader.theme == "default"
+    assert config.preferences.reader.paragraph_spacing == "normal"
+    assert config.preferences.reader.show_progress is True
+    assert config.preferences.reader.show_chapter_title is True
+    assert config.preferences.reader.zen_mode_default is False
+    assert config.preferences.covers.display == "auto"
+    assert config.preferences.covers.prefer_thumbnails is True
+
+
+def test_reader_and_cover_preferences_round_trip(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    books = tmp_path / "books"
+    books.mkdir()
+    path.write_text(
+        json.dumps(
+            {
+                "library_path": str(books),
+                "preferences": {
+                    "reader": {
+                        "width": "wide",
+                        "theme": "warm",
+                        "paragraph_spacing": "relaxed",
+                        "show_progress": False,
+                        "show_chapter_title": False,
+                        "zen_mode_default": True,
+                    },
+                    "covers": {
+                        "display": "text",
+                        "prefer_thumbnails": False,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(path)
+    save_config(path, config)
+    saved = json.loads(path.read_text(encoding="utf-8"))
+
+    assert saved["preferences"]["reader"]["width"] == "wide"
+    assert saved["preferences"]["reader"]["theme"] == "warm"
+    assert saved["preferences"]["reader"]["paragraph_spacing"] == "relaxed"
+    assert saved["preferences"]["reader"]["show_progress"] is False
+    assert saved["preferences"]["reader"]["show_chapter_title"] is False
+    assert saved["preferences"]["reader"]["zen_mode_default"] is True
+    assert saved["preferences"]["covers"]["display"] == "text"
+    assert saved["preferences"]["covers"]["prefer_thumbnails"] is False
+
+
+def test_unknown_preference_keys_survive_save_and_redact(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    books = tmp_path / "books"
+    books.mkdir()
+    path.write_text(
+        json.dumps(
+            {
+                "library_path": str(books),
+                "preferences": {
+                    "reader": {"width": "narrow"},
+                    "covers": {"display": "off"},
+                    "theme": "textual-dark",
+                    "custom": {"accent": "green"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(path)
+    save_config(path, config)
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    redacted = json.loads(redact_config(config))
+
+    assert saved["preferences"]["theme"] == "textual-dark"
+    assert saved["preferences"]["custom"] == {"accent": "green"}
+    assert redacted["preferences"]["theme"] == "textual-dark"
+    assert redacted["preferences"]["custom"] == {"accent": "green"}
+
+
+def test_redact_config_serializes_typed_preferences_and_extra_values(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    books = tmp_path / "books"
+    books.mkdir()
+    path.write_text(
+        json.dumps(
+            {
+                "library_path": str(books),
+                "preferences": {
+                    "reader": {
+                        "width": "wide",
+                        "theme": "high_contrast",
+                        "paragraph_spacing": "compact",
+                        "show_progress": False,
+                        "show_chapter_title": False,
+                        "zen_mode_default": True,
+                    },
+                    "covers": {
+                        "display": "text",
+                        "prefer_thumbnails": False,
+                    },
+                    "ui_density": "compact",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    redacted = json.loads(redact_config(load_config(path)))
+
+    assert redacted["preferences"]["reader"] == {
+        "width": "wide",
+        "theme": "high_contrast",
+        "paragraph_spacing": "compact",
+        "show_progress": False,
+        "show_chapter_title": False,
+        "zen_mode_default": True,
+    }
+    assert redacted["preferences"]["covers"] == {
+        "display": "text",
+        "prefer_thumbnails": False,
+    }
+    assert redacted["preferences"]["ui_density"] == "compact"
+
+
+def test_add_catalog_preserves_typed_preferences_from_loaded_config(tmp_path: Path) -> None:
+    from shelfline.app import ShelflineApp
+
+    path = tmp_path / "config.json"
+    books = tmp_path / "books"
+    books.mkdir()
+    path.write_text(
+        json.dumps(
+            {
+                "library_path": str(books),
+                "preferences": {
+                    "reader": {"width": "wide"},
+                    "covers": {"display": "text"},
+                    "theme": "textual-dark",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    app = ShelflineApp(config=load_config(path))
+
+    app.add_catalog(CatalogConfig(name="Public", url="https://example.test/opds"))
+
+    assert app.config is not None
+    assert app.config.preferences.reader.width == "wide"
+    assert app.config.preferences.covers.display == "text"
+    assert app.config.preferences.extra == {"theme": "textual-dark"}
+
+
+def test_invalid_known_reader_preference_fails(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    books = tmp_path / "books"
+    books.mkdir()
+    path.write_text(
+        json.dumps(
+            {
+                "library_path": str(books),
+                "preferences": {"reader": {"width": "cinema"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match="preferences.reader.width"):
+        load_config(path)
+
+
+def test_invalid_known_cover_preference_fails(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    books = tmp_path / "books"
+    books.mkdir()
+    path.write_text(
+        json.dumps(
+            {
+                "library_path": str(books),
+                "preferences": {"covers": {"display": "always"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match="preferences.covers.display"):
+        load_config(path)
+
+
 def test_save_config_restricts_file_permissions_when_supported(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -80,7 +80,7 @@ class ShelflineApp(App[None]):
             AppConfig(
                 library_path=self.config.library_path,
                 catalogs=catalogs,
-                preferences=dict(self.config.preferences),
+                preferences=self.config.preferences,
             )
         )
 
