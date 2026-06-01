@@ -232,6 +232,20 @@ async def test_reader_toc_j_and_k_change_selection() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reader_toc_marks_current_section_and_progress() -> None:
+    app = ShelflineApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EpubReaderScreen(_preview(), section_index=1))
+
+        await pilot.press("t")
+
+        rendered_toc = str(app.screen.query_one("#toc-list").render())
+        assert "current" in rendered_toc
+        assert "2 / 2" in rendered_toc
+
+
+@pytest.mark.asyncio
 async def test_reader_toc_scrolls_to_keep_long_outline_selection_visible() -> None:
     app = ShelflineApp(config=None)
 

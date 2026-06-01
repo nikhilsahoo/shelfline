@@ -50,12 +50,16 @@ class ReaderTocRow(Static):
         entry: EpubOutlineItem,
         *,
         index: int,
+        current_section_index: int,
+        section_count: int,
         selected: bool = False,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self.entry = entry
         self.index = index
+        self.current_section_index = current_section_index
+        self.section_count = section_count
         self.selected = selected
 
     def compose(self) -> ComposeResult:
@@ -67,7 +71,13 @@ class ReaderTocRow(Static):
 
     def _row_text(self) -> str:
         prefix = ">" if self.selected else " "
-        return f"{prefix} {self.entry.title}"
+        progress = f"{self.entry.section_index + 1} / {self.section_count}"
+        marker = (
+            " current"
+            if self.entry.section_index == self.current_section_index
+            else ""
+        )
+        return f"{prefix} {self.entry.title} {progress}{marker}"
 
 
 class ReaderTocList(VerticalScroll):
@@ -75,11 +85,15 @@ class ReaderTocList(VerticalScroll):
         self,
         entries: tuple[EpubOutlineItem, ...],
         *,
+        current_section_index: int,
+        section_count: int,
         selected_index: int = 0,
         **kwargs: object,
     ) -> None:
         super().__init__(id="toc-list", classes="toc-list", **kwargs)
         self.entries = entries
+        self.current_section_index = current_section_index
+        self.section_count = section_count
         self.selected_index = selected_index
 
     def compose(self) -> ComposeResult:
@@ -116,6 +130,8 @@ class ReaderTocList(VerticalScroll):
                 entry,
                 id=f"toc-row-{index}",
                 index=index,
+                current_section_index=self.current_section_index,
+                section_count=self.section_count,
                 selected=index == self.selected_index,
             )
             for index, entry in enumerate(self.entries)
@@ -123,7 +139,11 @@ class ReaderTocList(VerticalScroll):
 
     def _row_text(self, entry: EpubOutlineItem, index: int) -> str:
         prefix = ">" if index == self.selected_index else " "
-        return f"{prefix} {entry.title}"
+        progress = f"{entry.section_index + 1} / {self.section_count}"
+        marker = (
+            " current" if entry.section_index == self.current_section_index else ""
+        )
+        return f"{prefix} {entry.title} {progress}{marker}"
 
 
 class ReaderTocScreen(Screen[None]):
@@ -145,7 +165,12 @@ class ReaderTocScreen(Screen[None]):
         yield Header()
         with Container(id="toc-surface"):
             yield StatusLine("Table of Contents", id="toc-title")
-            yield ReaderTocList(self.entries, selected_index=self.selected_index)
+            yield ReaderTocList(
+                self.entries,
+                current_section_index=self.reader.section_index,
+                section_count=len(self.reader.preview.sections),
+                selected_index=self.selected_index,
+            )
         yield KeyHintFooter(self.KEY_HINT)
 
     def action_cursor_down(self) -> None:
