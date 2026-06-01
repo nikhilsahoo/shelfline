@@ -87,6 +87,27 @@ def test_parse_acquisition_feed_ignores_malformed_optional_cover_link() -> None:
     assert entry.best_epub_link().href == "https://example.test/opds/books/broken-cover.epub"
 
 
+def test_parse_acquisition_feed_ignores_bad_port_optional_cover_link() -> None:
+    xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Catalog</title>
+  <entry>
+    <title>Bad Port Cover Book</title>
+    <link rel="http://opds-spec.org/image" href="https://example.test:bad/cover.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/image/thumbnail" href="https://example.test:bad/thumb.jpg" type="image/jpeg"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/bad-port-cover.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+
+    feed = parse_opds_feed(xml, source_url="https://example.test/opds/fiction.xml")
+
+    entry = feed.entries[0]
+    assert entry.cover_image_url is None
+    assert entry.thumbnail_url is None
+    assert entry.best_epub_link().href == "https://example.test/opds/books/bad-port-cover.epub"
+
+
 def test_parse_acquisition_feed_skips_malformed_acquisition_link() -> None:
     xml = """<?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
@@ -105,6 +126,27 @@ def test_parse_acquisition_feed_skips_malformed_acquisition_link() -> None:
     assert [link.href for link in entry.acquisition_links] == [
         "https://example.test/opds/books/good.epub"
     ]
+
+
+def test_parse_acquisition_feed_skips_bad_port_acquisition_link() -> None:
+    xml = """<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Catalog</title>
+  <entry>
+    <title>Mixed Bad Port Links Book</title>
+    <link rel="http://opds-spec.org/acquisition" href="https://example.test:bad/book.epub" type="application/epub+zip"/>
+    <link rel="http://opds-spec.org/acquisition" href="books/good.epub" type="application/epub+zip"/>
+  </entry>
+</feed>
+"""
+
+    feed = parse_opds_feed(xml, source_url="https://example.test/opds/fiction.xml")
+
+    entry = feed.entries[0]
+    assert [link.href for link in entry.acquisition_links] == [
+        "https://example.test/opds/books/good.epub"
+    ]
+    assert entry.best_epub_link().href == "https://example.test/opds/books/good.epub"
 
 
 def test_parse_feed_sanitizes_links_resolved_from_credentialed_source_url() -> None:

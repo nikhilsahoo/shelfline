@@ -88,9 +88,16 @@ def _is_acquisition_relation(relation: str) -> bool:
 
 def _resolve_link_href(source_url: str, href: str) -> str | None:
     try:
-        return sanitize_url_credentials(urljoin(source_url, href))
+        resolved_href = urljoin(source_url, href)
+        _validate_url_structure(resolved_href)
+        return sanitize_url_credentials(resolved_href)
     except ValueError:
         return None
+
+
+def _validate_url_structure(url: str) -> None:
+    parts = urlsplit(url)
+    _ = parts.port
 
 
 def _is_navigation_link(relation: str, media_type: str) -> bool:
