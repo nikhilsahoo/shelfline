@@ -7,6 +7,7 @@ from ebooklib import epub
 from pytest_httpx import HTTPXMock
 
 from shelfline.config import AppConfig, CatalogConfig, load_config
+from shelfline.catalog.models import AcquisitionLink, CatalogEntry
 from shelfline.covers import cached_cover_path
 from shelfline.credentials import CredentialStore, MemoryCredentialBackend
 from shelfline.downloads import DownloadError, DownloadProgress
@@ -208,6 +209,44 @@ async def test_workflow_malformed_cover_url_does_not_fail_download(
 
     feed = await workflow.fetch_catalog(catalog)
     downloaded = await workflow.download_best_epub(catalog, feed.entries[0])
+
+    assert downloaded.read_bytes() == b"not an epub"
+    book = workflow.library.list_books()[0]
+    assert book.cover_image_path is None
+    assert book.cover_cache_status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_workflow_invalid_bracket_cover_url_does_not_fail_download(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    httpx_mock.add_response(
+        url="https://example.test/opds/books/invalid-bracket-cover.epub",
+        content=b"not an epub",
+    )
+    httpx_mock.add_response(url="https://%5Bbad/cover.jpg", status_code=404)
+    catalog = CatalogConfig(name="Public", url="https://example.test/opds")
+    workflow = CatalogWorkflow(
+        AppConfig(library_path=tmp_path / "books", catalogs=[catalog], preferences={}),
+        tmp_path / "state.db",
+        httpx.AsyncClient(),
+    )
+    entry = CatalogEntry(
+        title="Invalid Bracket Cover Book",
+        identifier=None,
+        updated=None,
+        cover_image_url="https://[bad/cover.jpg",
+        acquisition_links=[
+            AcquisitionLink(
+                href="https://example.test/opds/books/invalid-bracket-cover.epub",
+                relation="http://opds-spec.org/acquisition",
+                media_type="application/epub+zip",
+            )
+        ],
+    )
+
+    downloaded = await workflow.download_best_epub(catalog, entry)
 
     assert downloaded.read_bytes() == b"not an epub"
     book = workflow.library.list_books()[0]

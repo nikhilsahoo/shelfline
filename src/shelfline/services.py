@@ -246,9 +246,9 @@ def _catalog_for_url(
 
 
 def _same_origin(left_url: str, right_url: str) -> bool:
-    left = urlsplit(left_url)
-    right = urlsplit(right_url)
     try:
+        left = urlsplit(left_url)
+        right = urlsplit(right_url)
         return (
             left.scheme == right.scheme
             and left.hostname == right.hostname
