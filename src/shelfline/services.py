@@ -248,11 +248,14 @@ def _catalog_for_url(
 def _same_origin(left_url: str, right_url: str) -> bool:
     left = urlsplit(left_url)
     right = urlsplit(right_url)
-    return (
-        left.scheme == right.scheme
-        and left.hostname == right.hostname
-        and _origin_port(left) == _origin_port(right)
-    )
+    try:
+        return (
+            left.scheme == right.scheme
+            and left.hostname == right.hostname
+            and _origin_port(left) == _origin_port(right)
+        )
+    except ValueError:
+        return False
 
 
 def _origin_port(parts) -> int | None:
