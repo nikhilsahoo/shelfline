@@ -1,34 +1,43 @@
 # Shelfline
 
-Shelfline is a Python/Textual terminal application for browsing OPDS 1.x
-catalogs, downloading books, and managing a local reading library.
+Shelfline is a terminal bookshelf for OPDS catalogs: browse Calibre-Web and
+other OPDS 1.x libraries, download books, manage a local library, and read
+EPUBs from the terminal.
 
-The app is catalog-first: add an OPDS catalog, browse folders and book
-entries, download one book at a time, then read supported EPUB text directly
-inside the terminal.
+The app is catalog-first: add an OPDS catalog, browse folders and book entries,
+download one book at a time, then read supported EPUB text directly inside the
+terminal.
+
+## Who Shelfline Is For
+
+- Calibre-Web users who browse their library through OPDS.
+- Self-hosters with private OPDS book catalogs.
+- Terminal-first readers who want keyboard-first download, library, and EPUB
+  reading workflows.
+- People managing local ebook collections across Windows and Linux.
 
 ## Screenshots
 
 OPDS catalog book listing from Calibre-Web, showing authors and the current
 selection:
 
-![OPDS catalog book listing](docs/assets/screenshots/catalog-books.png)
+![OPDS catalog book listing](https://raw.githubusercontent.com/nikhilsahoo/shelfline/main/docs/assets/screenshots/catalog-books.png)
 
 Saved catalog selector with the catalog detail pane:
 
-![Saved catalog selector](docs/assets/screenshots/catalogs.png)
+![Saved catalog selector](https://raw.githubusercontent.com/nikhilsahoo/shelfline/main/docs/assets/screenshots/catalogs.png)
 
 OPDS folder and group navigation:
 
-![OPDS folder navigation](docs/assets/screenshots/catalog-folders.png)
+![OPDS folder navigation](https://raw.githubusercontent.com/nikhilsahoo/shelfline/main/docs/assets/screenshots/catalog-folders.png)
 
 Local library with book details:
 
-![Local library](docs/assets/screenshots/library.png)
+![Local library](https://raw.githubusercontent.com/nikhilsahoo/shelfline/main/docs/assets/screenshots/library.png)
 
 EPUB reader view:
 
-![EPUB reader](docs/assets/screenshots/reader.png)
+![EPUB reader](https://raw.githubusercontent.com/nikhilsahoo/shelfline/main/docs/assets/screenshots/reader.png)
 
 ## Capabilities
 
@@ -76,22 +85,34 @@ Python package dependencies are declared in `pyproject.toml`:
 
 Development and test dependencies are available through the `dev` extra.
 
+## Installation Status
+
+Shelfline is always installable from source. PyPI and `pipx` availability
+follows published releases; release notes live in
+[docs/release.md](https://github.com/nikhilsahoo/shelfline/blob/main/docs/release.md).
+
 ## Installation From Source
+
+Installing from a source checkout is the recommended path today.
+
+Clone the repository, install the package in editable mode, then run Shelfline:
 
 Windows PowerShell:
 
 ```powershell
+git clone https://github.com/nikhilsahoo/shelfline.git
+cd shelfline
 python -m pip install -e ".[dev]"
-python -m pytest -v
-python -m shelfline --help
+shelfline
 ```
 
 Linux shell:
 
 ```shell
+git clone https://github.com/nikhilsahoo/shelfline.git
+cd shelfline
 python -m pip install -e '.[dev]'
-python -m pytest -v
-python -m shelfline --help
+shelfline
 ```
 
 Run the app from an editable checkout with either the console script or module

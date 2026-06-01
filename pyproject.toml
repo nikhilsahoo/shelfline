@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,6 +8,25 @@ version = "0.1.0"
 description = "Terminal OPDS catalog browser and book downloader"
 readme = "README.md"
 requires-python = ">=3.11"
+authors = [
+  { name = "nikhilsahoo" },
+]
+license = "MIT"
+keywords = ["opds", "epub", "tui", "textual", "calibre-web", "ebook", "terminal"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+  "Topic :: Software Development :: User Interfaces",
+  "Topic :: Terminals",
+  "Topic :: Utilities",
+]
 dependencies = [
   "ebooklib>=0.18",
   "feedparser>=6.0.11",
@@ -27,6 +46,11 @@ dev = [
 
 [project.scripts]
 shelfline = "shelfline.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/nikhilsahoo/shelfline"
+Repository = "https://github.com/nikhilsahoo/shelfline"
+Issues = "https://github.com/nikhilsahoo/shelfline/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
