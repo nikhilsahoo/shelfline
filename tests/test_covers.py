@@ -16,6 +16,15 @@ from shelfline.covers import (
 )
 
 
+class ChunkedStream(httpx.AsyncByteStream):
+    def __init__(self, chunks: list[bytes]) -> None:
+        self.chunks = chunks
+
+    async def __aiter__(self):
+        for chunk in self.chunks:
+            yield chunk
+
+
 def test_cached_cover_path_is_deterministic_and_safe(tmp_path: Path) -> None:
     first = cached_cover_path(tmp_path, "https://example.test/covers/A Book.jpg")
     second = cached_cover_path(tmp_path, "https://example.test/covers/A Book.jpg")
@@ -117,6 +126,47 @@ async def test_cover_cache_rejects_oversized_cover_without_writing(
 
 
 @pytest.mark.asyncio
+async def test_cover_cache_rejects_oversized_content_length_without_writing(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    httpx_mock.add_response(
+        url="https://example.test/covers/declared-huge.jpg",
+        content=b"small",
+        headers={
+            "content-length": str(MAX_COVER_BYTES + 1),
+            "content-type": "image/jpeg",
+        },
+    )
+
+    async with httpx.AsyncClient() as client:
+        cache = CoverCache(tmp_path, client)
+        with pytest.raises(CoverError, match="too large"):
+            await cache.fetch("https://example.test/covers/declared-huge.jpg")
+
+    assert not (tmp_path / ".shelfline" / "covers").exists()
+
+
+@pytest.mark.asyncio
+async def test_cover_cache_rejects_oversized_chunked_stream_without_writing(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    httpx_mock.add_response(
+        url="https://example.test/covers/chunked-huge.jpg",
+        stream=ChunkedStream([b"x" * MAX_COVER_BYTES, b"y"]),
+        headers={"content-type": "image/jpeg"},
+    )
+
+    async with httpx.AsyncClient() as client:
+        cache = CoverCache(tmp_path, client)
+        with pytest.raises(CoverError, match="too large"):
+            await cache.fetch("https://example.test/covers/chunked-huge.jpg")
+
+    assert not (tmp_path / ".shelfline" / "covers").exists()
+
+
+@pytest.mark.asyncio
 async def test_cover_cache_rejects_non_image_content_type_without_writing(
     tmp_path: Path,
     httpx_mock: HTTPXMock,
@@ -131,6 +181,25 @@ async def test_cover_cache_rejects_non_image_content_type_without_writing(
         cache = CoverCache(tmp_path, client)
         with pytest.raises(CoverError, match="not an image"):
             await cache.fetch("https://example.test/covers/not-image.jpg")
+
+    assert not (tmp_path / ".shelfline" / "covers").exists()
+
+
+@pytest.mark.asyncio
+async def test_cover_cache_rejects_unsupported_image_type_without_writing(
+    tmp_path: Path,
+    httpx_mock: HTTPXMock,
+) -> None:
+    httpx_mock.add_response(
+        url="https://example.test/covers/vector.svg",
+        content=b"<svg></svg>",
+        headers={"content-type": "image/svg+xml"},
+    )
+
+    async with httpx.AsyncClient() as client:
+        cache = CoverCache(tmp_path, client)
+        with pytest.raises(CoverError, match="unsupported image type"):
+            await cache.fetch("https://example.test/covers/vector.svg")
 
     assert not (tmp_path / ".shelfline" / "covers").exists()
 
@@ -196,5 +265,34 @@ def test_extract_epub_cover_caches_embedded_cover(tmp_path: Path) -> None:
 
     assert path is not None
     assert path.parent == tmp_path / ".shelfline" / "covers"
+    assert path.suffix == ".jpg"
+    assert path.read_bytes() == cover_bytes
+
+
+def test_extract_epub_cover_falls_back_for_weird_embedded_suffix(tmp_path: Path) -> None:
+    epub_path = tmp_path / "weird-cover.epub"
+    cover_bytes = b"cover-image-bytes"
+    book = epub.EpubBook()
+    book.set_identifier("weird-cover")
+    book.set_title("Weird Cover")
+    book.set_language("en")
+    cover = epub.EpubImage(
+        uid="cover",
+        file_name="images/cover.not-image",
+        media_type="image/jpeg",
+        content=cover_bytes,
+    )
+    book.add_item(cover)
+    chapter = epub.EpubHtml(title="Chapter", file_name="chapter.xhtml", lang="en")
+    chapter.content = b"<html><body><p>Text.</p></body></html>"
+    book.add_item(chapter)
+    book.spine = [chapter]
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    epub.write_epub(str(epub_path), book)
+
+    path = extract_epub_cover(epub_path, tmp_path)
+
+    assert path is not None
     assert path.suffix == ".jpg"
     assert path.read_bytes() == cover_bytes

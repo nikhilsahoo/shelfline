@@ -48,30 +48,50 @@ class CoverCache:
         auth: tuple[str, str] | None = None,
     ) -> Path:
         try:
-            response = await self.http_client.get(source_url, auth=auth)
-            response.raise_for_status()
+            async with self.http_client.stream("GET", source_url, auth=auth) as response:
+                response.raise_for_status()
+                content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
+                self._validate_response_headers(source_url, response.headers, content_type)
+                content = await self._read_cover_content(source_url, response)
         except Exception as exc:
+            if isinstance(exc, CoverError):
+                raise
             safe_url = _redact_url_credentials(source_url)
             raise CoverError(f"Could not fetch cover from {safe_url}") from exc
 
-        content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
-        self._validate_response(source_url, response.content, content_type)
         path = cached_cover_path(self.library_path, source_url, content_type)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(response.content)
+        path.write_bytes(content)
         return path
 
-    def _validate_response(
+    def _validate_response_headers(
         self,
         source_url: str,
-        content: bytes,
+        headers: httpx.Headers,
         content_type: str,
     ) -> None:
         safe_url = _redact_url_credentials(source_url)
-        if not _is_image_content_type(content_type):
+        if content_type not in _CONTENT_TYPE_EXTENSIONS:
+            if content_type.startswith("image/"):
+                raise CoverError(f"Cover response from {safe_url} has unsupported image type")
             raise CoverError(f"Cover response from {safe_url} is not an image")
-        if len(content) > MAX_COVER_BYTES:
+
+        content_length = headers.get("content-length")
+        if content_length is not None and _content_length_exceeds_limit(content_length):
             raise CoverError(f"Cover response from {safe_url} is too large")
+
+    async def _read_cover_content(
+        self,
+        source_url: str,
+        response: httpx.Response,
+    ) -> bytes:
+        safe_url = _redact_url_credentials(source_url)
+        content = bytearray()
+        async for chunk in response.aiter_bytes():
+            content.extend(chunk)
+            if len(content) > MAX_COVER_BYTES:
+                raise CoverError(f"Cover response from {safe_url} is too large")
+        return bytes(content)
 
 
 def extract_epub_cover(epub_path: Path, library_path: Path) -> Path | None:
@@ -87,7 +107,7 @@ def extract_epub_cover(epub_path: Path, library_path: Path) -> Path | None:
         if "cover" not in name and item.get_type() != ITEM_COVER:
             continue
 
-        extension = Path(name).suffix.lower() or ".jpg"
+        extension = _safe_image_extension(Path(name).suffix.lower())
         digest = sha256(f"{epub_path}:{name}".encode("utf-8")).hexdigest()[:24]
         path = cover_cache_dir(library_path) / f"{digest}{extension}"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -109,8 +129,19 @@ def _extension_for_cover(source_url: str, content_type: str | None) -> str:
     return ".jpg"
 
 
-def _is_image_content_type(content_type: str) -> bool:
-    return content_type.startswith("image/") or content_type in _CONTENT_TYPE_EXTENSIONS
+def _content_length_exceeds_limit(content_length: str) -> bool:
+    try:
+        return int(content_length) > MAX_COVER_BYTES
+    except ValueError:
+        return False
+
+
+def _safe_image_extension(suffix: str) -> str:
+    if suffix == ".jpeg":
+        return ".jpg"
+    if suffix in {".jpg", ".png", ".webp", ".gif"}:
+        return suffix
+    return ".jpg"
 
 
 def _redact_url_credentials(source_url: str) -> str:
