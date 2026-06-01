@@ -278,6 +278,32 @@ def test_cover_display_falls_back_when_terminal_graphics_requested(tmp_path: Pat
     assert str(image_path) not in rendered
 
 
+@pytest.mark.asyncio
+async def test_cover_display_auto_mode_does_not_expose_image_path_when_rendering_fails(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "cover.jpg"
+    image_path.write_bytes(b"not a real image")
+
+    app = ShelflineApp()
+
+    async with app.run_test():
+        display = CoverDisplay(
+            title="Dune",
+            authors=["Frank Herbert"],
+            image_path=image_path,
+            terminal_graphics=True,
+            display_mode="auto",
+            cache_status="cached",
+        )
+        await app.mount(display)
+        fallback = display.query_one(".cover-fallback")
+
+    rendered = str(fallback.render())
+    assert "Dune" in rendered
+    assert str(image_path) not in rendered
+
+
 def test_cover_display_text_mode_shows_polished_metadata(tmp_path: Path) -> None:
     image_path = tmp_path / "cover.jpg"
     image_path.write_bytes(b"not a real image")

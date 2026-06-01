@@ -7,6 +7,7 @@ from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.containers import Container, VerticalScroll
+from textual.widget import Widget
 from textual.widgets import Static
 
 from shelfline.catalog.models import AcquisitionLink, CatalogEntry
@@ -845,6 +846,30 @@ class CoverDisplay(Static):
     @property
     def renderable(self) -> str:
         return self._renderable
+
+    def compose(self) -> ComposeResult:
+        if self.display_mode == "off":
+            return
+
+        image_widget = self._image_widget()
+        if image_widget is not None:
+            yield image_widget
+        yield Static(self._renderable, classes="cover-fallback")
+
+    def _image_widget(self) -> Widget | None:
+        if self.display_mode != "auto":
+            return None
+        if not self.terminal_graphics:
+            return None
+        if self.image_path is None or not self.image_path.exists():
+            return None
+
+        try:
+            from textual_image.widget import Image
+
+            return Image(str(self.image_path))
+        except Exception:
+            return None
 
     def _render_cover(self) -> str:
         if self.display_mode == "off":
