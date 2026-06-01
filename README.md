@@ -85,17 +85,42 @@ Python package dependencies are declared in `pyproject.toml`:
 
 Development and test dependencies are available through the `dev` extra.
 
-## Installation Status
+## Installation
 
-Shelfline is always installable from source. PyPI and `pipx` availability
-follows published releases; release notes live in
+The recommended install path is `pipx`, which keeps Shelfline isolated from
+your project Python environments while still exposing the `shelfline` command:
+
+```shell
+pipx install shelfline
+shelfline
+```
+
+If you do not use `pipx`, install from PyPI with `pip`:
+
+```shell
+python -m pip install shelfline
+shelfline
+```
+
+Upgrade an existing install with:
+
+```shell
+pipx upgrade shelfline
+```
+
+or:
+
+```shell
+python -m pip install --upgrade shelfline
+```
+
+Release notes and publishing details live in
 [docs/release.md](https://github.com/nikhilsahoo/shelfline/blob/main/docs/release.md).
 
 ## Installation From Source
 
-Installing from a source checkout is the recommended path today.
-
-Clone the repository, install the package in editable mode, then run Shelfline:
+For development or local testing, clone the repository and install the package
+in editable mode:
 
 Windows PowerShell:
 
