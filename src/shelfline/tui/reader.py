@@ -7,6 +7,7 @@ from textual.containers import Container, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Header, Static
 
+from shelfline.config import ReaderPreferences
 from shelfline.library import Bookmark, LibraryRepository, ReadingProgress
 from shelfline.reader import EpubOutlineItem, EpubPreview
 from shelfline.tui.layout import KeyHintFooter
@@ -14,10 +15,18 @@ from shelfline.tui.widgets import StatusLine
 
 
 class ReaderChrome(Container):
-    def __init__(self, title: str, progress: str, **kwargs: object) -> None:
+    def __init__(
+        self,
+        title: str,
+        progress: str,
+        *,
+        show_progress: bool = True,
+        **kwargs: object,
+    ) -> None:
         super().__init__(**kwargs)
         self.title = title
         self.progress = progress
+        self.show_progress = show_progress
 
     @property
     def renderable(self) -> str:
@@ -25,7 +34,13 @@ class ReaderChrome(Container):
 
     def compose(self) -> ComposeResult:
         yield StatusLine(self.title, id="reader-title", classes="reader-title")
-        yield StatusLine(self.progress, id="reader-progress", classes="reader-progress")
+        progress = StatusLine(
+            self.progress,
+            id="reader-progress",
+            classes="reader-progress",
+        )
+        progress.display = self.show_progress
+        yield progress
 
 
 class ReaderTocRow(Static):
@@ -191,12 +206,14 @@ class EpubReaderScreen(Screen[None]):
         section_index: int = 0,
         library: LibraryRepository | None = None,
         book_path: Path | None = None,
+        preferences: ReaderPreferences | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self.preview = preview
         self.library = library
         self.book_path = book_path
+        self.preferences = preferences or ReaderPreferences()
         self._progress_load_error: str | None = None
         self.section_index = self._initial_section_index(section_index)
 
@@ -204,14 +221,21 @@ class EpubReaderScreen(Screen[None]):
         section = self.preview.section_at(self.section_index)
         yield Header()
         with Container(id="reader-surface", classes="reader-surface"):
-            with Container(id="reader-page", classes="reader-page"):
+            with Container(id="reader-page", classes=self._reader_page_classes()):
                 yield ReaderChrome(
                     self.preview.title,
                     self.preview.progress_label(self.section_index),
+                    show_progress=self.preferences.show_progress,
                     id="reader-chrome",
                     classes="reader-chrome",
                 )
-                yield StatusLine(section.heading, id="reader-heading", classes="reader-heading")
+                heading = StatusLine(
+                    section.heading,
+                    id="reader-heading",
+                    classes="reader-heading",
+                )
+                heading.display = self.preferences.show_chapter_title
+                yield heading
                 with VerticalScroll(id="reader-body", classes="reader-body"):
                     yield Static(section.text, id="reader-body-text", classes="reader-text")
         yield StatusLine("Ready", id="status-line")
@@ -309,6 +333,16 @@ class EpubReaderScreen(Screen[None]):
         if self.preview.section_count == 0:
             return 0
         return max(0, min(section_index, self.preview.section_count - 1))
+
+    def _reader_page_classes(self) -> str:
+        return " ".join(
+            (
+                "reader-page",
+                f"reader-width-{self.preferences.width}",
+                f"reader-theme-{self.preferences.theme}",
+                f"reader-spacing-{self.preferences.paragraph_spacing}",
+            )
+        )
 
     def _save_progress(self) -> None:
         if self.library is None or self.book_path is None:

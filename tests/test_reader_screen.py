@@ -9,6 +9,7 @@ from textual.pilot import Pilot
 from textual.widgets import Footer
 
 from shelfline.app import ShelflineApp
+from shelfline.config import ReaderPreferences
 from shelfline.library import Bookmark, BookRecord, LibraryRepository, ReadingProgress
 from shelfline.reader import EpubOutlineItem, EpubPreview, EpubSection
 from shelfline.tui.layout import KeyHintFooter
@@ -330,6 +331,31 @@ async def test_reader_screen_uses_constrained_reading_surface() -> None:
         assert text.has_class("reader-text")
         assert "Reader Title" in str(chrome.renderable)
         assert "1 / 2" in str(chrome.renderable)
+
+
+@pytest.mark.asyncio
+async def test_reader_screen_applies_reader_preference_classes() -> None:
+    app = ShelflineApp(config=None)
+    preferences = ReaderPreferences(
+        width="wide",
+        theme="warm",
+        paragraph_spacing="relaxed",
+        show_progress=False,
+        show_chapter_title=False,
+    )
+
+    async with app.run_test():
+        await app.push_screen(EpubReaderScreen(_preview(), preferences=preferences))
+
+        page = app.screen.query_one("#reader-page")
+        progress = app.screen.query_one("#reader-progress")
+        heading = app.screen.query_one("#reader-heading")
+
+        assert page.has_class("reader-width-wide")
+        assert page.has_class("reader-theme-warm")
+        assert page.has_class("reader-spacing-relaxed")
+        assert progress.display is False
+        assert heading.display is False
 
 
 @pytest.mark.asyncio

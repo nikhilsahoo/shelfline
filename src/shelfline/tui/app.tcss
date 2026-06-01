@@ -199,6 +199,88 @@
     background: $surface;
 }
 
+.reader-width-narrow {
+    width: 68;
+}
+
+.reader-width-medium {
+    width: 84;
+}
+
+.reader-width-wide {
+    width: 104;
+}
+
+.reader-spacing-compact {
+    padding: 0 2;
+}
+
+.reader-spacing-compact #reader-heading {
+    margin: 0;
+}
+
+.reader-spacing-compact #reader-body {
+    margin: 0;
+    padding: 0 2 0 1;
+}
+
+.reader-spacing-normal {
+    padding: 1 2;
+}
+
+.reader-spacing-relaxed {
+    padding: 2 3;
+}
+
+.reader-spacing-relaxed #reader-heading {
+    margin: 1 0;
+}
+
+.reader-spacing-relaxed #reader-body {
+    margin: 1 0 0 0;
+    padding: 1 4 0 1;
+}
+
+.reader-theme-warm {
+    background: $warning 10%;
+    border-left: solid $warning;
+    border-right: solid $warning;
+}
+
+.reader-theme-warm #reader-title {
+    color: $warning;
+}
+
+.reader-theme-warm #reader-heading {
+    color: $warning;
+}
+
+.reader-theme-warm #reader-body {
+    border-top: solid $warning;
+}
+
+.reader-theme-high_contrast {
+    background: black;
+    color: white;
+    border-left: solid white;
+    border-right: solid white;
+}
+
+.reader-theme-high_contrast #reader-title,
+.reader-theme-high_contrast #reader-heading,
+.reader-theme-high_contrast .reader-text {
+    color: white;
+}
+
+.reader-theme-high_contrast #reader-progress,
+.reader-theme-high_contrast #reader-chrome {
+    color: white;
+}
+
+.reader-theme-high_contrast #reader-body {
+    border-top: solid white;
+}
+
 #reader-chrome {
     layout: horizontal;
     height: 1;
