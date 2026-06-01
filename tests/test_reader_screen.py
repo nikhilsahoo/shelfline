@@ -122,9 +122,11 @@ class _FailingProgressLibrary:
         *,
         load_error: RuntimeError | None = None,
         save_error: RuntimeError | None = None,
+        bookmark_list_error: RuntimeError | None = None,
     ) -> None:
         self.load_error = load_error
         self.save_error = save_error
+        self.bookmark_list_error = bookmark_list_error
 
     def get_reading_progress(self, book_path: Path) -> ReadingProgress | None:
         if self.load_error is not None:
@@ -134,6 +136,11 @@ class _FailingProgressLibrary:
     def save_reading_progress(self, progress: ReadingProgress) -> None:
         if self.save_error is not None:
             raise self.save_error
+
+    def list_bookmarks(self, book_path: Path) -> tuple[Bookmark, ...]:
+        if self.bookmark_list_error is not None:
+            raise self.bookmark_list_error
+        return ()
 
     def add_bookmark(self, bookmark: object) -> object:
         raise RuntimeError("bookmark database unavailable")
@@ -333,6 +340,33 @@ async def test_reader_bookmark_navigator_opens_and_jumps(tmp_path: Path) -> None
 
         assert isinstance(app.screen, EpubReaderScreen)
         assert app.screen.section_index == 1
+
+
+@pytest.mark.asyncio
+async def test_reader_bookmark_navigator_reports_load_failure(tmp_path: Path) -> None:
+    library = _FailingProgressLibrary(
+        bookmark_list_error=RuntimeError("bookmark database unavailable")
+    )
+    book_path = tmp_path / "books" / "reader-book.epub"
+    app = ShelflineApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(
+            EpubReaderScreen(_preview(), library=library, book_path=book_path)
+        )
+        reader = app.screen
+        assert isinstance(reader, EpubReaderScreen)
+
+        await pilot.press("g")
+
+        assert app.screen.__class__.__name__ == "ReaderBookmarkScreen"
+        assert "Bookmarks unavailable: bookmark database unavailable" in str(
+            app.screen.query_one("#bookmark-title").renderable
+        )
+        assert "No bookmarks" in str(app.screen.query_one("#bookmark-list").render())
+        assert "Bookmarks unavailable: bookmark database unavailable" in str(
+            reader.query_one("#status-line").renderable
+        )
 
 
 @pytest.mark.asyncio

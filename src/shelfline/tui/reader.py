@@ -287,13 +287,17 @@ class ReaderBookmarkScreen(Screen[None]):
     def __init__(self, reader: EpubReaderScreen, **kwargs: object) -> None:
         super().__init__(**kwargs)
         self.reader = reader
+        self.load_error: str | None = None
         self.bookmarks = self._bookmarks(reader)
         self.selected_index = self._initial_selected_index()
 
     def compose(self) -> ComposeResult:
         yield Header()
         with Container(id="bookmark-surface"):
-            yield StatusLine("Bookmarks", id="bookmark-title")
+            yield StatusLine(
+                self.load_error or "Bookmarks",
+                id="bookmark-title",
+            )
             yield ReaderBookmarkList(
                 self.bookmarks,
                 selected_index=self.selected_index,
@@ -337,7 +341,12 @@ class ReaderBookmarkScreen(Screen[None]):
     def _bookmarks(self, reader: EpubReaderScreen) -> tuple[Bookmark, ...]:
         if reader.library is None or reader.book_path is None:
             return ()
-        return tuple(reader.library.list_bookmarks(reader.book_path))
+        try:
+            return tuple(reader.library.list_bookmarks(reader.book_path))
+        except Exception as error:
+            self.load_error = f"Bookmarks unavailable: {error}"
+            reader._set_status(self.load_error)
+            return ()
 
 
 class ReaderPreferencesScreen(Screen[None]):
