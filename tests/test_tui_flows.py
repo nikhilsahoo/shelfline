@@ -11,7 +11,7 @@ from textual.widgets import Footer
 from shelfline.app import ShelflineApp
 from shelfline.catalog.client import CatalogFetchError
 from shelfline.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
-from shelfline.config import AppConfig, CatalogConfig
+from shelfline.config import AppConfig, AppPreferences, CatalogConfig, CoverPreferences
 from shelfline.downloads import DownloadError, DownloadProgress
 from shelfline.library import BookRecord, LibraryRepository
 from shelfline.reader import EpubOutlineItem, EpubPreview, EpubSection
@@ -879,6 +879,49 @@ async def test_library_screen_detail_pane_shows_selected_book_metadata_on_mount(
         assert "Example" in rendered
         assert f"{LOCAL_PATH_LABEL.text}: {tmp_path / 'books' / 'Dune.epub'}" in rendered
         assert f"{OPEN_PREVIEW_LABEL.text}: Enter preview" in rendered
+
+
+@pytest.mark.asyncio
+async def test_library_detail_uses_cover_preferences(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    cover_path = tmp_path / "covers" / "dune.jpg"
+    book = _book(tmp_path, title="Dune", is_read=False)
+    repo.add_book(
+        BookRecord(
+            title=book.title,
+            authors=book.authors,
+            identifiers=book.identifiers,
+            source_catalog=book.source_catalog,
+            source_entry_url=book.source_entry_url,
+            acquisition_url=book.acquisition_url,
+            media_type=book.media_type,
+            cover_image_url="https://example.test/covers/dune.jpg",
+            cover_image_path=cover_path,
+            local_file_path=book.local_file_path,
+            is_read=book.is_read,
+            thumbnail_url="https://example.test/covers/dune-thumb.jpg",
+            cover_cache_status="failed",
+        )
+    )
+    app = ShelflineApp(
+        config=AppConfig(
+            library_path=tmp_path,
+            preferences=AppPreferences(covers=CoverPreferences(display="text")),
+        ),
+        library=repo,
+    )
+
+    async with app.run_test():
+        await app.push_screen(LibraryScreen(library=repo))
+        rendered = "\n".join(
+            str(static.render())
+            for static in app.screen.query("#detail-region Static")
+            if static.display
+        )
+
+    assert "Dune" in rendered
+    assert "Cover unavailable" in rendered
 
 
 @pytest.mark.asyncio

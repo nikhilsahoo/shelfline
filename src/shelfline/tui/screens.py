@@ -10,7 +10,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Header, Input, Static
 
 from shelfline.catalog.models import CatalogEntry, CatalogFeed
-from shelfline.config import AppConfig, CatalogConfig
+from shelfline.config import AppConfig, AppPreferences, CatalogConfig
 from shelfline.downloads import DownloadProgress
 from shelfline.library import BookRecord, LibraryRepository, LibrarySearch
 from shelfline.reader import EpubPreview, ReaderError, extract_epub_preview
@@ -424,12 +424,7 @@ class EntryScreen(Screen[None]):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield CoverDisplay(
-            title=self.entry.title,
-            authors=self.entry.authors,
-            image_path=self.entry.cover_image_url or self.entry.thumbnail_url,
-            id="cover-display",
-        )
+        yield self._cover_display()
         yield EntryDetailView(self.entry, selected_index=self.selected_index)
         yield BusyIndicator(id="busy-indicator")
         yield StatusLine("Ready", id="status-line")
@@ -484,12 +479,44 @@ class EntryScreen(Screen[None]):
             return
         self.selected_index = max(0, min(len(self.entry.acquisition_links) - 1, self.selected_index + delta))
         self.query_one("#entry-body", EntryDetailView).set_selected_index(self.selected_index)
+        self._update_cover_display()
         link = self.entry.acquisition_links[self.selected_index]
         label = link.title or link.media_type
         self.query_one("#status-line", StatusLine).set_message(f"Selected {label}")
 
     def _entry_text(self) -> str:
         return EntryDetailView.render_text(self.entry, self.selected_index)
+
+    def _cover_display(self) -> CoverDisplay:
+        return CoverDisplay(
+            title=self.entry.title,
+            authors=self.entry.authors,
+            image_path=None,
+            display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            media_type=self._selected_media_type(),
+            source=self.catalog.name if self.catalog is not None else None,
+            cache_status=None,
+            id="cover-display",
+        )
+
+    def _update_cover_display(self) -> None:
+        cover = self.query_one("#cover-display", CoverDisplay)
+        cover.title = self.entry.title
+        cover.authors = list(self.entry.authors)
+        cover.image_path = None
+        cover.display_mode = _cover_display_mode(getattr(self.app, "config", None))
+        cover.media_type = self._selected_media_type()
+        cover.source = self.catalog.name if self.catalog is not None else None
+        cover.cache_status = None
+        rendered = cover._render_cover()
+        cover._renderable = rendered
+        cover.update(rendered)
+
+    def _selected_media_type(self) -> str | None:
+        if not self.entry.acquisition_links:
+            return None
+        index = min(self.selected_index, len(self.entry.acquisition_links) - 1)
+        return self.entry.acquisition_links[index].media_type
 
 
 class DownloadStatusScreen(Screen[None]):
@@ -572,6 +599,7 @@ class LibraryScreen(Screen[None]):
         )
         replace_region(
             self.query_one("#detail-region"),
+            self._cover_display(self.selected_book),
             LibraryDetailView(self.selected_book),
             StatusLine("Ready", id="status-line"),
         )
@@ -694,18 +722,65 @@ class LibraryScreen(Screen[None]):
         self.selected_index = max(0, min(len(self.books) - 1, self.selected_index + delta))
         self.query_one("#library-body", LibraryBookList).set_selected_index(self.selected_index)
         self.query_one("#library-detail", LibraryDetailView).set_book(self.selected_book)
+        self._update_cover_display(self.selected_book)
         self._set_status(f"Selected {self.books[self.selected_index].title}")
 
     def _refresh_library_body(self) -> None:
         self.query_one("#library-body", LibraryBookList).set_books(self.books, self.selected_index)
         self.query_one("#library-detail", LibraryDetailView).set_book(self.selected_book)
+        self._update_cover_display(self.selected_book)
 
     def _library_text(self) -> str:
         return LibraryBookList.render_text(self.books, self.selected_index)
 
+    def _cover_display(self, book: BookRecord | None) -> CoverDisplay:
+        return CoverDisplay(
+            title=book.title if book is not None else "",
+            authors=book.authors if book is not None else [],
+            image_path=book.cover_image_path if book is not None else None,
+            display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            media_type=book.media_type if book is not None else None,
+            source=book.source_catalog if book is not None else None,
+            cache_status=book.cover_cache_status if book is not None else None,
+            id="cover-display",
+        )
+
+    def _update_cover_display(self, book: BookRecord | None) -> None:
+        cover = self.query_one("#cover-display", CoverDisplay)
+        if book is None:
+            cover.display = False
+            cover.title = ""
+            cover.authors = []
+            cover.image_path = None
+            cover.media_type = None
+            cover.source = None
+            cover.cache_status = None
+            cover._renderable = ""
+            cover.update("")
+            return
+
+        cover.display = True
+        cover.title = book.title
+        cover.authors = list(book.authors)
+        cover.image_path = book.cover_image_path
+        cover.display_mode = _cover_display_mode(getattr(self.app, "config", None))
+        cover.media_type = book.media_type
+        cover.source = book.source_catalog
+        cover.cache_status = book.cover_cache_status
+        rendered = cover._render_cover()
+        cover._renderable = rendered
+        cover.update(rendered)
+
 
 def _error_message(error: Exception) -> str:
     return str(error) or error.__class__.__name__
+
+
+def _cover_display_mode(config: AppConfig | None) -> str:
+    preferences = getattr(config, "preferences", None)
+    if isinstance(preferences, AppPreferences):
+        return preferences.covers.display
+    return "auto"
 
 
 class EpubPreviewScreen(Screen[None]):
