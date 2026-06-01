@@ -22,6 +22,8 @@ class BookRecord:
     local_file_path: Path
     is_read: bool = False
     deleted_at: str | None = None
+    thumbnail_url: str | None = None
+    cover_cache_status: str = "missing"
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,8 @@ class LibraryRepository:
                     media_type TEXT NOT NULL,
                     cover_image_url TEXT,
                     cover_image_path TEXT,
+                    thumbnail_url TEXT,
+                    cover_cache_status TEXT NOT NULL DEFAULT 'missing',
                     local_file_path TEXT NOT NULL UNIQUE,
                     is_read INTEGER NOT NULL DEFAULT 0,
                     deleted_at TEXT,
@@ -78,6 +82,7 @@ class LibraryRepository:
                 )
                 """
             )
+            self._migrate_books_schema(connection)
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS feed_cache (
@@ -126,11 +131,13 @@ class LibraryRepository:
                     media_type,
                     cover_image_url,
                     cover_image_path,
+                    thumbnail_url,
+                    cover_cache_status,
                     local_file_path,
                     is_read,
                     deleted_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(local_file_path) DO UPDATE SET
                     title = excluded.title,
                     authors_json = excluded.authors_json,
@@ -141,6 +148,8 @@ class LibraryRepository:
                     media_type = excluded.media_type,
                     cover_image_url = excluded.cover_image_url,
                     cover_image_path = excluded.cover_image_path,
+                    thumbnail_url = excluded.thumbnail_url,
+                    cover_cache_status = excluded.cover_cache_status,
                     is_read = excluded.is_read,
                     deleted_at = excluded.deleted_at
                 """,
@@ -154,6 +163,8 @@ class LibraryRepository:
                     book.media_type,
                     book.cover_image_url,
                     self._path_to_text(book.cover_image_path),
+                    book.thumbnail_url,
+                    book.cover_cache_status,
                     self._path_to_text(book.local_file_path),
                     int(book.is_read),
                     book.deleted_at,
@@ -175,6 +186,8 @@ class LibraryRepository:
                     media_type,
                     cover_image_url,
                     cover_image_path,
+                    thumbnail_url,
+                    cover_cache_status,
                     local_file_path,
                     is_read,
                     deleted_at
@@ -214,6 +227,8 @@ class LibraryRepository:
                     media_type,
                     cover_image_url,
                     cover_image_path,
+                    thumbnail_url,
+                    cover_cache_status,
                     local_file_path,
                     is_read,
                     deleted_at
@@ -237,6 +252,27 @@ class LibraryRepository:
             connection.execute(
                 "UPDATE books SET is_read = ? WHERE local_file_path = ?",
                 (int(is_read), self._path_to_text(local_file_path)),
+            )
+
+    def update_cover_cache(
+        self,
+        local_file_path: Path,
+        cover_image_path: Path | None,
+        cover_cache_status: str,
+    ) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE books
+                SET cover_image_path = ?,
+                    cover_cache_status = ?
+                WHERE local_file_path = ?
+                """,
+                (
+                    self._path_to_text(cover_image_path),
+                    cover_cache_status,
+                    self._path_to_text(local_file_path),
+                ),
             )
 
     def save_reading_progress(self, progress: ReadingProgress) -> None:
@@ -446,6 +482,22 @@ class LibraryRepository:
         return str(path) if path is not None else None
 
     @staticmethod
+    def _migrate_books_schema(connection: sqlite3.Connection) -> None:
+        columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(books)").fetchall()
+        }
+        if "thumbnail_url" not in columns:
+            connection.execute("ALTER TABLE books ADD COLUMN thumbnail_url TEXT")
+        if "cover_cache_status" not in columns:
+            connection.execute(
+                """
+                ALTER TABLE books
+                ADD COLUMN cover_cache_status TEXT NOT NULL DEFAULT 'missing'
+                """
+            )
+
+    @staticmethod
     def _book_matches_literal_query(book: BookRecord, query: str) -> bool:
         folded_query = query.casefold()
         return folded_query in book.title.casefold() or any(
@@ -468,6 +520,8 @@ class LibraryRepository:
             local_file_path=Path(row["local_file_path"]),
             is_read=bool(row["is_read"]),
             deleted_at=row["deleted_at"],
+            thumbnail_url=row["thumbnail_url"],
+            cover_cache_status=row["cover_cache_status"],
         )
 
     @staticmethod

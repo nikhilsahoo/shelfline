@@ -34,6 +34,126 @@ def test_repository_initializes_schema_and_saves_book(tmp_path: Path) -> None:
     assert books[0].is_read is False
 
 
+def test_book_record_stores_thumbnail_and_cover_cache_status(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+
+    repo.add_book(
+        BookRecord(
+            title="Sample Book",
+            authors=["Ada Writer"],
+            identifiers=["urn:isbn:9780000000001"],
+            source_catalog="Private",
+            source_entry_url="https://example.test/opds/book",
+            acquisition_url="https://example.test/books/sample.epub",
+            media_type="application/epub+zip",
+            cover_image_url="https://example.test/covers/sample.jpg",
+            cover_image_path=tmp_path / "covers" / "sample.jpg",
+            local_file_path=tmp_path / "books" / "sample.epub",
+            thumbnail_url="https://example.test/thumbs/sample.jpg",
+            cover_cache_status="cached",
+        )
+    )
+
+    books = repo.list_books()
+    assert books[0].thumbnail_url == "https://example.test/thumbs/sample.jpg"
+    assert books[0].cover_cache_status == "cached"
+
+
+def test_update_book_cover_cache_path(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    book_path = tmp_path / "books" / "sample.epub"
+    cached_cover_path = tmp_path / "covers" / "sample.jpg"
+    repo.add_book(
+        BookRecord(
+            title="Sample Book",
+            authors=[],
+            identifiers=[],
+            source_catalog="Private",
+            source_entry_url=None,
+            acquisition_url="https://example.test/books/sample.epub",
+            media_type="application/epub+zip",
+            cover_image_url=None,
+            cover_image_path=None,
+            local_file_path=book_path,
+        )
+    )
+
+    repo.update_cover_cache(book_path, cached_cover_path, "cached")
+
+    book = repo.list_books()[0]
+    assert book.cover_image_path == cached_cover_path
+    assert book.cover_cache_status == "cached"
+
+
+def test_repository_migrates_cover_metadata_columns(tmp_path: Path) -> None:
+    db_path = tmp_path / "state.db"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE books (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                authors_json TEXT NOT NULL,
+                identifiers_json TEXT NOT NULL,
+                source_catalog TEXT NOT NULL,
+                source_entry_url TEXT,
+                acquisition_url TEXT NOT NULL,
+                media_type TEXT NOT NULL,
+                cover_image_url TEXT,
+                cover_image_path TEXT,
+                local_file_path TEXT NOT NULL UNIQUE,
+                is_read INTEGER NOT NULL DEFAULT 0,
+                deleted_at TEXT,
+                downloaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO books (
+                title,
+                authors_json,
+                identifiers_json,
+                source_catalog,
+                source_entry_url,
+                acquisition_url,
+                media_type,
+                cover_image_url,
+                cover_image_path,
+                local_file_path,
+                is_read,
+                deleted_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "Legacy Book",
+                "[]",
+                "[]",
+                "Private",
+                None,
+                "https://example.test/books/legacy.epub",
+                "application/epub+zip",
+                None,
+                str(tmp_path / "covers" / "legacy.jpg"),
+                str(tmp_path / "books" / "legacy.epub"),
+                0,
+                None,
+            ),
+        )
+
+    repo = LibraryRepository(db_path)
+    repo.initialize()
+    repo.initialize()
+
+    book = repo.list_books()[0]
+    assert book.thumbnail_url is None
+    assert book.cover_image_path == tmp_path / "covers" / "legacy.jpg"
+    assert book.cover_cache_status == "missing"
+
+
 def test_repository_marks_book_read_and_unread(tmp_path: Path) -> None:
     repo = LibraryRepository(tmp_path / "state.db")
     repo.initialize()
