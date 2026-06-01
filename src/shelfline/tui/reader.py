@@ -190,6 +190,156 @@ class ReaderTocScreen(Screen[None]):
         )
 
 
+class ReaderBookmarkRow(Static):
+    def __init__(
+        self,
+        bookmark: Bookmark,
+        *,
+        index: int,
+        selected: bool = False,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.bookmark = bookmark
+        self.index = index
+        self.selected = selected
+
+    def compose(self) -> ComposeResult:
+        yield Static(self._row_text(), classes="bookmark-row-title")
+
+    def set_selected(self, selected: bool) -> None:
+        self.selected = selected
+        self.query_one(".bookmark-row-title", Static).update(self._row_text())
+
+    def _row_text(self) -> str:
+        prefix = ">" if self.selected else " "
+        label = self.bookmark.label or f"Section {self.bookmark.section_index + 1}"
+        return f"{prefix} {label}"
+
+
+class ReaderBookmarkList(VerticalScroll):
+    def __init__(
+        self,
+        bookmarks: tuple[Bookmark, ...],
+        *,
+        selected_index: int = 0,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(id="bookmark-list", classes="bookmark-list", **kwargs)
+        self.bookmarks = bookmarks
+        self.selected_index = selected_index
+
+    def compose(self) -> ComposeResult:
+        empty_state = Static(
+            "No bookmarks",
+            id="bookmark-empty",
+            classes="empty-state",
+        )
+        empty_state.display = not self.bookmarks
+        yield empty_state
+        yield from self._row_widgets()
+
+    def render(self) -> str:
+        if not self.bookmarks:
+            return "No bookmarks"
+        return "\n".join(
+            self._row_text(bookmark, index)
+            for index, bookmark in enumerate(self.bookmarks)
+        )
+
+    def set_selected_index(self, selected_index: int) -> None:
+        self.selected_index = selected_index
+        selected_row: ReaderBookmarkRow | None = None
+        for row in self.query(ReaderBookmarkRow):
+            selected = row.index == selected_index
+            row.set_selected(selected)
+            if selected:
+                selected_row = row
+        if selected_row is not None:
+            self.scroll_to_widget(selected_row, animate=False, immediate=True)
+
+    def _row_widgets(self) -> list[ReaderBookmarkRow]:
+        return [
+            ReaderBookmarkRow(
+                bookmark,
+                id=f"bookmark-row-{index}",
+                index=index,
+                selected=index == self.selected_index,
+            )
+            for index, bookmark in enumerate(self.bookmarks)
+        ]
+
+    def _row_text(self, bookmark: Bookmark, index: int) -> str:
+        prefix = ">" if index == self.selected_index else " "
+        label = bookmark.label or f"Section {bookmark.section_index + 1}"
+        return f"{prefix} {label}"
+
+
+class ReaderBookmarkScreen(Screen[None]):
+    KEY_HINT = "Keys: j down | k up | enter jump | b back"
+    BINDINGS = [
+        ("j", "cursor_down", "Down"),
+        ("k", "cursor_up", "Up"),
+        ("enter", "jump_to_bookmark", "Jump"),
+        ("b", "dismiss_bookmarks", "Back"),
+    ]
+
+    def __init__(self, reader: EpubReaderScreen, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+        self.reader = reader
+        self.bookmarks = self._bookmarks(reader)
+        self.selected_index = self._initial_selected_index()
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with Container(id="bookmark-surface"):
+            yield StatusLine("Bookmarks", id="bookmark-title")
+            yield ReaderBookmarkList(
+                self.bookmarks,
+                selected_index=self.selected_index,
+            )
+        yield KeyHintFooter(self.KEY_HINT)
+
+    def action_cursor_down(self) -> None:
+        if not self.bookmarks:
+            return
+        self.selected_index = min(self.selected_index + 1, len(self.bookmarks) - 1)
+        self._refresh_selection()
+
+    def action_cursor_up(self) -> None:
+        if not self.bookmarks:
+            return
+        self.selected_index = max(self.selected_index - 1, 0)
+        self._refresh_selection()
+
+    def action_jump_to_bookmark(self) -> None:
+        if not self.bookmarks:
+            self.app.pop_screen()
+            return
+        bookmark = self.bookmarks[self.selected_index]
+        self.reader.jump_to_section(bookmark.section_index)
+        self.app.pop_screen()
+
+    def action_dismiss_bookmarks(self) -> None:
+        self.app.pop_screen()
+
+    def _initial_selected_index(self) -> int:
+        for index, bookmark in enumerate(self.bookmarks):
+            if bookmark.section_index >= self.reader.section_index:
+                return index
+        return 0
+
+    def _refresh_selection(self) -> None:
+        self.query_one("#bookmark-list", ReaderBookmarkList).set_selected_index(
+            self.selected_index
+        )
+
+    def _bookmarks(self, reader: EpubReaderScreen) -> tuple[Bookmark, ...]:
+        if reader.library is None or reader.book_path is None:
+            return ()
+        return tuple(reader.library.list_bookmarks(reader.book_path))
+
+
 class ReaderPreferencesScreen(Screen[None]):
     KEY_HINT = "Keys: n narrow | m medium | w wide | b back"
     BINDINGS = [
@@ -228,11 +378,12 @@ class ReaderPreferencesScreen(Screen[None]):
 
 
 class EpubReaderScreen(Screen[None]):
-    KEY_HINT = "Keys: n next | p previous | t toc | o options | m bookmark | z zen | b back | l library | c catalogs"
+    KEY_HINT = "Keys: n next | p previous | t toc | g bookmarks | o options | m bookmark | z zen | b back | l library | c catalogs"
     BINDINGS = [
         ("n", "next_section", "Next"),
         ("p", "previous_section", "Previous"),
         ("t", "table_of_contents", "TOC"),
+        ("g", "bookmark_navigator", "Bookmarks"),
         ("o", "reader_options", "Options"),
         ("m", "add_bookmark", "Bookmark"),
         ("b", "go_back", "Back"),
@@ -305,6 +456,9 @@ class EpubReaderScreen(Screen[None]):
 
     def action_table_of_contents(self) -> None:
         self.app.push_screen(ReaderTocScreen(self))
+
+    def action_bookmark_navigator(self) -> None:
+        self.app.push_screen(ReaderBookmarkScreen(self))
 
     def action_reader_options(self) -> None:
         self.app.push_screen(ReaderPreferencesScreen(self))

@@ -312,6 +312,30 @@ async def test_reader_toc_falls_back_to_section_headings_when_outline_is_empty()
 
 
 @pytest.mark.asyncio
+async def test_reader_bookmark_navigator_opens_and_jumps(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    book_path = tmp_path / "books" / "reader-book.epub"
+    repo.add_bookmark(Bookmark(book_path, section_index=1, label="Chapter Two"))
+    app = ShelflineApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(
+            EpubReaderScreen(_preview(), library=repo, book_path=book_path)
+        )
+
+        await pilot.press("g")
+
+        assert app.screen.__class__.__name__ == "ReaderBookmarkScreen"
+        assert "Chapter Two" in str(app.screen.query_one("#bookmark-list").render())
+
+        await pilot.press("enter")
+
+        assert isinstance(app.screen, EpubReaderScreen)
+        assert app.screen.section_index == 1
+
+
+@pytest.mark.asyncio
 async def test_reader_screen_body_is_scrollable() -> None:
     app = ShelflineApp(config=None)
 
