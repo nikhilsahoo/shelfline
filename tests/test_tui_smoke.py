@@ -276,3 +276,44 @@ def test_cover_display_falls_back_when_terminal_graphics_requested(tmp_path: Pat
     assert "Example Book" in rendered
     assert "Ada Lovelace" in rendered
     assert str(image_path) not in rendered
+
+
+def test_cover_display_text_mode_shows_polished_metadata(tmp_path: Path) -> None:
+    image_path = tmp_path / "cover.jpg"
+    image_path.write_bytes(b"not a real image")
+
+    display = CoverDisplay(
+        title="Polished Book",
+        authors=["Ada Lovelace", "Mary Shelley"],
+        image_path=image_path,
+        display_mode="text",
+        media_type="application/epub+zip",
+        source="Standard Ebooks",
+        cache_status="cached",
+    )
+
+    rendered = str(display.renderable)
+
+    assert "Polished Book" in rendered
+    assert "Ada Lovelace, Mary Shelley" in rendered
+    assert "application/epub+zip" in rendered
+    assert "Standard Ebooks" in rendered
+    assert "Cover cached" in rendered
+    assert str(image_path) not in rendered
+
+
+def test_cover_display_off_mode_hides_cover_block(tmp_path: Path) -> None:
+    image_path = tmp_path / "cover.jpg"
+    image_path.write_bytes(b"not a real image")
+
+    display = CoverDisplay(
+        title="Hidden Book",
+        authors=["Ada Lovelace"],
+        image_path=image_path,
+        display_mode="off",
+        media_type="application/epub+zip",
+        source="Standard Ebooks",
+        cache_status="cached",
+    )
+
+    assert str(display.renderable) == ""

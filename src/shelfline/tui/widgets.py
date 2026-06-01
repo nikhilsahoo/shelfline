@@ -824,12 +824,20 @@ class CoverDisplay(Static):
         authors: list[str] | tuple[str, ...] | None = None,
         image_path: str | Path | None = None,
         terminal_graphics: bool = False,
+        display_mode: str = "auto",
+        media_type: str | None = None,
+        source: str | None = None,
+        cache_status: str | None = None,
         **kwargs: object,
     ) -> None:
         self.title = title
         self.authors = list(authors or [])
         self.image_path = Path(image_path) if image_path is not None else None
         self.terminal_graphics = terminal_graphics
+        self.display_mode = display_mode
+        self.media_type = media_type
+        self.source = source
+        self.cache_status = cache_status
         renderable = self._render_cover()
         super().__init__(renderable, **kwargs)
         self._renderable = renderable
@@ -839,5 +847,19 @@ class CoverDisplay(Static):
         return self._renderable
 
     def _render_cover(self) -> str:
+        if self.display_mode == "off":
+            return ""
+
         author_text = ", ".join(self.authors) if self.authors else "Unknown author"
-        return f"{self.title}\n{author_text}"
+        lines = [self.title, author_text]
+        if self.media_type:
+            lines.append(f"Media type: {self.media_type}")
+        if self.source:
+            lines.append(f"Source: {self.source}")
+        lines.append(self._cover_status_text())
+        return "\n".join(lines)
+
+    def _cover_status_text(self) -> str:
+        if self.cache_status == "cached" and self.image_path is not None and self.image_path.exists():
+            return "Cover cached"
+        return "Cover unavailable"
