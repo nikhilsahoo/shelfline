@@ -393,6 +393,19 @@ def test_cover_display_reports_cached_status_when_image_path_exists(tmp_path: Pa
     assert "Cover unavailable" not in rendered
 
 
+def test_cover_display_reports_available_status_when_remote_cover_is_known() -> None:
+    display = CoverDisplay(
+        title="Remote Cover Book",
+        authors=["Ada Lovelace"],
+        cover_url="https://example.test/covers/remote.jpg",
+    )
+
+    rendered = str(display.renderable)
+
+    assert "Cover available" in rendered
+    assert "Cover unavailable" not in rendered
+
+
 def test_cover_display_off_mode_hides_cover_block(tmp_path: Path) -> None:
     image_path = tmp_path / "cover.jpg"
     image_path.write_bytes(b"not a real image")

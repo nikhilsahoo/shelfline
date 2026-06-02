@@ -657,6 +657,33 @@ async def test_entry_screen_renders_cover_fallback_and_all_acquisitions() -> Non
 
 
 @pytest.mark.asyncio
+async def test_entry_screen_reports_available_cover_when_catalog_entry_has_cover_url() -> None:
+    entry = CatalogEntry(
+        title="Covered Book",
+        identifier="urn:book:covered",
+        updated="2026-05-30",
+        authors=["Ada Lovelace"],
+        cover_image_url="https://example.test/covers/covered.jpg",
+        acquisition_links=[
+            AcquisitionLink(
+                href="https://example.test/books/covered.epub",
+                relation="http://opds-spec.org/acquisition",
+                media_type="application/epub+zip",
+                title="EPUB",
+            )
+        ],
+    )
+    app = ShelflineApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(EntryScreen(entry))
+        cover = str(app.screen.query_one("#cover-display").renderable)
+
+    assert "Cover available" in cover
+    assert "Cover unavailable" not in cover
+
+
+@pytest.mark.asyncio
 async def test_entry_screen_cleans_html_summary_for_detail_display() -> None:
     entry = CatalogEntry(
         title="Escaped Story",
@@ -944,7 +971,51 @@ async def test_library_detail_uses_cover_preferences(tmp_path: Path) -> None:
         )
 
     assert "Dune" in rendered
-    assert "Cover unavailable" in rendered
+    assert "Cover available" in rendered
+    assert "Cover unavailable" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_library_detail_reports_available_cover_when_record_has_remote_url(tmp_path: Path) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    book = _book(tmp_path, title="Dune", is_read=False)
+    repo.add_book(
+        BookRecord(
+            title=book.title,
+            authors=book.authors,
+            identifiers=book.identifiers,
+            source_catalog=book.source_catalog,
+            source_entry_url=book.source_entry_url,
+            acquisition_url=book.acquisition_url,
+            media_type=book.media_type,
+            cover_image_url="https://example.test/covers/dune.jpg",
+            cover_image_path=None,
+            local_file_path=book.local_file_path,
+            is_read=book.is_read,
+            thumbnail_url="https://example.test/covers/dune-thumb.jpg",
+            cover_cache_status="missing",
+        )
+    )
+    app = ShelflineApp(
+        config=AppConfig(
+            library_path=tmp_path,
+            preferences=AppPreferences(covers=CoverPreferences(display="text")),
+        ),
+        library=repo,
+    )
+
+    async with app.run_test():
+        await app.push_screen(LibraryScreen(library=repo))
+        rendered = "\n".join(
+            str(static.render())
+            for static in app.screen.query("#detail-region Static")
+            if static.display
+        )
+
+    assert "Dune" in rendered
+    assert "Cover available" in rendered
+    assert "Cover unavailable" not in rendered
 
 
 @pytest.mark.asyncio

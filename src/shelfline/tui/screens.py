@@ -497,6 +497,7 @@ class EntryScreen(Screen[None]):
             media_type=self._selected_media_type(),
             source=self.catalog.name if self.catalog is not None else None,
             cache_status=None,
+            cover_url=self._entry_cover_url(),
             id="cover-display",
         )
 
@@ -511,6 +512,7 @@ class EntryScreen(Screen[None]):
             media_type=self._selected_media_type(),
             source=self.catalog.name if self.catalog is not None else None,
             cache_status=None,
+            cover_url=self._entry_cover_url(),
         )
 
     def _selected_media_type(self) -> str | None:
@@ -518,6 +520,9 @@ class EntryScreen(Screen[None]):
             return None
         index = min(self.selected_index, len(self.entry.acquisition_links) - 1)
         return self.entry.acquisition_links[index].media_type
+
+    def _entry_cover_url(self) -> str | None:
+        return self.entry.cover_image_url or self.entry.thumbnail_url
 
 
 class DownloadStatusScreen(Screen[None]):
@@ -745,6 +750,7 @@ class LibraryScreen(Screen[None]):
             media_type=book.media_type if book is not None else None,
             source=book.source_catalog if book is not None else None,
             cache_status=book.cover_cache_status if book is not None else None,
+            cover_url=self._book_cover_url(book),
             id="cover-display",
         )
 
@@ -761,6 +767,7 @@ class LibraryScreen(Screen[None]):
                 media_type=None,
                 source=None,
                 cache_status=None,
+                cover_url=None,
             )
             cover.display = False
             return
@@ -774,7 +781,13 @@ class LibraryScreen(Screen[None]):
             media_type=book.media_type,
             source=book.source_catalog,
             cache_status=book.cover_cache_status,
+            cover_url=self._book_cover_url(book),
         )
+
+    def _book_cover_url(self, book: BookRecord | None) -> str | None:
+        if book is None:
+            return None
+        return book.cover_image_url or book.thumbnail_url
 
 
 def _error_message(error: Exception) -> str:

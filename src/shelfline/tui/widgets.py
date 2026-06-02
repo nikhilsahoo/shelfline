@@ -829,6 +829,7 @@ class CoverDisplay(Static):
         media_type: str | None = None,
         source: str | None = None,
         cache_status: str | None = None,
+        cover_url: str | None = None,
         **kwargs: object,
     ) -> None:
         self.title = title
@@ -839,6 +840,7 @@ class CoverDisplay(Static):
         self.media_type = media_type
         self.source = source
         self.cache_status = cache_status
+        self.cover_url = cover_url
         renderable = self._render_cover()
         super().__init__(renderable, **kwargs)
         self._renderable = renderable
@@ -868,6 +870,7 @@ class CoverDisplay(Static):
         source: str | None,
         cache_status: str | None,
         terminal_graphics: bool | None = None,
+        cover_url: str | None = None,
     ) -> None:
         self.title = title
         self.authors = list(authors or [])
@@ -878,6 +881,7 @@ class CoverDisplay(Static):
         self.media_type = media_type
         self.source = source
         self.cache_status = cache_status
+        self.cover_url = cover_url
 
         rendered = self._render_cover()
         self._renderable = rendered
@@ -936,4 +940,6 @@ class CoverDisplay(Static):
     def _cover_status_text(self) -> str:
         if self.image_path is not None and (self.cache_status == "cached" or self.image_path.exists()):
             return "Cover cached"
+        if self.cover_url:
+            return "Cover available"
         return "Cover unavailable"
