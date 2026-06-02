@@ -303,17 +303,26 @@ class FeedScreen(Screen[None]):
         self.selected_index = 0
 
     def compose(self) -> ComposeResult:
-        yield Header()
-        yield FeedEntryList(
-            breadcrumbs=self.breadcrumbs,
-            source_url=self.feed.source_url,
-            updated=self.feed.updated,
-            entries=self.feed.entries,
-            selected_index=self.selected_index,
+        yield AppShell(area="Catalog", key_hints=self.KEY_HINT)
+
+    def on_mount(self) -> None:
+        replace_region(
+            self.query_one("#main-region"),
+            FeedEntryList(
+                breadcrumbs=self.breadcrumbs,
+                source_url=self.feed.source_url,
+                updated=self.feed.updated,
+                entries=self.feed.entries,
+                selected_index=self.selected_index,
+            ),
+            BusyIndicator(id="busy-indicator"),
         )
-        yield BusyIndicator(id="busy-indicator")
-        yield StatusLine("Ready", id="status-line")
-        yield KeyHintFooter(self.KEY_HINT)
+        replace_region(
+            self.query_one("#detail-region"),
+            self._detail_view(),
+            StatusLine("Ready", id="status-line"),
+        )
+        self._start_selected_cover_fetch()
 
     def begin_fetch(self, message: str = "Fetching feed") -> None:
         self._begin_outgoing_call(message)
@@ -358,7 +367,7 @@ class FeedScreen(Screen[None]):
             )
             return
 
-        await self.app.push_screen(EntryScreen(entry, catalog=self.catalog, workflow=self.workflow))
+        self.finish_outgoing_call("Use d to download this book")
 
     async def action_open_selected(self) -> None:
         await self.open_entry(self.selected_index)
@@ -380,9 +389,39 @@ class FeedScreen(Screen[None]):
             return
         self.selected_index = max(0, min(len(self.feed.entries) - 1, self.selected_index + delta))
         self.query_one("#feed-body", FeedEntryList).set_selected_index(self.selected_index)
-        self.query_one("#status-line", StatusLine).set_message(
-            f"Selected {self.feed.entries[self.selected_index].title}"
+        self._refresh_detail()
+        entry = self.feed.entries[self.selected_index]
+        self.query_one("#status-line", StatusLine).set_message(f"Selected {entry.title}")
+        self._start_selected_cover_fetch()
+
+    @property
+    def selected_entry(self) -> CatalogEntry | None:
+        if not self.feed.entries:
+            return None
+        index = min(self.selected_index, len(self.feed.entries) - 1)
+        return self.feed.entries[index]
+
+    def _detail_view(self) -> CatalogEntryDetailView:
+        return CatalogEntryDetailView(
+            self.selected_entry,
+            terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
+            display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            source=self.catalog.name if self.catalog is not None else None,
         )
+
+    def _refresh_detail(self) -> None:
+        detail = self.query_one("#catalog-entry-detail", CatalogEntryDetailView)
+        detail.set_entry(
+            self.selected_entry,
+            cover_path=None,
+            cover_status=None,
+            terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
+            display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            source=self.catalog.name if self.catalog is not None else None,
+        )
+
+    def _start_selected_cover_fetch(self) -> None:
+        return None
 
     def _begin_outgoing_call(self, message: str) -> None:
         self.query_one("#busy-indicator", BusyIndicator).start(message)

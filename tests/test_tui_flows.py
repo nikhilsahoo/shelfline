@@ -312,8 +312,9 @@ async def test_feed_screen_uses_entry_row_widgets_for_selection() -> None:
 async def test_feed_screen_renders_selected_book_in_detail_pane() -> None:
     app = ShelflineApp(config=None)
 
-    async with app.run_test():
+    async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(_feed()))
+        await pilot.pause()
         rendered = str(app.screen.query_one("#catalog-entry-detail").renderable)
 
     assert "Interesting Book" in rendered
@@ -334,8 +335,9 @@ async def test_feed_screen_renders_folder_detail_without_book_noise() -> None:
     )
     app = ShelflineApp(config=None)
 
-    async with app.run_test():
+    async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(feed))
+        await pilot.pause()
         rendered = str(app.screen.query_one("#catalog-entry-detail").renderable)
 
     assert "Fiction" in rendered
@@ -514,7 +516,7 @@ async def test_catalog_screen_empty_state_uses_catalog_list_widget(tmp_path: Pat
 
 
 @pytest.mark.asyncio
-async def test_feed_screen_opens_entry_details() -> None:
+async def test_feed_screen_keeps_book_details_inline_on_enter() -> None:
     app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
@@ -522,8 +524,9 @@ async def test_feed_screen_opens_entry_details() -> None:
         await app.screen.open_entry(0)
         await pilot.pause()
 
-        assert isinstance(app.screen, EntryScreen)
-        assert "Interesting Book" in str(app.screen.query_one("#entry-body").renderable)
+        assert isinstance(app.screen, FeedScreen)
+        assert "Interesting Book" in str(app.screen.query_one("#catalog-entry-detail").renderable)
+        assert "d download" in str(app.screen.query_one("#catalog-entry-detail").renderable)
 
 
 @pytest.mark.asyncio
@@ -544,14 +547,15 @@ async def test_entry_screen_enables_terminal_graphics_in_auto_cover_mode() -> No
 
 
 @pytest.mark.asyncio
-async def test_feed_screen_enter_binding_opens_entry_details() -> None:
+async def test_feed_screen_enter_binding_keeps_book_details_inline() -> None:
     app = ShelflineApp(config=None)
 
     async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(_feed()))
         await pilot.press("enter")
 
-        assert isinstance(app.screen, EntryScreen)
+        assert isinstance(app.screen, FeedScreen)
+        assert "Interesting Book" in str(app.screen.query_one("#catalog-entry-detail").renderable)
 
 
 @pytest.mark.asyncio
@@ -573,8 +577,8 @@ async def test_feed_screen_selection_moves_before_opening_entry() -> None:
         assert f"{BOOK_LABEL.text} Interesting Book" in rendered
         await pilot.press("enter")
 
-        assert isinstance(app.screen, EntryScreen)
-        assert "Interesting Book" in str(app.screen.query_one("#entry-body").renderable)
+        assert isinstance(app.screen, FeedScreen)
+        assert "Interesting Book" in str(app.screen.query_one("#catalog-entry-detail").renderable)
 
 
 @pytest.mark.asyncio
@@ -682,7 +686,7 @@ async def test_entry_screen_back_binding_returns_to_feed_screen() -> None:
     async with app.run_test() as pilot:
         await app.push_screen(FeedScreen(_feed()))
         feed_screen = app.screen
-        await pilot.press("enter")
+        await app.push_screen(EntryScreen(_entry()))
         assert isinstance(app.screen, EntryScreen)
 
         await pilot.press("b")

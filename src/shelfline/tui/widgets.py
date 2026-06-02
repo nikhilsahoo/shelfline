@@ -575,8 +575,7 @@ class CatalogEntryDetailView(VerticalScroll):
             self.display_mode = display_mode
         self.source = source
         if self.is_mounted:
-            self.remove_children()
-            self.mount_all(self._widgets())
+            self.refresh(recompose=True)
 
     def _widgets(self) -> list[Widget]:
         if self.entry is None:
