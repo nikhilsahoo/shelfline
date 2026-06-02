@@ -577,6 +577,40 @@ class CatalogEntryDetailView(VerticalScroll):
         if self.is_mounted:
             self.refresh(recompose=True)
 
+    def update_cover(
+        self,
+        entry: CatalogEntry,
+        *,
+        cover_path: Path | None,
+        cover_status: str | None,
+        terminal_graphics: bool,
+        display_mode: str,
+        source: str | None,
+    ) -> None:
+        self.entry = entry
+        self.cover_path = cover_path
+        self.cover_status = cover_status
+        self.terminal_graphics = terminal_graphics
+        self.display_mode = display_mode
+        self.source = source
+
+        cover = next(iter(self.query(CoverDisplay)), None)
+        if cover is None:
+            if self.is_mounted:
+                self.refresh(recompose=True)
+            return
+        cover.update_cover(
+            title=entry.title,
+            authors=entry.authors,
+            image_path=cover_path,
+            terminal_graphics=terminal_graphics,
+            display_mode=display_mode,
+            media_type=self._primary_media_type(entry),
+            source=source,
+            cache_status=cover_status,
+            cover_url=entry.cover_image_url or entry.thumbnail_url,
+        )
+
     def _widgets(self) -> list[Widget]:
         if self.entry is None:
             return [Static(f"{glyph(ENTRY_LABEL)} No entry selected", classes="empty-state")]

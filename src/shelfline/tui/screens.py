@@ -460,8 +460,67 @@ class FeedScreen(Screen[None]):
             source=self.catalog.name if self.catalog is not None else None,
         )
 
+    def _selected_entry_cover_url(self) -> str | None:
+        entry = self.selected_entry
+        if entry is None or entry.navigation_url is not None:
+            return None
+        return entry.cover_image_url or entry.thumbnail_url
+
     def _start_selected_cover_fetch(self) -> None:
-        return None
+        if self.workflow is None or self.catalog is None:
+            return
+        if self._selected_entry_cover_url() is None:
+            return
+        if _cover_display_mode(getattr(self.app, "config", None)) == "off":
+            return
+        self.run_worker(
+            self._cache_selected_cover(self.selected_index),
+            name="feed-cover",
+            exclusive=True,
+        )
+
+    async def _cache_selected_cover(self, index: int) -> None:
+        if self.workflow is None or self.catalog is None:
+            return
+        if index < 0 or index >= len(self.feed.entries):
+            return
+
+        entry = self.feed.entries[index]
+        if entry.navigation_url is not None:
+            return
+        if entry.cover_image_url is None and entry.thumbnail_url is None:
+            return
+
+        try:
+            cover_path = await self.workflow.cache_catalog_entry_cover(self.catalog, entry)
+        except Exception:
+            return
+        if cover_path is None or not self.is_mounted:
+            return
+        if index != self.selected_index or self.selected_entry is not entry:
+            return
+
+        detail = self.query_one("#catalog-entry-detail", CatalogEntryDetailView)
+        terminal_graphics = _cover_terminal_graphics(getattr(self.app, "config", None))
+        display_mode = _cover_display_mode(getattr(self.app, "config", None))
+        source = self.catalog.name if self.catalog is not None else None
+
+        def apply_cover() -> None:
+            if not self.is_mounted:
+                return
+            if index != self.selected_index or self.selected_entry is not entry:
+                return
+            detail.update_cover(
+                entry,
+                cover_path=cover_path,
+                cover_status="cached",
+                terminal_graphics=terminal_graphics,
+                display_mode=display_mode,
+                source=source,
+            )
+
+        apply_cover()
+        self.call_after_refresh(apply_cover)
 
     def _begin_outgoing_call(self, message: str) -> None:
         self.query_one("#busy-indicator", BusyIndicator).start(message)
@@ -511,7 +570,7 @@ class EntryScreen(Screen[None]):
         yield KeyHintFooter(self.KEY_HINT)
 
     def on_mount(self) -> None:
-        self._start_cover_fetch()
+        return None
 
     def begin_download(self, message: str = "Starting download") -> None:
         self.query_one("#busy-indicator", BusyIndicator).start(message)
@@ -566,7 +625,6 @@ class EntryScreen(Screen[None]):
         link = self.entry.acquisition_links[self.selected_index]
         label = link.title or link.media_type
         self.query_one("#status-line", StatusLine).set_message(f"Selected {label}")
-        self._start_cover_fetch()
 
     def _entry_text(self) -> str:
         return EntryDetailView.render_text(self.entry, self.selected_index)
