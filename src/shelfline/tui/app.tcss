@@ -146,6 +146,31 @@
     color: $text;
 }
 
+.catalog-entry-detail {
+    height: 1fr;
+    padding: 0 1;
+}
+
+.catalog-cover-box {
+    height: 10;
+    max-height: 10;
+    width: 100%;
+    margin: 0 0 1 0;
+    padding: 0 1;
+    border-bottom: solid $primary;
+}
+
+.catalog-cover-display {
+    height: 9;
+    max-height: 9;
+    width: 100%;
+}
+
+.catalog-detail-hint {
+    margin: 1 0 0 0;
+    color: $text-muted;
+}
+
 .library-detail-field {
     color: $text;
 }

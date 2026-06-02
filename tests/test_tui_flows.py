@@ -190,6 +190,14 @@ def _feed() -> CatalogFeed:
     )
 
 
+def test_catalog_detail_styles_constrain_cover_area() -> None:
+    css = Path("src/shelfline/tui/app.tcss").read_text(encoding="utf-8")
+    assert ".catalog-entry-detail" in css
+    assert ".catalog-cover-box" in css
+    assert "max-height:" in css
+    assert "height:" in css
+
+
 def _navigation_entry() -> CatalogEntry:
     return CatalogEntry(
         title="Fiction",
