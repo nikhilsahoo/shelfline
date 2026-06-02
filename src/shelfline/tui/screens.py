@@ -341,8 +341,7 @@ class FeedScreen(Screen[None]):
         if index < 0 or index >= len(self.feed.entries):
             self.finish_outgoing_call("Entry is not available")
             return
-        self.selected_index = index
-        entry = self.feed.entries[index]
+        entry = self._select_entry(index)
         if entry.navigation_url is not None:
             if self.workflow is None or self.catalog is None:
                 self.finish_outgoing_call("Catalog workflow is not available")
@@ -387,12 +386,16 @@ class FeedScreen(Screen[None]):
     def _move_selection(self, delta: int) -> None:
         if not self.feed.entries:
             return
-        self.selected_index = max(0, min(len(self.feed.entries) - 1, self.selected_index + delta))
+        self._select_entry(max(0, min(len(self.feed.entries) - 1, self.selected_index + delta)))
+
+    def _select_entry(self, index: int) -> CatalogEntry:
+        self.selected_index = index
         self.query_one("#feed-body", FeedEntryList).set_selected_index(self.selected_index)
         self._refresh_detail()
         entry = self.feed.entries[self.selected_index]
         self.query_one("#status-line", StatusLine).set_message(f"Selected {entry.title}")
         self._start_selected_cover_fetch()
+        return entry
 
     @property
     def selected_entry(self) -> CatalogEntry | None:

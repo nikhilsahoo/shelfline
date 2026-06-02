@@ -198,6 +198,16 @@ def _navigation_entry() -> CatalogEntry:
     )
 
 
+def _entry_without_downloads() -> CatalogEntry:
+    return CatalogEntry(
+        title="Unavailable Book",
+        identifier="urn:book:unavailable",
+        updated="2026-05-31",
+        authors=["Grace Hopper"],
+        summary="A listed book without current downloads.",
+    )
+
+
 def _write_preview_epub(epub_path: Path, title: str) -> None:
     book = epub.EpubBook()
     book.set_identifier(title)
@@ -345,6 +355,26 @@ async def test_feed_screen_renders_folder_detail_without_book_noise() -> None:
     assert "Unknown author" not in rendered
     assert "Cover" not in rendered
     assert "download" not in rendered.lower()
+
+
+@pytest.mark.asyncio
+async def test_feed_screen_renders_book_without_acquisitions_as_unavailable() -> None:
+    feed = CatalogFeed(
+        title="Root Feed",
+        source_url="https://example.test/opds",
+        updated=None,
+        entries=[_entry_without_downloads()],
+    )
+    app = ShelflineApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(feed))
+        await pilot.pause()
+        rendered = str(app.screen.query_one("#catalog-entry-detail").renderable)
+
+    assert "Unavailable Book" in rendered
+    assert "No downloads available" in rendered
+    assert "Enter open" not in rendered
 
 
 @pytest.mark.asyncio
@@ -527,6 +557,49 @@ async def test_feed_screen_keeps_book_details_inline_on_enter() -> None:
         assert isinstance(app.screen, FeedScreen)
         assert "Interesting Book" in str(app.screen.query_one("#catalog-entry-detail").renderable)
         assert "d download" in str(app.screen.query_one("#catalog-entry-detail").renderable)
+
+
+@pytest.mark.asyncio
+async def test_feed_screen_open_entry_updates_inline_selection_and_detail() -> None:
+    feed = CatalogFeed(
+        title="Example Feed",
+        source_url="https://example.test/opds",
+        updated="2026-05-30",
+        entries=[
+            _entry(),
+            CatalogEntry(
+                title="Second Book",
+                identifier="urn:book:second",
+                updated="2026-05-31",
+                authors=["Katherine Johnson"],
+                acquisition_links=[
+                    AcquisitionLink(
+                        href="https://example.test/books/second.epub",
+                        relation="http://opds-spec.org/acquisition",
+                        media_type="application/epub+zip",
+                        title="EPUB",
+                    )
+                ],
+            ),
+        ],
+    )
+    app = ShelflineApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(feed))
+        await pilot.pause()
+        await app.screen.open_entry(1)
+        await pilot.pause()
+
+        detail_rendered = str(app.screen.query_one("#catalog-entry-detail").renderable)
+        feed_body = app.screen.query_one("#feed-body", FeedEntryList)
+        list_rendered = str(feed_body.renderable)
+
+    assert "Second Book" in detail_rendered
+    assert "Katherine Johnson" in detail_rendered
+    assert feed_body.selected_index == 1
+    assert "> 2." in list_rendered
+    assert "Second Book" in list_rendered
 
 
 @pytest.mark.asyncio

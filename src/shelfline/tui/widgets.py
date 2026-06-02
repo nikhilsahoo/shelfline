@@ -580,7 +580,7 @@ class CatalogEntryDetailView(VerticalScroll):
     def _widgets(self) -> list[Widget]:
         if self.entry is None:
             return [Static(f"{glyph(ENTRY_LABEL)} No entry selected", classes="empty-state")]
-        if self.entry.navigation_url is not None or not self.entry.acquisition_links:
+        if self.entry.navigation_url is not None:
             return self._folder_widgets(self.entry)
         return self._book_widgets(self.entry)
 
@@ -646,7 +646,7 @@ class CatalogEntryDetailView(VerticalScroll):
     def render_text(entry: CatalogEntry | None) -> str:
         if entry is None:
             return f"{glyph(ENTRY_LABEL)} No entry selected"
-        if entry.navigation_url is not None or not entry.acquisition_links:
+        if entry.navigation_url is not None:
             lines = [f"{glyph(FOLDER_LABEL)} {entry.title}"]
             if entry.updated:
                 lines.append(f"Updated: {entry.updated}")
@@ -659,8 +659,11 @@ class CatalogEntryDetailView(VerticalScroll):
         if summary:
             lines.extend(["Description:", summary])
         lines.append(f"{DOWNLOADS_LABEL.text} - d download")
-        for index, link in enumerate(entry.acquisition_links):
-            lines.append(AcquisitionRow(link, index=index, selected=index == 0).renderable)
+        if not entry.acquisition_links:
+            lines.append("No downloads available")
+        else:
+            for index, link in enumerate(entry.acquisition_links):
+                lines.append(AcquisitionRow(link, index=index, selected=index == 0).renderable)
         return "\n".join(lines)
 
 
