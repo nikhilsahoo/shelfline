@@ -529,6 +529,142 @@ class EntryDetailView(VerticalScroll):
         return "\n".join(lines)
 
 
+class CatalogEntryDetailView(VerticalScroll):
+    def __init__(
+        self,
+        entry: CatalogEntry | None,
+        *,
+        cover_path: Path | None = None,
+        cover_status: str | None = None,
+        terminal_graphics: bool = False,
+        display_mode: str = "auto",
+        source: str | None = None,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(id="catalog-entry-detail", classes="catalog-entry-detail", **kwargs)
+        self.entry = entry
+        self.cover_path = cover_path
+        self.cover_status = cover_status
+        self.terminal_graphics = terminal_graphics
+        self.display_mode = display_mode
+        self.source = source
+
+    @property
+    def renderable(self) -> str:
+        return self.render_text(self.entry)
+
+    def compose(self) -> ComposeResult:
+        yield from self._widgets()
+
+    def set_entry(
+        self,
+        entry: CatalogEntry | None,
+        *,
+        cover_path: Path | None = None,
+        cover_status: str | None = None,
+        terminal_graphics: bool | None = None,
+        display_mode: str | None = None,
+        source: str | None = None,
+    ) -> None:
+        self.entry = entry
+        self.cover_path = cover_path
+        self.cover_status = cover_status
+        if terminal_graphics is not None:
+            self.terminal_graphics = terminal_graphics
+        if display_mode is not None:
+            self.display_mode = display_mode
+        self.source = source
+        if self.is_mounted:
+            self.remove_children()
+            self.mount_all(self._widgets())
+
+    def _widgets(self) -> list[Widget]:
+        if self.entry is None:
+            return [Static(f"{glyph(ENTRY_LABEL)} No entry selected", classes="empty-state")]
+        if self.entry.navigation_url is not None or not self.entry.acquisition_links:
+            return self._folder_widgets(self.entry)
+        return self._book_widgets(self.entry)
+
+    def _folder_widgets(self, entry: CatalogEntry) -> list[Widget]:
+        widgets: list[Widget] = [
+            Static(f"{glyph(FOLDER_LABEL)} {entry.title}", classes="entry-title"),
+        ]
+        if entry.updated:
+            widgets.append(Static(f"Updated: {entry.updated}", classes="entry-updated"))
+        if entry.navigation_url:
+            widgets.append(Static(entry.navigation_url, classes="entry-updated"))
+        widgets.append(Static("Enter open", classes="catalog-detail-hint"))
+        return widgets
+
+    def _book_widgets(self, entry: CatalogEntry) -> list[Widget]:
+        cover = CoverDisplay(
+            title=entry.title,
+            authors=entry.authors,
+            image_path=self.cover_path,
+            terminal_graphics=self.terminal_graphics,
+            display_mode=self.display_mode,
+            media_type=self._primary_media_type(entry),
+            source=self.source,
+            cache_status=self.cover_status,
+            cover_url=entry.cover_image_url or entry.thumbnail_url,
+            classes="catalog-cover-display",
+        )
+        widgets: list[Widget] = [
+            Container(cover, classes="catalog-cover-box"),
+            Static(entry.title, classes="entry-title"),
+            Static(self._authors_text(entry), classes="entry-authors"),
+        ]
+        if entry.updated:
+            widgets.append(Static(f"Updated: {entry.updated}", classes="entry-updated"))
+        summary = clean_opds_html_text(entry.summary or "")
+        if summary:
+            widgets.extend(
+                [
+                    Static("Description", classes="entry-section-title"),
+                    Static(summary, classes="entry-summary"),
+                ]
+            )
+        widgets.append(Static(f"{DOWNLOADS_LABEL.text} - d download", classes="entry-section-title"))
+        if not entry.acquisition_links:
+            widgets.append(Static("No downloads available", classes="empty-state"))
+        else:
+            widgets.extend(
+                AcquisitionRow(link, index=index, selected=index == 0)
+                for index, link in enumerate(entry.acquisition_links)
+            )
+        return widgets
+
+    @staticmethod
+    def _authors_text(entry: CatalogEntry) -> str:
+        return ", ".join(entry.authors) if entry.authors else "Unknown author"
+
+    @staticmethod
+    def _primary_media_type(entry: CatalogEntry) -> str | None:
+        link = entry.best_epub_link() or (entry.acquisition_links[0] if entry.acquisition_links else None)
+        return link.media_type if link is not None else None
+
+    @staticmethod
+    def render_text(entry: CatalogEntry | None) -> str:
+        if entry is None:
+            return f"{glyph(ENTRY_LABEL)} No entry selected"
+        if entry.navigation_url is not None or not entry.acquisition_links:
+            lines = [f"{glyph(FOLDER_LABEL)} {entry.title}"]
+            if entry.updated:
+                lines.append(f"Updated: {entry.updated}")
+            if entry.navigation_url:
+                lines.append(entry.navigation_url)
+            lines.append("Enter open")
+            return "\n".join(lines)
+        lines = [entry.title, CatalogEntryDetailView._authors_text(entry)]
+        summary = clean_opds_html_text(entry.summary or "")
+        if summary:
+            lines.extend(["Description:", summary])
+        lines.append(f"{DOWNLOADS_LABEL.text} - d download")
+        for index, link in enumerate(entry.acquisition_links):
+            lines.append(AcquisitionRow(link, index=index, selected=index == 0).renderable)
+        return "\n".join(lines)
+
+
 def _format_from_media_type(media_type: str) -> str:
     if "epub" in media_type:
         return "EPUB"

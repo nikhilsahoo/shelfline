@@ -21,6 +21,7 @@ from shelfline.tui.theme import BASIC_AUTH_LABEL, NO_AUTH_LABEL
 from shelfline.tui.widgets import (
     BusyIndicator,
     CoverDisplay,
+    CatalogEntryDetailView,
     CatalogList,
     EntryDetailView,
     FeedEntryList,

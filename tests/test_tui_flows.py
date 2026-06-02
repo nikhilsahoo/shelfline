@@ -309,6 +309,43 @@ async def test_feed_screen_uses_entry_row_widgets_for_selection() -> None:
 
 
 @pytest.mark.asyncio
+async def test_feed_screen_renders_selected_book_in_detail_pane() -> None:
+    app = ShelflineApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(FeedScreen(_feed()))
+        rendered = str(app.screen.query_one("#catalog-entry-detail").renderable)
+
+    assert "Interesting Book" in rendered
+    assert "Ada Lovelace" in rendered
+    assert "A small but useful book." in rendered
+    assert "EPUB" in rendered
+    assert "PDF" in rendered
+    assert "d download" in rendered
+
+
+@pytest.mark.asyncio
+async def test_feed_screen_renders_folder_detail_without_book_noise() -> None:
+    feed = CatalogFeed(
+        title="Root Feed",
+        source_url="https://example.test/opds",
+        updated=None,
+        entries=[_navigation_entry()],
+    )
+    app = ShelflineApp(config=None)
+
+    async with app.run_test():
+        await app.push_screen(FeedScreen(feed))
+        rendered = str(app.screen.query_one("#catalog-entry-detail").renderable)
+
+    assert "Fiction" in rendered
+    assert "Enter open" in rendered
+    assert "Unknown author" not in rendered
+    assert "Cover" not in rendered
+    assert "download" not in rendered.lower()
+
+
+@pytest.mark.asyncio
 async def test_feed_screen_many_entries_use_contiguous_scrollable_rows() -> None:
     entries = [
         CatalogEntry(
