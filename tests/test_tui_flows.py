@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from pathlib import Path
 from typing import Any
 
@@ -190,12 +191,26 @@ def _feed() -> CatalogFeed:
     )
 
 
+def _selector_block(css: str, selector: str) -> str:
+    match = re.search(
+        rf"(?ms)^\s*{re.escape(selector)}\s*\{{(?P<body>.*?)^\s*\}}",
+        css,
+    )
+    assert match is not None, f"Missing CSS selector {selector}"
+    return match.group("body")
+
+
 def test_catalog_detail_styles_constrain_cover_area() -> None:
     css = Path("src/shelfline/tui/app.tcss").read_text(encoding="utf-8")
-    assert ".catalog-entry-detail" in css
-    assert ".catalog-cover-box" in css
-    assert "max-height:" in css
-    assert "height:" in css
+    assert _selector_block(css, ".catalog-entry-detail")
+    cover_box = _selector_block(css, ".catalog-cover-box")
+    cover_display = _selector_block(css, ".catalog-cover-display")
+    assert _selector_block(css, ".catalog-detail-hint")
+
+    assert "height:" in cover_box
+    assert "max-height:" in cover_box
+    assert "height:" in cover_display
+    assert "max-height:" in cover_display
 
 
 def _navigation_entry() -> CatalogEntry:
