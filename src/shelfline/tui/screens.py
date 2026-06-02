@@ -418,6 +418,8 @@ class FeedScreen(Screen[None]):
         self._select_entry(max(0, min(len(self.feed.entries) - 1, self.selected_index + delta)))
 
     def _select_entry(self, index: int) -> CatalogEntry:
+        if index == self.selected_index:
+            return self.feed.entries[self.selected_index]
         self.selected_index = index
         self.query_one("#feed-body", FeedEntryList).set_selected_index(self.selected_index)
         self._refresh_detail()

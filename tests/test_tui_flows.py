@@ -920,6 +920,66 @@ async def test_feed_screen_selected_book_cover_fetches_inline_detail_cover(
 
 
 @pytest.mark.asyncio
+async def test_feed_screen_open_selected_keeps_cached_inline_cover(
+    tmp_path: Path,
+) -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    cover_path = tmp_path / "covers" / "covered.jpg"
+    cover_path.parent.mkdir()
+    cover_path.write_bytes(b"cover")
+    workflow = FakeWorkflow()
+    workflow.catalog_cover_path = cover_path
+    entry = CatalogEntry(
+        title="Covered Book",
+        identifier="urn:book:covered",
+        updated="2026-05-30",
+        authors=["Ada Lovelace"],
+        cover_image_url="https://example.test/covers/covered.jpg",
+        acquisition_links=[
+            AcquisitionLink(
+                href="https://example.test/books/covered.epub",
+                relation="http://opds-spec.org/acquisition",
+                media_type="application/epub+zip",
+                title="EPUB",
+            )
+        ],
+    )
+    feed = CatalogFeed(
+        title="Covered Feed",
+        source_url="https://example.test/opds",
+        updated=None,
+        entries=[entry],
+    )
+    app = ShelflineApp(
+        config=AppConfig(
+            library_path=tmp_path,
+            catalogs=[catalog],
+            preferences=AppPreferences(covers=CoverPreferences(display="auto")),
+        ),
+        workflow=workflow,
+    )
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(feed, catalog=catalog, workflow=workflow))
+        await pilot.pause()
+        await pilot.pause()
+        await pilot.pause()
+
+        cached_cover = app.screen.query_one("#catalog-entry-detail").query_one(CoverDisplay)
+        assert cached_cover.image_path == cover_path
+        assert cached_cover.cache_status == "cached"
+
+        await pilot.press("enter")
+        await pilot.pause()
+
+        cover = app.screen.query_one("#catalog-entry-detail").query_one(CoverDisplay)
+
+    assert workflow.catalog_cover_requests == [(catalog, entry)]
+    assert cover.image_path == cover_path
+    assert cover.cache_status == "cached"
+
+
+@pytest.mark.asyncio
 async def test_feed_screen_clears_stale_cover_when_selection_has_no_cover(
     tmp_path: Path,
 ) -> None:
