@@ -60,6 +60,10 @@ class FakeWorkflow:
         self.download_statuses: list[str] = []
         self.downloads: list[tuple[CatalogConfig, CatalogEntry, AcquisitionLink | None]] = []
         self.fetch_urls: list[str | None] = []
+        self.catalog_cover_path: Path | None = None
+        self.book_cover_path: Path | None = None
+        self.catalog_cover_requests: list[tuple[CatalogConfig, CatalogEntry]] = []
+        self.book_cover_requests: list[BookRecord] = []
 
     async def fetch_catalog(
         self,
@@ -98,6 +102,22 @@ class FakeWorkflow:
             on_status("Download complete")
             self.download_statuses.append("Download complete")
         return self.download_path
+
+    async def cache_catalog_entry_cover(
+        self,
+        catalog: CatalogConfig,
+        entry: CatalogEntry,
+    ) -> Path | None:
+        self.catalog_cover_requests.append((catalog, entry))
+        return self.catalog_cover_path
+
+    async def cache_book_remote_cover(self, book: BookRecord) -> BookRecord:
+        self.book_cover_requests.append(book)
+        if self.book_cover_path is None:
+            return book
+        assert hasattr(self, "library")
+        self.library.update_cover_cache(book.local_file_path, self.book_cover_path, "cached")
+        return self.library.list_books()[0]
 
 
 class MappingWorkflow(FakeWorkflow):
@@ -684,6 +704,49 @@ async def test_entry_screen_reports_available_cover_when_catalog_entry_has_cover
 
 
 @pytest.mark.asyncio
+async def test_entry_screen_fetches_catalog_cover_and_updates_display(tmp_path: Path) -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    cover_path = tmp_path / "covers" / "covered.jpg"
+    cover_path.parent.mkdir()
+    cover_path.write_bytes(b"cover")
+    workflow = FakeWorkflow()
+    workflow.catalog_cover_path = cover_path
+    entry = CatalogEntry(
+        title="Covered Book",
+        identifier="urn:book:covered",
+        updated="2026-05-30",
+        authors=["Ada Lovelace"],
+        cover_image_url="https://example.test/covers/covered.jpg",
+        acquisition_links=[
+            AcquisitionLink(
+                href="https://example.test/books/covered.epub",
+                relation="http://opds-spec.org/acquisition",
+                media_type="application/epub+zip",
+                title="EPUB",
+            )
+        ],
+    )
+    app = ShelflineApp(
+        config=AppConfig(
+            library_path=tmp_path,
+            catalogs=[catalog],
+            preferences=AppPreferences(covers=CoverPreferences(display="auto")),
+        ),
+        workflow=workflow,
+    )
+
+    async with app.run_test() as pilot:
+        await app.push_screen(EntryScreen(entry, catalog=catalog, workflow=workflow))
+        await pilot.pause()
+        await pilot.pause()
+        cover = app.screen.query_one("#cover-display", CoverDisplay)
+
+    assert workflow.catalog_cover_requests == [(catalog, entry)]
+    assert cover.image_path == cover_path
+    assert cover.cache_status == "cached"
+
+
+@pytest.mark.asyncio
 async def test_entry_screen_cleans_html_summary_for_detail_display() -> None:
     entry = CatalogEntry(
         title="Escaped Story",
@@ -1016,6 +1079,58 @@ async def test_library_detail_reports_available_cover_when_record_has_remote_url
     assert "Dune" in rendered
     assert "Cover available" in rendered
     assert "Cover unavailable" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_library_screen_backfills_remote_cover_and_updates_selected_detail(
+    tmp_path: Path,
+) -> None:
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    cover_path = tmp_path / "covers" / "dune.jpg"
+    cover_path.parent.mkdir()
+    cover_path.write_bytes(b"cover")
+    book = _book(tmp_path, title="Dune", is_read=False)
+    old_record = BookRecord(
+        title=book.title,
+        authors=book.authors,
+        identifiers=book.identifiers,
+        source_catalog=book.source_catalog,
+        source_entry_url=book.source_entry_url,
+        acquisition_url=book.acquisition_url,
+        media_type=book.media_type,
+        cover_image_url="https://example.test/covers/dune.jpg",
+        cover_image_path=None,
+        local_file_path=book.local_file_path,
+        is_read=book.is_read,
+        thumbnail_url="https://example.test/covers/dune-thumb.jpg",
+        cover_cache_status="missing",
+    )
+    repo.add_book(old_record)
+    workflow = FakeWorkflow()
+    workflow.library = repo
+    workflow.book_cover_path = cover_path
+    app = ShelflineApp(
+        config=AppConfig(
+            library_path=tmp_path,
+            preferences=AppPreferences(covers=CoverPreferences(display="auto")),
+        ),
+        workflow=workflow,
+        library=repo,
+    )
+
+    async with app.run_test() as pilot:
+        await app.push_screen(LibraryScreen(library=repo, workflow=workflow))
+        await pilot.pause()
+        await pilot.pause()
+        cover = app.screen.query_one("#cover-display", CoverDisplay)
+
+    stored = repo.list_books()[0]
+    assert workflow.book_cover_requests == [old_record]
+    assert stored.cover_image_path == cover_path
+    assert stored.cover_cache_status == "cached"
+    assert cover.image_path == cover_path
+    assert cover.cache_status == "cached"
 
 
 @pytest.mark.asyncio

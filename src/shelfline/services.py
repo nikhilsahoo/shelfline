@@ -154,6 +154,50 @@ class CatalogWorkflow:
     async def aclose(self) -> None:
         await self._http_client.aclose()
 
+    async def cache_catalog_entry_cover(
+        self,
+        catalog: CatalogConfig,
+        entry: CatalogEntry,
+    ) -> Path | None:
+        if _cover_cache_disabled(self.config):
+            return None
+
+        remote_url = _preferred_cover_url(self.config, entry)
+        if remote_url is None:
+            return None
+
+        return await self._cover_cache.fetch(
+            remote_url,
+            auth=_auth_tuple(catalog, self._credentials)
+            if _same_origin(catalog.url, remote_url)
+            else None,
+        )
+
+    async def cache_book_remote_cover(self, book: BookRecord) -> BookRecord:
+        if _cover_cache_disabled(self.config):
+            self.library.update_cover_cache(book.local_file_path, None, "skipped")
+            return replace(book, cover_image_path=None, cover_cache_status="skipped")
+
+        remote_url = _preferred_book_cover_url(self.config, book)
+        if remote_url is None:
+            self.library.update_cover_cache(book.local_file_path, None, "missing")
+            return replace(book, cover_image_path=None, cover_cache_status="missing")
+
+        catalog = _catalog_by_name(self.config, book.source_catalog)
+        try:
+            cover_path = await self._cover_cache.fetch(
+                remote_url,
+                auth=_auth_tuple(catalog, self._credentials)
+                if catalog is not None and _same_origin(catalog.url, remote_url)
+                else None,
+            )
+        except (CoverError, OSError):
+            self.library.update_cover_cache(book.local_file_path, None, "failed")
+            return replace(book, cover_image_path=None, cover_cache_status="failed")
+
+        self.library.update_cover_cache(book.local_file_path, cover_path, "cached")
+        return replace(book, cover_image_path=cover_path, cover_cache_status="cached")
+
     async def _cache_downloaded_book_cover(
         self,
         catalog: CatalogConfig,
@@ -211,6 +255,22 @@ def _preferred_cover_url(config: AppConfig, entry: CatalogEntry) -> str | None:
     if prefer_thumbnails:
         return entry.thumbnail_url or entry.cover_image_url
     return entry.cover_image_url or entry.thumbnail_url
+
+
+def _preferred_book_cover_url(config: AppConfig, book: BookRecord) -> str | None:
+    preferences = config.preferences
+    covers = getattr(preferences, "covers", None)
+    prefer_thumbnails = getattr(covers, "prefer_thumbnails", True)
+    if prefer_thumbnails:
+        return book.thumbnail_url or book.cover_image_url
+    return book.cover_image_url or book.thumbnail_url
+
+
+def _catalog_by_name(config: AppConfig, name: str) -> CatalogConfig | None:
+    for catalog in config.catalogs:
+        if catalog.name == name:
+            return catalog
+    return None
 
 
 def _auth_tuple(

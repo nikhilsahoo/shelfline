@@ -430,6 +430,9 @@ class EntryScreen(Screen[None]):
         yield StatusLine("Ready", id="status-line")
         yield KeyHintFooter(self.KEY_HINT)
 
+    def on_mount(self) -> None:
+        self._start_cover_fetch()
+
     def begin_download(self, message: str = "Starting download") -> None:
         self.query_one("#busy-indicator", BusyIndicator).start(message)
         self.query_one("#status-line", StatusLine).set_message(message)
@@ -483,6 +486,7 @@ class EntryScreen(Screen[None]):
         link = self.entry.acquisition_links[self.selected_index]
         label = link.title or link.media_type
         self.query_one("#status-line", StatusLine).set_message(f"Selected {label}")
+        self._start_cover_fetch()
 
     def _entry_text(self) -> str:
         return EntryDetailView.render_text(self.entry, self.selected_index)
@@ -523,6 +527,37 @@ class EntryScreen(Screen[None]):
 
     def _entry_cover_url(self) -> str | None:
         return self.entry.cover_image_url or self.entry.thumbnail_url
+
+    def _start_cover_fetch(self) -> None:
+        if self.workflow is None or self.catalog is None:
+            return
+        if self._entry_cover_url() is None:
+            return
+        if _cover_display_mode(getattr(self.app, "config", None)) == "off":
+            return
+        self.run_worker(self._cache_entry_cover(), name="entry-cover", exclusive=True)
+
+    async def _cache_entry_cover(self) -> None:
+        if self.workflow is None or self.catalog is None:
+            return
+        try:
+            cover_path = await self.workflow.cache_catalog_entry_cover(self.catalog, self.entry)
+        except Exception:
+            return
+        if cover_path is None or not self.is_mounted:
+            return
+        cover = self.query_one("#cover-display", CoverDisplay)
+        cover.update_cover(
+            title=self.entry.title,
+            authors=self.entry.authors,
+            image_path=cover_path,
+            terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
+            display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            media_type=self._selected_media_type(),
+            source=self.catalog.name if self.catalog is not None else None,
+            cache_status="cached",
+            cover_url=self._entry_cover_url(),
+        )
 
 
 class DownloadStatusScreen(Screen[None]):
@@ -582,15 +617,18 @@ class LibraryScreen(Screen[None]):
         self,
         *,
         library: LibraryRepository | None = None,
+        workflow: CatalogWorkflow | None = None,
         books: list[BookRecord] | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self.library = library
+        self.workflow = workflow
         self.books = list(books) if books is not None else []
         self.selected_index = 0
         self.search_active = False
         self.current_search_query = ""
+        self._cover_backfills: set[Path] = set()
         if self.library is not None:
             self.books = self.library.list_books()
 
@@ -611,6 +649,7 @@ class LibraryScreen(Screen[None]):
         )
         self.app.set_focus(None)
         self.call_after_refresh(lambda: self.app.set_focus(None))
+        self._start_selected_cover_backfill()
 
     def action_focus_search(self) -> None:
         search = self.query_one("#library-search", Input)
@@ -701,6 +740,7 @@ class LibraryScreen(Screen[None]):
     def action_refresh_library(self) -> None:
         self.refresh_books()
         self._set_status("Library refreshed")
+        self._start_selected_cover_backfill()
 
     @property
     def selected_book(self) -> BookRecord | None:
@@ -731,11 +771,13 @@ class LibraryScreen(Screen[None]):
         self.query_one("#library-detail", LibraryDetailView).set_book(self.selected_book)
         self._update_cover_display(self.selected_book)
         self._set_status(f"Selected {self.books[self.selected_index].title}")
+        self._start_selected_cover_backfill()
 
     def _refresh_library_body(self) -> None:
         self.query_one("#library-body", LibraryBookList).set_books(self.books, self.selected_index)
         self.query_one("#library-detail", LibraryDetailView).set_book(self.selected_book)
         self._update_cover_display(self.selected_book)
+        self._start_selected_cover_backfill()
 
     def _library_text(self) -> str:
         return LibraryBookList.render_text(self.books, self.selected_index)
@@ -788,6 +830,35 @@ class LibraryScreen(Screen[None]):
         if book is None:
             return None
         return book.cover_image_url or book.thumbnail_url
+
+    def _start_selected_cover_backfill(self) -> None:
+        book = self.selected_book
+        if self.workflow is None or book is None:
+            return
+        if book.cover_image_path is not None:
+            return
+        if self._book_cover_url(book) is None:
+            return
+        if _cover_display_mode(getattr(self.app, "config", None)) == "off":
+            return
+        if book.local_file_path in self._cover_backfills:
+            return
+        self._cover_backfills.add(book.local_file_path)
+        self.run_worker(
+            self._backfill_selected_cover(book),
+            name=f"library-cover-{book.local_file_path}",
+        )
+
+    async def _backfill_selected_cover(self, book: BookRecord) -> None:
+        try:
+            await self.workflow.cache_book_remote_cover(book)  # type: ignore[union-attr]
+        except Exception:
+            return
+        finally:
+            self._cover_backfills.discard(book.local_file_path)
+        if not self.is_mounted:
+            return
+        self.refresh_books()
 
 
 def _error_message(error: Exception) -> str:

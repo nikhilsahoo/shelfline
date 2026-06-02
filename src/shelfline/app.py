@@ -44,7 +44,7 @@ class ShelflineApp(App[None]):
             return SetupScreen()
 
         if self.config.catalogs and self._library_has_books():
-            return LibraryScreen(library=self.library)
+            return LibraryScreen(library=self.library, workflow=self.workflow)
 
         return CatalogsScreen(self.config, workflow=self.workflow)
 
@@ -95,7 +95,7 @@ class ShelflineApp(App[None]):
 
     def action_show_library(self) -> None:
         if self.library is not None:
-            self.push_screen(LibraryScreen(library=self.library))
+            self.push_screen(LibraryScreen(library=self.library, workflow=self.workflow))
             return
 
         self.notify("Library screen is not wired yet")
