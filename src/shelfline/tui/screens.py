@@ -9,7 +9,7 @@ from textual.containers import Container
 from textual.screen import Screen
 from textual.widgets import Button, Header, Input, Static
 
-from shelfline.catalog.models import CatalogEntry, CatalogFeed
+from shelfline.catalog.models import AcquisitionLink, CatalogEntry, CatalogFeed
 from shelfline.config import AppConfig, AppPreferences, CatalogConfig, ReaderPreferences
 from shelfline.downloads import DownloadProgress
 from shelfline.library import BookRecord, LibraryRepository, LibrarySearch
@@ -276,9 +276,10 @@ class CatalogsScreen(Screen[None]):
 
 
 class FeedScreen(Screen[None]):
-    KEY_HINT = "Keys: enter open | j/k select | b back | c catalogs | l library"
+    KEY_HINT = "Keys: enter open | d download | j/k select | b back | c catalogs | l library"
     BINDINGS = [
         ("enter", "open_selected", "Open"),
+        ("d", "download_selected", "Download"),
         ("b", "go_back", "Back"),
         ("j", "cursor_down", "Down"),
         ("down", "cursor_down", "Down"),
@@ -371,6 +372,34 @@ class FeedScreen(Screen[None]):
     async def action_open_selected(self) -> None:
         await self.open_entry(self.selected_index)
 
+    async def download_selected_entry(self) -> None:
+        if self.workflow is None or self.catalog is None:
+            self.finish_outgoing_call("Download workflow is not available")
+            return
+        entry = self.selected_entry
+        link = self._selected_download_link()
+        if entry is None or link is None:
+            self.finish_outgoing_call("Selected entry has no downloads")
+            return
+
+        status_screen = DownloadStatusScreen(status="Starting download...")
+        await self.app.push_screen(status_screen)
+        try:
+            await self.workflow.download_acquisition(
+                self.catalog,
+                entry,
+                link=link,
+                on_status=status_screen.set_status,
+                on_progress=lambda progress: status_screen.update_progress(progress),
+            )
+        except Exception as exc:
+            status_screen.set_status(f"Download failed: {_error_message(exc)}")
+            return
+        status_screen.set_status("Download complete")
+
+    async def action_download_selected(self) -> None:
+        await self.download_selected_entry()
+
     def action_go_back(self) -> None:
         if len(self.app.screen_stack) <= 1:
             self.finish_outgoing_call("No parent feed")
@@ -403,6 +432,14 @@ class FeedScreen(Screen[None]):
             return None
         index = min(self.selected_index, len(self.feed.entries) - 1)
         return self.feed.entries[index]
+
+    def _selected_download_link(self) -> AcquisitionLink | None:
+        entry = self.selected_entry
+        if entry is None:
+            return None
+        return entry.best_epub_link() or (
+            entry.acquisition_links[0] if entry.acquisition_links else None
+        )
 
     def _detail_view(self) -> CatalogEntryDetailView:
         return CatalogEntryDetailView(

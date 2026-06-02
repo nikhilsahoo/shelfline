@@ -378,6 +378,54 @@ async def test_feed_screen_renders_book_without_acquisitions_as_unavailable() ->
 
 
 @pytest.mark.asyncio
+async def test_feed_screen_downloads_selected_book_with_d_key(tmp_path: Path) -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    selected_entry = _entry()
+    selected_link = selected_entry.best_epub_link()
+    assert selected_link is not None
+    feed = CatalogFeed(
+        title="Example Feed",
+        source_url="https://example.test/opds",
+        updated="2026-05-30",
+        entries=[_navigation_entry(), selected_entry],
+    )
+    workflow = FakeWorkflow(download_path=tmp_path / "Interesting Book.epub")
+    app = ShelflineApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(feed, catalog=catalog, workflow=workflow))
+        await pilot.press("j")
+        await pilot.press("d")
+
+        assert isinstance(app.screen, DownloadStatusScreen)
+        assert workflow.downloads == [(catalog, selected_entry, selected_link)]
+        assert "Download complete" in str(app.screen.query_one("#download-status").renderable)
+
+
+@pytest.mark.asyncio
+async def test_feed_screen_download_key_reports_no_download_for_folder() -> None:
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    workflow = FakeWorkflow()
+    feed = CatalogFeed(
+        title="Root Feed",
+        source_url="https://example.test/opds",
+        updated=None,
+        entries=[_navigation_entry()],
+    )
+    app = ShelflineApp(config=None)
+
+    async with app.run_test() as pilot:
+        await app.push_screen(FeedScreen(feed, catalog=catalog, workflow=workflow))
+        await pilot.press("d")
+
+        assert isinstance(app.screen, FeedScreen)
+        assert workflow.downloads == []
+        assert "Selected entry has no downloads" in str(
+            app.screen.query_one("#status-line").renderable
+        )
+
+
+@pytest.mark.asyncio
 async def test_feed_screen_many_entries_use_contiguous_scrollable_rows() -> None:
     entries = [
         CatalogEntry(
