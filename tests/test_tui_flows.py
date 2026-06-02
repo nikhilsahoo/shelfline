@@ -205,12 +205,15 @@ def test_catalog_detail_styles_constrain_cover_area() -> None:
     assert _selector_block(css, ".catalog-entry-detail")
     cover_box = _selector_block(css, ".catalog-cover-box")
     cover_display = _selector_block(css, ".catalog-cover-display")
+    cover_image = _selector_block(css, ".catalog-cover-display .cover-image")
     assert _selector_block(css, ".catalog-detail-hint")
 
     assert "height:" in cover_box
     assert "max-height:" in cover_box
     assert "height:" in cover_display
     assert "max-height:" in cover_display
+    assert "width: auto;" in cover_image
+    assert "height: auto;" in cover_image
 
 
 def _navigation_entry() -> CatalogEntry:

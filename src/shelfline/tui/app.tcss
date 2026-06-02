@@ -166,6 +166,13 @@
     width: 100%;
 }
 
+.catalog-cover-display .cover-image {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+}
+
 .catalog-detail-hint {
     margin: 1 0 0 0;
     color: $text-muted;
