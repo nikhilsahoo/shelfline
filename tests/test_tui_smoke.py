@@ -6,6 +6,7 @@ import types
 from pathlib import Path
 
 import pytest
+import PIL.Image as PILImage
 
 from shelfline.app import ShelflineApp
 from shelfline.config import AppConfig, CatalogConfig
@@ -301,6 +302,8 @@ def test_cover_display_uses_configured_textual_image_renderer(
     calls: list[tuple[str, str]] = []
 
     class FakeImage:
+        _Renderable = object
+
         def __init__(self, path: str) -> None:
             calls.append((self.__class__.__name__, path))
 
@@ -325,6 +328,110 @@ def test_cover_display_uses_configured_textual_image_renderer(
 
     assert widget is not None
     assert calls == [(expected_class, str(image_path))]
+
+
+@pytest.mark.parametrize("renderer", ["halfcell", "unicode"])
+def test_cover_display_falls_back_for_flattening_renderers_without_pillow_support(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    renderer: str,
+) -> None:
+    image_path = tmp_path / "cover.png"
+    PILImage.new("RGB", (1, 1), color="white").save(image_path)
+    monkeypatch.delattr(PILImage.Image, "get_flattened_data", raising=False)
+    calls: list[str] = []
+
+    class FakeHalfcellRenderable:
+        pass
+
+    class FakeUnicodeRenderable:
+        pass
+
+    class FakeImage:
+        _Renderable = object
+
+        def __init__(self, _path: str) -> None:
+            calls.append(self.__class__.__name__)
+
+    fake_widget_module = types.ModuleType("textual_image.widget")
+    fake_widget_module.Image = type("Image", (FakeImage,), {})
+    fake_widget_module.TGPImage = type("TGPImage", (FakeImage,), {})
+    fake_widget_module.SixelImage = type("SixelImage", (FakeImage,), {})
+    fake_widget_module.HalfcellImage = type(
+        "HalfcellImage",
+        (FakeImage,),
+        {"_Renderable": FakeHalfcellRenderable},
+    )
+    fake_widget_module.UnicodeImage = type(
+        "UnicodeImage",
+        (FakeImage,),
+        {"_Renderable": FakeUnicodeRenderable},
+    )
+    monkeypatch.setitem(sys.modules, "textual_image.widget", fake_widget_module)
+
+    fake_halfcell_module = types.ModuleType("textual_image.renderable.halfcell")
+    fake_halfcell_module.Image = FakeHalfcellRenderable
+    monkeypatch.setitem(sys.modules, "textual_image.renderable.halfcell", fake_halfcell_module)
+    fake_unicode_module = types.ModuleType("textual_image.renderable.unicode")
+    fake_unicode_module.Image = FakeUnicodeRenderable
+    monkeypatch.setitem(sys.modules, "textual_image.renderable.unicode", fake_unicode_module)
+
+    display = CoverDisplay(
+        title="Flattening Renderer Book",
+        authors=["Ada Lovelace"],
+        image_path=image_path,
+        terminal_graphics=True,
+        display_mode="auto",
+        renderer=renderer,
+    )
+
+    assert display._image_widget() is None
+    assert calls == []
+    assert "Flattening Renderer Book" in str(display.renderable)
+
+
+def test_cover_display_auto_falls_back_when_selected_renderer_requires_missing_pillow_support(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image_path = tmp_path / "cover.png"
+    PILImage.new("RGB", (1, 1), color="white").save(image_path)
+    monkeypatch.delattr(PILImage.Image, "get_flattened_data", raising=False)
+    calls: list[str] = []
+
+    class FakeHalfcellRenderable:
+        pass
+
+    class FakeAutoImage:
+        _Renderable = FakeHalfcellRenderable
+
+        def __init__(self, _path: str) -> None:
+            calls.append("Image")
+
+    fake_widget_module = types.ModuleType("textual_image.widget")
+    fake_widget_module.Image = FakeAutoImage
+    fake_widget_module.TGPImage = type("TGPImage", (), {"_Renderable": object})
+    fake_widget_module.SixelImage = type("SixelImage", (), {"_Renderable": object})
+    fake_widget_module.HalfcellImage = type("HalfcellImage", (), {"_Renderable": FakeHalfcellRenderable})
+    fake_widget_module.UnicodeImage = type("UnicodeImage", (), {"_Renderable": object})
+    monkeypatch.setitem(sys.modules, "textual_image.widget", fake_widget_module)
+
+    fake_halfcell_module = types.ModuleType("textual_image.renderable.halfcell")
+    fake_halfcell_module.Image = FakeHalfcellRenderable
+    monkeypatch.setitem(sys.modules, "textual_image.renderable.halfcell", fake_halfcell_module)
+
+    display = CoverDisplay(
+        title="Auto Renderer Book",
+        authors=["Ada Lovelace"],
+        image_path=image_path,
+        terminal_graphics=True,
+        display_mode="auto",
+        renderer="auto",
+    )
+
+    assert display._image_widget() is None
+    assert calls == []
+    assert "Auto Renderer Book" in str(display.renderable)
 
 
 def test_cover_display_text_renderer_does_not_import_textual_image(

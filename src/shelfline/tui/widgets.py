@@ -998,6 +998,46 @@ class DownloadProgressDisplay(Static):
         self.update(text)
 
 
+def _pillow_supports_flattened_data() -> bool:
+    try:
+        import PIL.Image as PILImage
+    except Exception:
+        return False
+
+    return hasattr(PILImage.Image, "get_flattened_data")
+
+
+def _renderer_requires_flattened_data(renderer: str, widget_class: type[object]) -> bool:
+    if renderer in {"halfcell", "unicode"}:
+        return True
+    if renderer != "auto":
+        return False
+
+    renderable_class = getattr(widget_class, "_Renderable", None)
+    if renderable_class is None:
+        return False
+
+    import importlib
+
+    flattening_renderers = []
+    for module_name in (
+        "textual_image.renderable.halfcell",
+        "textual_image.renderable.unicode",
+    ):
+        try:
+            renderable_module = importlib.import_module(module_name)
+        except Exception:
+            continue
+        renderable = getattr(renderable_module, "Image", None)
+        if isinstance(renderable, type):
+            flattening_renderers.append(renderable)
+    if not flattening_renderers:
+        return False
+    if not isinstance(renderable_class, type):
+        return False
+    return issubclass(renderable_class, tuple(flattening_renderers))
+
+
 class CoverDisplay(Static):
     def __init__(
         self,
@@ -1115,6 +1155,8 @@ class CoverDisplay(Static):
                 "halfcell": image_widgets.HalfcellImage,
                 "unicode": image_widgets.UnicodeImage,
             }.get(self.renderer, image_widgets.Image)
+            if _renderer_requires_flattened_data(self.renderer, widget_class) and not _pillow_supports_flattened_data():
+                return None
             return widget_class(str(self.image_path))
         except Exception:
             return None
