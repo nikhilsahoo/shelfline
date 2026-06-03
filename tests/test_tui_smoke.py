@@ -6,7 +6,6 @@ import types
 from pathlib import Path
 
 import pytest
-import PIL.Image as PILImage
 
 from shelfline.app import ShelflineApp
 from shelfline.config import AppConfig, CatalogConfig
@@ -336,6 +335,7 @@ def test_cover_display_falls_back_for_flattening_renderers_without_pillow_suppor
     monkeypatch: pytest.MonkeyPatch,
     renderer: str,
 ) -> None:
+    PILImage = pytest.importorskip("PIL.Image")
     image_path = tmp_path / "cover.png"
     PILImage.new("RGB", (1, 1), color="white").save(image_path)
     monkeypatch.delattr(PILImage.Image, "get_flattened_data", raising=False)
@@ -394,6 +394,7 @@ def test_cover_display_auto_falls_back_when_selected_renderer_requires_missing_p
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    PILImage = pytest.importorskip("PIL.Image")
     image_path = tmp_path / "cover.png"
     PILImage.new("RGB", (1, 1), color="white").save(image_path)
     monkeypatch.delattr(PILImage.Image, "get_flattened_data", raising=False)
