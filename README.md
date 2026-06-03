@@ -420,3 +420,4 @@ Manual smoke checklist for an interactive terminal and test OPDS catalog:
 - Add queued or multi-file downloads.
 - Improve EPUB rendering beyond text-focused, section-based reading.
 - Add annotations, sync, and full-text book search.
+- Add author recommendations using AuthorDive APIs.
