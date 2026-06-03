@@ -88,11 +88,18 @@ Python package dependencies are declared in `pyproject.toml`:
 - `keyring`
 
 Terminal graphics cover rendering is optional. Install the `images` extra to
-enable the optional `textual-image` dependency where your terminal supports it:
+enable the optional `textual-image` dependency:
 
 ```shell
 python -m pip install "shelfline[images]"
 ```
+
+For the clearest cover images, use a terminal that supports a real raster image
+protocol and set `preferences.covers.renderer` to match it. `tgp` targets the
+Kitty Terminal Graphics Protocol, and `sixel` targets Sixel-capable terminals.
+`halfcell` and `unicode` are portable terminal-cell approximations, so they are
+useful fallbacks but are not pixel-perfect. The default `auto` lets
+`textual-image` choose the renderer.
 
 Development and test dependencies are available through the `dev` extra.
 
@@ -210,7 +217,8 @@ dependency and terminal support are available, then falls back to text. Use
   "preferences": {
     "covers": {
       "display": "auto",
-      "prefer_thumbnails": true
+      "prefer_thumbnails": true,
+      "renderer": "auto"
     },
     "reader": {
       "width": "medium",
@@ -227,6 +235,11 @@ dependency and terminal support are available, then falls back to text. Use
 Reader `width` accepts `narrow`, `medium`, or `wide`; `theme` accepts `default`,
 `warm`, or `high_contrast`; and `paragraph_spacing` accepts `compact`, `normal`,
 or `relaxed`.
+
+Cover `display` accepts `auto`, `text`, or `off`. Cover `renderer` accepts
+`auto`, `tgp`, `sixel`, `halfcell`, `unicode`, or `text`. Use
+`renderer: "text"` when you want cover metadata/status without mounting any
+terminal image widget.
 
 ### Credentials
 
@@ -292,7 +305,9 @@ Catalog and library detail panes can show cached cover metadata and optional
 cover art. Covers are cached below the configured library path in
 `.shelfline/covers/`; when cover display is enabled and image rendering is
 unavailable, Shelfline shows a text fallback designed for terminals. Set
-`preferences.covers.display` to `off` to disable cover display entirely.
+`preferences.covers.renderer` to `tgp` or `sixel` for high-fidelity output on
+compatible terminals, or set `preferences.covers.display` to `off` to disable
+cover display entirely.
 
 ### Library
 
