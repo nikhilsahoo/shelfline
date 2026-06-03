@@ -998,6 +998,7 @@ class CoverDisplay(Static):
         image_path: str | Path | None = None,
         terminal_graphics: bool = False,
         display_mode: str = "auto",
+        renderer: str = "auto",
         media_type: str | None = None,
         source: str | None = None,
         cache_status: str | None = None,
@@ -1009,6 +1010,7 @@ class CoverDisplay(Static):
         self.image_path = Path(image_path) if image_path is not None else None
         self.terminal_graphics = terminal_graphics
         self.display_mode = display_mode
+        self.renderer = renderer
         self.media_type = media_type
         self.source = source
         self.cache_status = cache_status
@@ -1042,6 +1044,7 @@ class CoverDisplay(Static):
         source: str | None,
         cache_status: str | None,
         terminal_graphics: bool | None = None,
+        renderer: str | None = None,
         cover_url: str | None = None,
     ) -> None:
         self.title = title
@@ -1049,6 +1052,8 @@ class CoverDisplay(Static):
         self.image_path = Path(image_path) if image_path is not None else None
         if terminal_graphics is not None:
             self.terminal_graphics = terminal_graphics
+        if renderer is not None:
+            self.renderer = renderer
         self.display_mode = display_mode
         self.media_type = media_type
         self.source = source
@@ -1084,15 +1089,24 @@ class CoverDisplay(Static):
     def _image_widget(self) -> Widget | None:
         if self.display_mode != "auto":
             return None
+        if self.renderer == "text":
+            return None
         if not self.terminal_graphics:
             return None
         if self.image_path is None or not self.image_path.exists():
             return None
 
         try:
-            from textual_image.widget import Image
+            from textual_image import widget as image_widgets
 
-            return Image(str(self.image_path))
+            widget_class = {
+                "auto": image_widgets.Image,
+                "tgp": image_widgets.TGPImage,
+                "sixel": image_widgets.SixelImage,
+                "halfcell": image_widgets.HalfcellImage,
+                "unicode": image_widgets.UnicodeImage,
+            }.get(self.renderer, image_widgets.Image)
+            return widget_class(str(self.image_path))
         except Exception:
             return None
 

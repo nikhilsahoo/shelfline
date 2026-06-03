@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -276,6 +278,100 @@ def test_cover_display_falls_back_when_terminal_graphics_requested(tmp_path: Pat
     assert "Example Book" in rendered
     assert "Ada Lovelace" in rendered
     assert str(image_path) not in rendered
+
+
+@pytest.mark.parametrize(
+    ("renderer", "expected_class"),
+    [
+        ("auto", "Image"),
+        ("tgp", "TGPImage"),
+        ("sixel", "SixelImage"),
+        ("halfcell", "HalfcellImage"),
+        ("unicode", "UnicodeImage"),
+    ],
+)
+def test_cover_display_uses_configured_textual_image_renderer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    renderer: str,
+    expected_class: str,
+) -> None:
+    image_path = tmp_path / "cover.jpg"
+    image_path.write_bytes(b"fake image")
+    calls: list[tuple[str, str]] = []
+
+    class FakeImage:
+        def __init__(self, path: str) -> None:
+            calls.append((self.__class__.__name__, path))
+
+        def add_class(self, _class_name: str) -> None:
+            return None
+
+    fake_module = types.ModuleType("textual_image.widget")
+    for class_name in ["Image", "TGPImage", "SixelImage", "HalfcellImage", "UnicodeImage"]:
+        setattr(fake_module, class_name, type(class_name, (FakeImage,), {}))
+    monkeypatch.setitem(sys.modules, "textual_image.widget", fake_module)
+
+    display = CoverDisplay(
+        title="Renderer Book",
+        authors=["Ada Lovelace"],
+        image_path=image_path,
+        terminal_graphics=True,
+        display_mode="auto",
+        renderer=renderer,
+    )
+
+    widget = display._image_widget()
+
+    assert widget is not None
+    assert calls == [(expected_class, str(image_path))]
+
+
+def test_cover_display_text_renderer_does_not_import_textual_image(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image_path = tmp_path / "cover.jpg"
+    image_path.write_bytes(b"fake image")
+    monkeypatch.delitem(sys.modules, "textual_image.widget", raising=False)
+
+    display = CoverDisplay(
+        title="Text Renderer Book",
+        authors=["Ada Lovelace"],
+        image_path=image_path,
+        terminal_graphics=True,
+        display_mode="auto",
+        renderer="text",
+    )
+
+    assert display._image_widget() is None
+    assert "textual_image.widget" not in sys.modules
+
+
+def test_cover_display_update_cover_updates_renderer(tmp_path: Path) -> None:
+    image_path = tmp_path / "cover.jpg"
+    image_path.write_bytes(b"fake image")
+    display = CoverDisplay(
+        title="Renderer Book",
+        authors=["Ada Lovelace"],
+        image_path=image_path,
+        terminal_graphics=True,
+        display_mode="auto",
+        renderer="auto",
+    )
+
+    display.update_cover(
+        title="Renderer Book",
+        authors=["Ada Lovelace"],
+        image_path=image_path,
+        display_mode="auto",
+        renderer="sixel",
+        media_type="application/epub+zip",
+        source="Example",
+        cache_status="cached",
+    )
+
+    assert display.renderer == "sixel"
 
 
 @pytest.mark.asyncio
