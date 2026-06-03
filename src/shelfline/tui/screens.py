@@ -448,6 +448,7 @@ class FeedScreen(Screen[None]):
             self.selected_entry,
             terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
             display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            renderer=_cover_renderer(getattr(self.app, "config", None)),
             source=self.catalog.name if self.catalog is not None else None,
         )
 
@@ -459,6 +460,7 @@ class FeedScreen(Screen[None]):
             cover_status=None,
             terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
             display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            renderer=_cover_renderer(getattr(self.app, "config", None)),
             source=self.catalog.name if self.catalog is not None else None,
         )
 
@@ -505,6 +507,7 @@ class FeedScreen(Screen[None]):
         detail = self.query_one("#catalog-entry-detail", CatalogEntryDetailView)
         terminal_graphics = _cover_terminal_graphics(getattr(self.app, "config", None))
         display_mode = _cover_display_mode(getattr(self.app, "config", None))
+        renderer = _cover_renderer(getattr(self.app, "config", None))
         source = self.catalog.name if self.catalog is not None else None
 
         def apply_cover() -> None:
@@ -518,6 +521,7 @@ class FeedScreen(Screen[None]):
                 cover_status="cached",
                 terminal_graphics=terminal_graphics,
                 display_mode=display_mode,
+                renderer=renderer,
                 source=source,
             )
 
@@ -638,6 +642,7 @@ class EntryScreen(Screen[None]):
             image_path=None,
             terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
             display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            renderer=_cover_renderer(getattr(self.app, "config", None)),
             media_type=self._selected_media_type(),
             source=self.catalog.name if self.catalog is not None else None,
             cache_status=None,
@@ -653,6 +658,7 @@ class EntryScreen(Screen[None]):
             image_path=None,
             terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
             display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            renderer=_cover_renderer(getattr(self.app, "config", None)),
             media_type=self._selected_media_type(),
             source=self.catalog.name if self.catalog is not None else None,
             cache_status=None,
@@ -693,6 +699,7 @@ class EntryScreen(Screen[None]):
             image_path=cover_path,
             terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
             display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            renderer=_cover_renderer(getattr(self.app, "config", None)),
             media_type=self._selected_media_type(),
             source=self.catalog.name if self.catalog is not None else None,
             cache_status="cached",
@@ -929,6 +936,7 @@ class LibraryScreen(Screen[None]):
             image_path=book.cover_image_path if book is not None else None,
             terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
             display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            renderer=_cover_renderer(getattr(self.app, "config", None)),
             media_type=book.media_type if book is not None else None,
             source=book.source_catalog if book is not None else None,
             cache_status=book.cover_cache_status if book is not None else None,
@@ -946,6 +954,7 @@ class LibraryScreen(Screen[None]):
                 image_path=None,
                 terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
                 display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+                renderer=_cover_renderer(getattr(self.app, "config", None)),
                 media_type=None,
                 source=None,
                 cache_status=None,
@@ -960,6 +969,7 @@ class LibraryScreen(Screen[None]):
             image_path=book.cover_image_path,
             terminal_graphics=_cover_terminal_graphics(getattr(self.app, "config", None)),
             display_mode=_cover_display_mode(getattr(self.app, "config", None)),
+            renderer=_cover_renderer(getattr(self.app, "config", None)),
             media_type=book.media_type,
             source=book.source_catalog,
             cache_status=book.cover_cache_status,
@@ -1009,6 +1019,13 @@ def _cover_display_mode(config: AppConfig | None) -> str:
     preferences = getattr(config, "preferences", None)
     if isinstance(preferences, AppPreferences):
         return preferences.covers.display
+    return "auto"
+
+
+def _cover_renderer(config: AppConfig | None) -> str:
+    preferences = getattr(config, "preferences", None)
+    if isinstance(preferences, AppPreferences):
+        return preferences.covers.renderer
     return "auto"
 
 

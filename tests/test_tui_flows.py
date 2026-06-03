@@ -695,6 +695,77 @@ async def test_entry_screen_enables_terminal_graphics_in_auto_cover_mode() -> No
 
 
 @pytest.mark.asyncio
+async def test_entry_screen_passes_cover_renderer_preference(tmp_path: Path) -> None:
+    feed = _feed()
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    config = AppConfig(
+        library_path=tmp_path,
+        catalogs=[catalog],
+        preferences={"covers": {"display": "auto", "renderer": "sixel"}},
+    )
+    app = ShelflineApp(config=config)
+
+    async with app.run_test():
+        await app.push_screen(FeedScreen(feed, catalog=catalog))
+        cover = app.screen.query_one("#catalog-entry-detail").query_one(CoverDisplay)
+
+    assert cover.renderer == "sixel"
+
+
+@pytest.mark.asyncio
+async def test_catalog_entry_screen_passes_cover_renderer_preference(tmp_path: Path) -> None:
+    entry = _entry()
+    catalog = CatalogConfig(name="Example", url="https://example.test/opds")
+    config = AppConfig(
+        library_path=tmp_path,
+        catalogs=[catalog],
+        preferences={"covers": {"display": "auto", "renderer": "tgp"}},
+    )
+    app = ShelflineApp(config=config)
+
+    async with app.run_test():
+        await app.push_screen(EntryScreen(entry, catalog=catalog))
+        cover = app.screen.query_one("#cover-display", CoverDisplay)
+
+    assert cover.renderer == "tgp"
+
+
+@pytest.mark.asyncio
+async def test_library_detail_passes_cover_renderer_preference(tmp_path: Path) -> None:
+    book_path = tmp_path / "book.epub"
+    book_path.write_bytes(b"book")
+    cover_path = tmp_path / "cover.jpg"
+    cover_path.write_bytes(b"cover")
+    repo = LibraryRepository(tmp_path / "state.db")
+    repo.initialize()
+    repo.add_book(
+        BookRecord(
+            title="Library Book",
+            authors=["Ada Lovelace"],
+            identifiers=[],
+            source_catalog="Example",
+            source_entry_url="https://example.test/book",
+            acquisition_url="https://example.test/book.epub",
+            media_type="application/epub+zip",
+            cover_image_url="https://example.test/cover.jpg",
+            cover_image_path=cover_path,
+            local_file_path=book_path,
+        )
+    )
+    config = AppConfig(
+        library_path=tmp_path,
+        preferences={"covers": {"display": "auto", "renderer": "halfcell"}},
+    )
+    app = ShelflineApp(config=config, library=repo)
+
+    async with app.run_test():
+        await app.push_screen(LibraryScreen(library=repo))
+        cover = app.screen.query_one("#cover-display", CoverDisplay)
+
+    assert cover.renderer == "halfcell"
+
+
+@pytest.mark.asyncio
 async def test_feed_screen_enter_binding_keeps_book_details_inline() -> None:
     app = ShelflineApp(config=None)
 

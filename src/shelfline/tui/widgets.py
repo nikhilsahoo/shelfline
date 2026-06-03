@@ -538,6 +538,7 @@ class CatalogEntryDetailView(VerticalScroll):
         cover_status: str | None = None,
         terminal_graphics: bool = False,
         display_mode: str = "auto",
+        renderer: str = "auto",
         source: str | None = None,
         **kwargs: object,
     ) -> None:
@@ -547,6 +548,7 @@ class CatalogEntryDetailView(VerticalScroll):
         self.cover_status = cover_status
         self.terminal_graphics = terminal_graphics
         self.display_mode = display_mode
+        self.renderer = renderer
         self.source = source
 
     @property
@@ -564,6 +566,7 @@ class CatalogEntryDetailView(VerticalScroll):
         cover_status: str | None = None,
         terminal_graphics: bool | None = None,
         display_mode: str | None = None,
+        renderer: str | None = None,
         source: str | None = None,
     ) -> None:
         self.entry = entry
@@ -573,6 +576,8 @@ class CatalogEntryDetailView(VerticalScroll):
             self.terminal_graphics = terminal_graphics
         if display_mode is not None:
             self.display_mode = display_mode
+        if renderer is not None:
+            self.renderer = renderer
         self.source = source
         if self.is_mounted:
             self.refresh(recompose=True)
@@ -585,6 +590,7 @@ class CatalogEntryDetailView(VerticalScroll):
         cover_status: str | None,
         terminal_graphics: bool,
         display_mode: str,
+        renderer: str,
         source: str | None,
     ) -> None:
         self.entry = entry
@@ -592,6 +598,7 @@ class CatalogEntryDetailView(VerticalScroll):
         self.cover_status = cover_status
         self.terminal_graphics = terminal_graphics
         self.display_mode = display_mode
+        self.renderer = renderer
         self.source = source
 
         cover = next(iter(self.query(CoverDisplay)), None)
@@ -605,6 +612,7 @@ class CatalogEntryDetailView(VerticalScroll):
             image_path=cover_path,
             terminal_graphics=terminal_graphics,
             display_mode=display_mode,
+            renderer=renderer,
             media_type=self._primary_media_type(entry),
             source=source,
             cache_status=cover_status,
@@ -636,6 +644,7 @@ class CatalogEntryDetailView(VerticalScroll):
             image_path=self.cover_path,
             terminal_graphics=self.terminal_graphics,
             display_mode=self.display_mode,
+            renderer=self.renderer,
             media_type=self._primary_media_type(entry),
             source=self.source,
             cache_status=self.cover_status,
