@@ -219,6 +219,7 @@ def test_default_preferences_are_loaded_when_missing(tmp_path: Path) -> None:
     assert config.preferences.reader.zen_mode_default is False
     assert config.preferences.covers.display == "auto"
     assert config.preferences.covers.prefer_thumbnails is True
+    assert config.preferences.covers.renderer == "auto"
 
 
 def test_app_config_normalizes_raw_preference_dicts(tmp_path: Path) -> None:
@@ -226,7 +227,7 @@ def test_app_config_normalizes_raw_preference_dicts(tmp_path: Path) -> None:
         library_path=tmp_path / "books",
         preferences={
             "reader": {"width": "wide"},
-            "covers": {"display": "text"},
+            "covers": {"display": "text", "renderer": "sixel"},
             "theme": "textual-dark",
         },
     )
@@ -234,6 +235,7 @@ def test_app_config_normalizes_raw_preference_dicts(tmp_path: Path) -> None:
     assert config.preferences.reader.width == "wide"
     assert config.preferences.reader.theme == "default"
     assert config.preferences.covers.display == "text"
+    assert config.preferences.covers.renderer == "sixel"
     assert config.preferences.extra == {"theme": "textual-dark"}
 
 
@@ -257,6 +259,7 @@ def test_reader_and_cover_preferences_round_trip(tmp_path: Path) -> None:
                     "covers": {
                         "display": "text",
                         "prefer_thumbnails": False,
+                        "renderer": "tgp",
                     },
                 },
             }
@@ -276,6 +279,7 @@ def test_reader_and_cover_preferences_round_trip(tmp_path: Path) -> None:
     assert saved["preferences"]["reader"]["zen_mode_default"] is True
     assert saved["preferences"]["covers"]["display"] == "text"
     assert saved["preferences"]["covers"]["prefer_thumbnails"] is False
+    assert saved["preferences"]["covers"]["renderer"] == "tgp"
 
 
 def test_unknown_preference_keys_survive_save_and_redact(tmp_path: Path) -> None:
@@ -328,6 +332,7 @@ def test_redact_config_serializes_typed_preferences_and_extra_values(tmp_path: P
                     "covers": {
                         "display": "text",
                         "prefer_thumbnails": False,
+                        "renderer": "unicode",
                     },
                     "ui_density": "compact",
                 },
@@ -349,6 +354,7 @@ def test_redact_config_serializes_typed_preferences_and_extra_values(tmp_path: P
     assert redacted["preferences"]["covers"] == {
         "display": "text",
         "prefer_thumbnails": False,
+        "renderer": "unicode",
     }
     assert redacted["preferences"]["ui_density"] == "compact"
 
@@ -365,7 +371,7 @@ def test_add_catalog_preserves_typed_preferences_from_loaded_config(tmp_path: Pa
                 "library_path": str(books),
                 "preferences": {
                     "reader": {"width": "wide"},
-                    "covers": {"display": "text"},
+                    "covers": {"display": "text", "renderer": "halfcell"},
                     "theme": "textual-dark",
                 },
             }
@@ -379,7 +385,47 @@ def test_add_catalog_preserves_typed_preferences_from_loaded_config(tmp_path: Pa
     assert app.config is not None
     assert app.config.preferences.reader.width == "wide"
     assert app.config.preferences.covers.display == "text"
+    assert app.config.preferences.covers.renderer == "halfcell"
     assert app.config.preferences.extra == {"theme": "textual-dark"}
+
+
+def test_cover_renderer_preference_accepts_supported_values(tmp_path: Path) -> None:
+    books = tmp_path / "books"
+    books.mkdir()
+
+    for renderer in ["auto", "tgp", "sixel", "halfcell", "unicode", "text"]:
+        path = tmp_path / f"{renderer}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "library_path": str(books),
+                    "preferences": {"covers": {"renderer": renderer}},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        config = load_config(path)
+
+        assert config.preferences.covers.renderer == renderer
+
+
+def test_invalid_cover_renderer_preference_fails(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    books = tmp_path / "books"
+    books.mkdir()
+    path.write_text(
+        json.dumps(
+            {
+                "library_path": str(books),
+                "preferences": {"covers": {"renderer": "pixel-perfect"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match="preferences.covers.renderer"):
+        load_config(path)
 
 
 def test_invalid_known_reader_preference_fails(tmp_path: Path) -> None:

@@ -37,6 +37,7 @@ class ReaderPreferences:
 class CoverPreferences:
     display: str = "auto"
     prefer_thumbnails: bool = True
+    renderer: str = "auto"
 
 
 @dataclass(frozen=True, eq=False)
@@ -73,6 +74,7 @@ _READER_WIDTHS = {"narrow", "medium", "wide"}
 _READER_THEMES = {"default", "warm", "high_contrast"}
 _PARAGRAPH_SPACING = {"compact", "normal", "relaxed"}
 _COVER_DISPLAY = {"auto", "text", "off"}
+_COVER_RENDERERS = {"auto", "tgp", "sixel", "halfcell", "unicode", "text"}
 
 
 def default_config_path(
@@ -246,6 +248,13 @@ def _parse_cover_preferences(raw: Any) -> CoverPreferences:
             True,
             "preferences.covers.prefer_thumbnails",
         ),
+        renderer=_enum_value(
+            raw,
+            "renderer",
+            "auto",
+            _COVER_RENDERERS,
+            "preferences.covers.renderer",
+        ),
     )
 
 
@@ -278,6 +287,7 @@ def _preferences_to_json(preferences: AppPreferences) -> dict[str, Any]:
     payload["covers"] = {
         "display": preferences.covers.display,
         "prefer_thumbnails": preferences.covers.prefer_thumbnails,
+        "renderer": preferences.covers.renderer,
     }
     return payload
 
