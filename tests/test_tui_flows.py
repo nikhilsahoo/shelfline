@@ -45,7 +45,7 @@ from shelfline.tui.theme import (
     UNREAD_LABEL,
     glyph,
 )
-from shelfline.tui.widgets import CatalogList, CoverDisplay, FeedEntryList, LibraryBookList
+from shelfline.tui.widgets import CatalogEntryDetailView, CatalogList, CoverDisplay, FeedEntryList, LibraryBookList
 
 
 class FakeWorkflow:
@@ -1074,6 +1074,46 @@ async def test_feed_screen_open_selected_keeps_cached_inline_cover(
     assert workflow.catalog_cover_requests == [(catalog, entry)]
     assert cover.image_path == cover_path
     assert cover.cache_status == "cached"
+
+
+@pytest.mark.asyncio
+async def test_catalog_detail_cover_box_omits_duplicate_fallback_metadata(tmp_path: Path) -> None:
+    cover_path = tmp_path / "covers" / "covered.jpg"
+    cover_path.parent.mkdir()
+    cover_path.write_bytes(b"cover")
+    entry = CatalogEntry(
+        title="Covered Book",
+        identifier="urn:book:covered",
+        updated="2026-05-30",
+        authors=["Ada Lovelace"],
+        cover_image_url="https://example.test/covers/covered.jpg",
+        acquisition_links=[
+            AcquisitionLink(
+                href="https://example.test/books/covered.epub",
+                relation="http://opds-spec.org/acquisition",
+                media_type="application/epub+zip",
+                title="EPUB",
+            )
+        ],
+    )
+    app = ShelflineApp()
+
+    async with app.run_test():
+        detail = CatalogEntryDetailView(
+            entry,
+            cover_path=cover_path,
+            cover_status="cached",
+            display_mode="auto",
+            source="Example",
+        )
+        await app.mount(detail)
+        cover = detail.query_one(CoverDisplay)
+        cover_fallbacks = list(cover.query(".cover-fallback"))
+        rendered = str(detail.renderable)
+
+    assert cover_fallbacks == []
+    assert "Covered Book" in rendered
+    assert "Ada Lovelace" in rendered
 
 
 @pytest.mark.asyncio

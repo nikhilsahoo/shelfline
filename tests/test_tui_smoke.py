@@ -541,6 +541,35 @@ async def test_cover_display_refreshes_mounted_fallback_text() -> None:
     assert "Ada Lovelace" not in rendered
 
 
+@pytest.mark.asyncio
+async def test_cover_display_can_suppress_mounted_fallback_metadata() -> None:
+    app = ShelflineApp()
+
+    async with app.run_test():
+        normal_display = CoverDisplay(
+            title="Normal Book",
+            authors=["Ada Lovelace"],
+            image_path=None,
+        )
+        compact_display = CoverDisplay(
+            title="Compact Book",
+            authors=["Mary Shelley"],
+            image_path=None,
+            show_fallback=False,
+        )
+        await app.mount(normal_display)
+        await app.mount(compact_display)
+
+        normal_fallbacks = list(normal_display.query(".cover-fallback"))
+        compact_fallbacks = list(compact_display.query(".cover-fallback"))
+        compact_rendered = str(compact_display.render())
+
+    assert len(normal_fallbacks) == 1
+    assert compact_fallbacks == []
+    assert "Compact Book" not in compact_rendered
+    assert "Mary Shelley" not in compact_rendered
+
+
 def test_cover_display_text_mode_shows_polished_metadata(tmp_path: Path) -> None:
     image_path = tmp_path / "cover.jpg"
     image_path.write_bytes(b"not a real image")

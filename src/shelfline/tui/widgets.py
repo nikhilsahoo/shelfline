@@ -649,6 +649,7 @@ class CatalogEntryDetailView(VerticalScroll):
             source=self.source,
             cache_status=self.cover_status,
             cover_url=entry.cover_image_url or entry.thumbnail_url,
+            show_fallback=False,
             classes="catalog-cover-display",
         )
         widgets: list[Widget] = [
@@ -1052,6 +1053,7 @@ class CoverDisplay(Static):
         source: str | None = None,
         cache_status: str | None = None,
         cover_url: str | None = None,
+        show_fallback: bool = True,
         **kwargs: object,
     ) -> None:
         self.title = title
@@ -1064,13 +1066,14 @@ class CoverDisplay(Static):
         self.source = source
         self.cache_status = cache_status
         self.cover_url = cover_url
+        self.show_fallback = show_fallback
         renderable = self._render_cover()
-        super().__init__(renderable, **kwargs)
+        super().__init__(renderable if show_fallback else "", **kwargs)
         self._renderable = renderable
 
     @property
     def renderable(self) -> str:
-        return self._renderable
+        return self._renderable if self.show_fallback else ""
 
     def compose(self) -> ComposeResult:
         if self.display_mode == "off":
@@ -1080,7 +1083,8 @@ class CoverDisplay(Static):
         if image_widget is not None:
             image_widget.add_class("cover-image")
             yield image_widget
-        yield Static(self._renderable, classes="cover-fallback")
+        if self.show_fallback:
+            yield Static(self._renderable, classes="cover-fallback")
 
     def update_cover(
         self,
@@ -1111,7 +1115,7 @@ class CoverDisplay(Static):
 
         rendered = self._render_cover()
         self._renderable = rendered
-        self.update(rendered)
+        self.update(rendered if self.show_fallback else "")
         if not self.is_mounted:
             return
 
@@ -1121,19 +1125,26 @@ class CoverDisplay(Static):
 
         self.display = True
         fallback = next(iter(self.query(".cover-fallback")), None)
-        if fallback is None:
-            fallback = Static(rendered, classes="cover-fallback")
-            self.mount(fallback)
-        else:
-            fallback.display = True
-            fallback.update(rendered)
+        if self.show_fallback:
+            if fallback is None:
+                fallback = Static(rendered, classes="cover-fallback")
+                self.mount(fallback)
+            else:
+                fallback.display = True
+                fallback.update(rendered)
+        elif fallback is not None:
+            fallback.remove()
+            fallback = None
 
         for image in self.query(".cover-image"):
             image.remove()
         image_widget = self._image_widget()
         if image_widget is not None:
             image_widget.add_class("cover-image")
-            self.mount(image_widget, before=fallback)
+            if fallback is None:
+                self.mount(image_widget)
+            else:
+                self.mount(image_widget, before=fallback)
 
     def _image_widget(self) -> Widget | None:
         if self.display_mode != "auto":
